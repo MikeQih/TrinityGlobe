@@ -257,7 +257,12 @@
       "category": "beer",
       "name": "Happy Brew Classic Lager",
       "categoryLabel": "Craft Beer",
-      "image": "/images/lager.jpg"
+      "image": "/images/lager.jpg",
+      "prices": {
+        "bottle": 1,
+        "case": 1,
+        "fiveCases": 1
+      }
     }
   ]
 }
