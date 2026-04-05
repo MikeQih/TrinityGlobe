@@ -259,9 +259,9 @@
       "categoryLabel": "Craft Beer",
       "image": "/images/lager.jpg",
       "prices": {
-        "bottle": 1,
-        "case": 1,
-        "fiveCases": 1
+        "bottle": "",
+        "case": "",
+        "fiveCases": ""
       }
     }
   ]
