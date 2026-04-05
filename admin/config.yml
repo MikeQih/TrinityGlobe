@@ -1,0 +1,56 @@
+backend:
+  name: git-gateway
+  branch: main
+
+media_folder: "images"
+public_folder: "/images"
+
+collections:
+  - name: "products"
+    label: "Products"
+    files:
+      - name: "product_list"
+        label: "Product List"
+        file: "products.json"
+        fields:
+          - label: "Products"
+            name: "products"
+            widget: "list"
+            summary: "{{fields.name}} — {{fields.category}}"
+            fields:
+              - label: "Product Name"
+                name: "name"
+                widget: "string"
+              - label: "Category"
+                name: "category"
+                widget: "string"
+                hint: "Used for tab filtering. e.g. cognac / whisky / champagne / wine / baijiu / other"
+              - label: "Category Label"
+                name: "categoryLabel"
+                widget: "string"
+                hint: "Displayed on the card. e.g. Cognac, Whisky, Red Wine"
+              - label: "Image"
+                name: "image"
+                widget: "image"
+              - label: "Prices (SGD)"
+                name: "prices"
+                widget: "object"
+                fields:
+                  - label: "1 Bottle"
+                    name: "bottle"
+                    widget: "number"
+                    required: false
+                    value_type: "int"
+                    hint: "Leave blank if not applicable"
+                  - label: "1 Case"
+                    name: "case"
+                    widget: "number"
+                    required: false
+                    value_type: "int"
+                    hint: "Leave blank if not applicable"
+                  - label: "5 Cases"
+                    name: "fiveCases"
+                    widget: "number"
+                    required: false
+                    value_type: "int"
+                    hint: "Leave blank if not applicable"

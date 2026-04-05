@@ -27,15 +27,35 @@ function buildPriceGrid(prices) {
   return `<div class="price-grid">${cols}</div>`;
 }
 
-// ── Render products from products-data.js (PRODUCTS global) ──
-function loadProducts() {
-  const grid = document.getElementById('productGrid');
-  const products = PRODUCTS;
+// ── Load products: fetch products.json (live), fallback to products-data.js (local) ──
+async function loadProducts() {
+  let products;
+  try {
+    const res = await fetch('/products.json');
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    products = data.products;
+  } catch {
+    // Local file:// fallback — requires products-data.js to be loaded
+    products = (typeof PRODUCTS !== 'undefined') ? PRODUCTS.map(p => ({
+      ...p,
+      image: 'images/' + p.image
+    })) : [];
+  }
 
+  renderProducts(products);
+  buildFilterTabs(products);
+  initFilter();
+  initReveal();
+}
+
+// ── Render product cards ──
+function renderProducts(products) {
+  const grid = document.getElementById('productGrid');
   grid.innerHTML = products.map(p => `
     <div class="product-card" data-category="${p.category}">
       <div class="card-img-wrap">
-        <img src="images/${p.image}" alt="${p.name}" loading="lazy" />
+        <img src="${p.image}" alt="${p.name}" loading="lazy" />
       </div>
       <div class="card-info">
         <span class="card-cat">${p.categoryLabel}</span>
@@ -43,36 +63,63 @@ function loadProducts() {
         ${buildPriceGrid(p.prices)}
       </div>
     </div>`).join('');
+}
 
-  // Attach filter + reveal after cards are in the DOM
-  initFilter();
-  initReveal();
+// ── Build filter tabs dynamically from product categories ──
+function buildFilterTabs(products) {
+  const tabContainer = document.getElementById('filterTabs');
+
+  // Tab display labels for known categories
+  const labelMap = {
+    cognac:    'Cognac',
+    whisky:    'Whisky',
+    champagne: 'Champagne',
+    wine:      'Wine',
+    baijiu:    'Baijiu',
+    other:     'Others',
+  };
+
+  // Preserve category order: known ones first, then any new ones alphabetically
+  const knownOrder = ['cognac', 'whisky', 'champagne', 'wine', 'baijiu', 'other'];
+  const usedCats = [...new Set(products.map(p => p.category))];
+  const ordered = [
+    ...knownOrder.filter(c => usedCats.includes(c)),
+    ...usedCats.filter(c => !knownOrder.includes(c)).sort(),
+  ];
+
+  const tabs = ['all', ...ordered].map((cat, i) => {
+    const label = cat === 'all' ? 'All' : (labelMap[cat] || cat.charAt(0).toUpperCase() + cat.slice(1));
+    return `<button class="tab${i === 0 ? ' active' : ''}" data-filter="${cat}">${label}</button>`;
+  }).join('');
+
+  tabContainer.innerHTML = tabs;
 }
 
 // ── Product filter tabs ──
 function initFilter() {
-  const tabs  = document.querySelectorAll('.tab');
-  const cards = document.querySelectorAll('.product-card');
+  const tabContainer = document.getElementById('filterTabs');
+  const grid = document.getElementById('productGrid');
 
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+  tabContainer.addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
 
-      const filter = tab.dataset.filter;
-      cards.forEach(card => {
-        const show = filter === 'all' || card.dataset.category === filter;
-        card.classList.toggle('hidden', !show);
-        if (show) {
-          card.style.opacity = '0';
-          card.style.transform = 'translateY(8px)';
-          requestAnimationFrame(() => {
-            card.style.transition = 'opacity 0.3s ease, transform 0.3s ease, border-color 0.3s';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-          });
-        }
-      });
+    tabContainer.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    const filter = tab.dataset.filter;
+    grid.querySelectorAll('.product-card').forEach(card => {
+      const show = filter === 'all' || card.dataset.category === filter;
+      card.classList.toggle('hidden', !show);
+      if (show) {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(8px)';
+        requestAnimationFrame(() => {
+          card.style.transition = 'opacity 0.3s ease, transform 0.3s ease, border-color 0.3s';
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0)';
+        });
+      }
     });
   });
 }
@@ -103,9 +150,9 @@ function scrollToContact() {
   document.getElementById('contact').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── Also reveal about section elements ──
+// ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
-  loadProducts(); // synchronous now — reads from products-data.js
+  loadProducts();
 
   const staticEls = document.querySelectorAll('.about-grid, .highlight');
   const observer = new IntersectionObserver((entries) => {

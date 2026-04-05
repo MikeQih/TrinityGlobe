@@ -94,15 +94,8 @@
       <div class="section-label">Our Collection</div>
       <h2 class="section-title">Finest Spirits,<br/>Curated for You</h2>
 
-      <!-- Category Filter -->
-      <div class="filter-tabs">
-        <button class="tab active" data-filter="all">All</button>
-        <button class="tab" data-filter="cognac">Cognac</button>
-        <button class="tab" data-filter="whisky">Whisky</button>
-        <button class="tab" data-filter="champagne">Champagne & Wine</button>
-        <button class="tab" data-filter="baijiu">Baijiu</button>
-        <button class="tab" data-filter="other">Others</button>
-      </div>
+      <!-- Category Filter — tabs generated dynamically by script.js -->
+      <div class="filter-tabs" id="filterTabs"></div>
 
       <!-- Product Grid — rendered by script.js from products.json -->
       <div class="product-grid" id="productGrid"></div>
@@ -160,6 +153,7 @@
     </div>
   </footer>
 
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="products-data.js"></script>
   <script src="script.js"></script>
 </body>
