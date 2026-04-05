@@ -263,6 +263,12 @@
         "case": "",
         "fiveCases": ""
       }
+    },
+    {
+      "name": "Happy Brew Wheat Beer",
+      "category": "beer",
+      "categoryLabel": "Craft Beer",
+      "image": "/images/wheat.jpg"
     }
   ]
 }
