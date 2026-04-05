@@ -11,6 +11,7 @@ function fmt(price) {
 
 // ── Build price grid HTML (always show all 3 tiers, "—" when null) ──
 function buildPriceGrid(prices) {
+  if (!prices) prices = {};
   const tiers = [
     { key: 'bottle',    label: '1 Bottle' },
     { key: 'case',      label: '1 Case'   },
