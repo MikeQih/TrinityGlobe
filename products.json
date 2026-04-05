@@ -252,6 +252,12 @@
         "case": 1320,
         "fiveCases": null
       }
+    },
+    {
+      "category": "beer",
+      "name": "Happy Brew Classic Lager",
+      "categoryLabel": "Craft Beer",
+      "image": "/images/lager.jpg"
     }
   ]
 }
