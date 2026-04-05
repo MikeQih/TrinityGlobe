@@ -498,7 +498,7 @@ a { text-decoration: none; color: inherit; }
 .price-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.3rem;
+  gap: 0.2rem;
   margin-top: 0.9rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
@@ -512,9 +512,10 @@ a { text-decoration: none; color: inherit; }
 
 .price-label {
   font-size: 0.58rem;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .price-value {
@@ -690,6 +691,15 @@ footer .container {
 
 @media (max-width: 480px) {
   .hero-title { letter-spacing: 0.04em; }
-  .filter-tabs { gap: 0.35rem; }
-  .tab { padding: 0.4rem 0.8rem; font-size: 0.68rem; }
+  .filter-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.35rem;
+    padding-bottom: 1rem;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 0.4rem 0.9rem; font-size: 0.68rem; white-space: nowrap; }
+  .product-grid { grid-template-columns: 1fr; }
 }

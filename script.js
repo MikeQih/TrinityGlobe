@@ -20,8 +20,9 @@ function buildPriceGrid(prices) {
 
   const cols = tiers.map(t => {
     const val = prices[t.key];
-    const display = val != null ? `<span class="price-value">${fmt(val)}</span>`
-                                : `<span class="price-value price-na">—</span>`;
+    const display = (val != null && val !== '' && val > 0)
+      ? `<span class="price-value">${fmt(val)}</span>`
+      : `<span class="price-value price-na">—</span>`;
     return `<div class="price-item"><span class="price-label">${t.label}</span>${display}</div>`;
   }).join('');
 
@@ -81,11 +82,12 @@ function buildFilterTabs(products) {
   };
 
   // Preserve category order: known ones first, then any new ones alphabetically
-  const knownOrder = ['cognac', 'whisky', 'champagne', 'wine', 'baijiu', 'other'];
+  const knownOrder = ['cognac', 'whisky', 'champagne', 'wine', 'baijiu'];
   const usedCats = [...new Set(products.map(p => p.category))];
   const ordered = [
     ...knownOrder.filter(c => usedCats.includes(c)),
-    ...usedCats.filter(c => !knownOrder.includes(c)).sort(),
+    ...usedCats.filter(c => !knownOrder.includes(c) && c !== 'other').sort(),
+    ...(usedCats.includes('other') ? ['other'] : []),
   ];
 
   const tabs = ['all', ...ordered].map((cat, i) => {
