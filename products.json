@@ -269,17 +269,6 @@
       "category": "beer",
       "categoryLabel": "Craft Beer",
       "image": "/images/wheat.jpg"
-    },
-    {
-      "name": "1",
-      "category": "1",
-      "categoryLabel": "1",
-      "image": "/images/价目表1.jpeg",
-      "prices": {
-        "bottle": "",
-        "case": "",
-        "fiveCases": ""
-      }
     }
   ]
 }
