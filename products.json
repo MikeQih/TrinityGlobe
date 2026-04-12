@@ -268,7 +268,12 @@
       "name": "Happy Brew Wheat Beer",
       "category": "beer",
       "categoryLabel": "Craft Beer",
-      "image": "/images/wheat.jpg"
+      "image": "/images/wheat.jpg",
+      "prices": {
+        "bottle": 1,
+        "case": 1,
+        "fiveCases": 1
+      }
     }
   ]
 }
