@@ -42,7 +42,7 @@ const PRODUCTS = [
     name: "Hennessy VSOP",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Hennessy VSOP.jpg",
+    image: "干邑白兰地 - Hennessy VSOP test.png",
     prices: { bottle: 105, case: 1260, fiveCases: null }
   },
   {
