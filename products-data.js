@@ -3,6 +3,22 @@
 // Prices are in SGD. Set a value to null to hide that price tier.
 
 const PRODUCTS = [
+  // ── Beer ──
+  {
+    name: "嗨啤精酿 拉格",
+    category: "other",
+    categoryLabel: "Beer · 精酿",
+    image: "啤酒 - Lager.jpg",
+    prices: { bottle: 6, case: 120, fiveCases: null }
+  },
+  {
+    name: "嗨啤精酿 小麦",
+    category: "other",
+    categoryLabel: "Beer · 精酿",
+    image: "啤酒 - 小麦啤.jpg",
+    prices: { bottle: 6, case: 120, fiveCases: null }
+  },
+
   // ── Other ──
   {
     name: "Blue Dash",

@@ -1,6 +1,20 @@
 {
   "products": [
     {
+      "name": "嗨啤精酿 拉格",
+      "category": "other",
+      "categoryLabel": "Beer · 精酿",
+      "image": "/images/啤酒 - Lager.jpg",
+      "prices": { "bottle": 6, "case": 120, "fiveCases": null }
+    },
+    {
+      "name": "嗨啤精酿 小麦",
+      "category": "other",
+      "categoryLabel": "Beer · 精酿",
+      "image": "/images/啤酒 - 小麦啤.jpg",
+      "prices": { "bottle": 6, "case": 120, "fiveCases": null }
+    },
+    {
       "name": "Blue Dash",
       "category": "other",
       "categoryLabel": "Vodka · Exclusive",
