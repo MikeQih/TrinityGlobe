@@ -298,7 +298,7 @@
       }
     },
     {
-      "name": "Dassai 23 1.8L",
+      "name": "獺祭 23 1.8L",
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - Dassai 23 1.8L.jpg",
@@ -353,7 +353,7 @@
       }
     },
     {
-      "name": "Moutai",
+      "name": "茅台",
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 飞天茅台.jpg",
@@ -364,7 +364,7 @@
       }
     },
     {
-      "name": "Wuliangye",
+      "name": "五粮液",
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 五粮液.png",
@@ -375,7 +375,7 @@
       }
     },
     {
-      "name": "Guojiao 1573",
+      "name": "国窖1573",
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 国窖1573.jpg",
