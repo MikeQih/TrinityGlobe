@@ -6,30 +6,32 @@ const PRODUCTS = [
   // ── Beer ──
   {
     name: "嗨啤精酿 拉格",
-    category: "other",
+    category: "beer",
     categoryLabel: "Beer · 精酿",
     image: "啤酒 - Lager.jpg",
     prices: { bottle: 6, case: 120, fiveCases: null }
   },
   {
     name: "嗨啤精酿 小麦",
-    category: "other",
+    category: "beer",
     categoryLabel: "Beer · 精酿",
     image: "啤酒 - 小麦啤.jpg",
     prices: { bottle: 6, case: 120, fiveCases: null }
   },
 
-  // ── Other ──
+  // ── Vodka ──
   {
     name: "Blue Dash",
-    category: "other",
+    category: "vodka",
     categoryLabel: "Vodka · Exclusive",
     image: "伏特加 - Blue Dash.jpg",
     prices: { bottle: 65, case: 780, fiveCases: null }
   },
+
+  // ── Tequila ──
   {
     name: "Premium Tequila",
-    category: "other",
+    category: "tequila",
     categoryLabel: "Tequila",
     image: "龙舌兰 - Premium Tequila.jpg",
     prices: { bottle: 78, case: 936, fiveCases: null }

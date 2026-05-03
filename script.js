@@ -74,17 +74,20 @@ function buildFilterTabs(products) {
 
   // Tab display labels for known categories
   const labelMap = {
-    cognac:    'Cognac',
-    whisky:    'Whisky',
-    champagne: 'Champagne',
-    wine:      'Wine',
-    sake:      'Sake',
-    baijiu:    'Baijiu',
-    other:     'Others',
+    cognac:   'Cognac',
+    whisky:   'Whisky',
+    champagne:'Champagne',
+    wine:     'Wine',
+    sake:     'Sake',
+    baijiu:   'Baijiu',
+    beer:     'Beer',
+    vodka:    'Vodka',
+    tequila:  'Tequila',
+    other:    'Others',
   };
 
   // Preserve category order: known ones first, then any new ones alphabetically
-  const knownOrder = ['cognac', 'whisky', 'champagne', 'wine', 'sake', 'baijiu'];
+  const knownOrder = ['cognac', 'whisky', 'champagne', 'wine', 'sake', 'baijiu', 'beer', 'vodka', 'tequila'];
   const usedCats = [...new Set(products.map(p => p.category))];
   const ordered = [
     ...knownOrder.filter(c => usedCats.includes(c)),
