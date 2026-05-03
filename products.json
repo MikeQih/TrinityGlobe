@@ -2,21 +2,29 @@
   "products": [
     {
       "name": "嗨啤精酿 拉格",
-      "category": "other",
+      "category": "beer",
       "categoryLabel": "Beer · 精酿",
       "image": "/images/啤酒 - Lager.jpg",
-      "prices": { "bottle": 6, "case": 120, "fiveCases": null }
+      "prices": {
+        "bottle": 6,
+        "case": 120,
+        "fiveCases": null
+      }
     },
     {
       "name": "嗨啤精酿 小麦",
-      "category": "other",
+      "category": "beer",
       "categoryLabel": "Beer · 精酿",
       "image": "/images/啤酒 - 小麦啤.jpg",
-      "prices": { "bottle": 6, "case": 120, "fiveCases": null }
+      "prices": {
+        "bottle": 6,
+        "case": 120,
+        "fiveCases": null
+      }
     },
     {
       "name": "Blue Dash",
-      "category": "other",
+      "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.jpg",
       "prices": {
@@ -27,7 +35,7 @@
     },
     {
       "name": "Premium Tequila",
-      "category": "other",
+      "category": "tequila",
       "categoryLabel": "Tequila",
       "image": "/images/龙舌兰 - Premium Tequila.jpg",
       "prices": {
