@@ -48,6 +48,7 @@ async function loadProducts() {
   renderProducts(products);
   buildFilterTabs(products);
   initFilter();
+  initSearch();
   initReveal();
 }
 
@@ -146,6 +147,41 @@ function initReveal() {
     el.style.transform = 'translateY(20px)';
     el.style.transition = `opacity 0.45s ease ${(i % 8) * 0.05}s, transform 0.45s ease ${(i % 8) * 0.05}s, border-color 0.3s`;
     observer.observe(el);
+  });
+}
+
+// ── Search ──
+function initSearch() {
+  const input = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('searchClear');
+  const grid = document.getElementById('productGrid');
+
+  function applySearch() {
+    const q = input.value.trim().toLowerCase();
+    clearBtn.classList.toggle('visible', q.length > 0);
+
+    const activeFilter = document.querySelector('.tab.active')?.dataset.filter || 'all';
+
+    grid.querySelectorAll('.product-card').forEach(card => {
+      const name = (card.querySelector('h3')?.textContent || '').toLowerCase();
+      const cat  = (card.querySelector('.card-cat')?.textContent || '').toLowerCase();
+      const matchesSearch = !q || name.includes(q) || cat.includes(q);
+      const matchesFilter = activeFilter === 'all' || card.dataset.category === activeFilter;
+      card.classList.toggle('hidden', !(matchesSearch && matchesFilter));
+    });
+  }
+
+  input.addEventListener('input', applySearch);
+
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    applySearch();
+    input.focus();
+  });
+
+  // Re-run search when filter tab changes
+  document.getElementById('filterTabs').addEventListener('click', () => {
+    requestAnimationFrame(applySearch);
   });
 }
 
