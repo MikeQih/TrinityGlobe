@@ -24,7 +24,7 @@ collections:
               - label: "Category"
                 name: "category"
                 widget: "string"
-                hint: "Used for tab filtering. e.g. cognac / whisky / champagne / wine / baijiu / other"
+                hint: "Used for tab filtering. e.g. cognac / whisky / champagne / wine / sake / baijiu / other"
               - label: "Category Label"
                 name: "categoryLabel"
                 widget: "string"
