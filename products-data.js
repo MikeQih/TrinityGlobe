@@ -8,14 +8,14 @@ const PRODUCTS = [
     name: "嗨啤精酿 拉格",
     category: "beer",
     categoryLabel: "Beer · 精酿",
-    image: "啤酒 - Lager.jpg",
+    image: "啤酒 - Lager.png",
     prices: { bottle: 6, case: 120, fiveCases: null }
   },
   {
     name: "嗨啤精酿 小麦",
     category: "beer",
     categoryLabel: "Beer · 精酿",
-    image: "啤酒 - 小麦啤.jpg",
+    image: "啤酒 - 小麦啤.png",
     prices: { bottle: 6, case: 120, fiveCases: null }
   },
 
@@ -24,7 +24,7 @@ const PRODUCTS = [
     name: "Blue Dash",
     category: "vodka",
     categoryLabel: "Vodka · Exclusive",
-    image: "伏特加 - Blue Dash.jpg",
+    image: "伏特加 - Blue Dash.png",
     prices: { bottle: 65, case: 780, fiveCases: null }
   },
 
@@ -33,7 +33,7 @@ const PRODUCTS = [
     name: "Premium Tequila",
     category: "tequila",
     categoryLabel: "Tequila",
-    image: "龙舌兰 - Premium Tequila.jpg",
+    image: "龙舌兰 - Premium Tequila.png",
     prices: { bottle: 78, case: 936, fiveCases: null }
   },
 
@@ -100,7 +100,7 @@ const PRODUCTS = [
     name: "The Macallan 12",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 麦卡伦12年.jpg",
+    image: "威士忌 - 麦卡伦12年.png",
     prices: { bottle: 170, case: 2040, fiveCases: null }
   },
   {
@@ -114,14 +114,14 @@ const PRODUCTS = [
     name: "The Macallan 18",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 麦卡伦18年.jpg",
+    image: "威士忌 - 麦卡伦18年.png",
     prices: { bottle: 550, case: 3300, fiveCases: null }
   },
   {
     name: "The Macallan 25",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 麦卡伦25年.jpg",
+    image: "威士忌 - 麦卡伦25年.png",
     prices: { bottle: 3150, case: 9450, fiveCases: null }
   },
   {
@@ -135,28 +135,28 @@ const PRODUCTS = [
     name: "Yamazaki 12",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 山崎12年.jpg",
+    image: "威士忌 - 山崎12年.png",
     prices: { bottle: 290, case: 3480, fiveCases: null }
   },
   {
     name: "Yamazaki 18",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 山崎18年.jpg",
+    image: "威士忌 - 山崎18年.png",
     prices: { bottle: 1500, case: 18000, fiveCases: null }
   },
   {
     name: "Hibiki Japanese Harmony",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 响和风.jpg",
+    image: "威士忌 - 响和风.png",
     prices: { bottle: 240, case: 2880, fiveCases: null }
   },
   {
     name: "Hibiki 21",
     category: "whisky",
     categoryLabel: "Whisky",
-    image: "威士忌 - 响21年.jpg",
+    image: "威士忌 - 响21年.png",
     prices: { bottle: 1350, case: 16200, fiveCases: null }
   },
 
@@ -172,7 +172,7 @@ const PRODUCTS = [
     name: "Dom Pérignon 2013",
     category: "champagne",
     categoryLabel: "Champagne",
-    image: "香槟 - Dom Pérignon 2013.jpg",
+    image: "香槟 - Dom Pérignon 2013.png",
     prices: { bottle: 285, case: null, fiveCases: null }
   },
   {
@@ -186,7 +186,7 @@ const PRODUCTS = [
     name: "Perrier-Jouët",
     category: "champagne",
     categoryLabel: "Champagne",
-    image: "香槟 - Perrier-Jouët.jpg",
+    image: "香槟 - Perrier-Jouët.png",
     prices: { bottle: 155, case: 930, fiveCases: null }
   },
 
@@ -209,14 +209,14 @@ const PRODUCTS = [
     name: "IT Extroso Appassimento Rosso",
     category: "wine",
     categoryLabel: "Red Wine",
-    image: "红酒 - IT Extroso Appassimento.jpg",
+    image: "红酒 - IT Extroso Appassimento.png",
     prices: { bottle: 60, case: null, fiveCases: null }
   },
   {
     name: "Sella & Mosca Monteoro 2020",
     category: "wine",
     categoryLabel: "White Wine",
-    image: "白葡萄酒 - Sella & Mosca Monteoro 2020.jpg",
+    image: "白葡萄酒 - Sella & Mosca Monteoro 2020.png",
     prices: { bottle: 60, case: null, fiveCases: null }
   },
 
@@ -225,7 +225,7 @@ const PRODUCTS = [
     name: "Dassai 23 1.8L",
     category: "sake",
     categoryLabel: "Sake · 清酒",
-    image: "清酒 - Dassai 23 1.8L.jpg",
+    image: "清酒 - Dassai 23 1.8L.png",
     prices: { bottle: 230, case: null, fiveCases: null }
   },
   {
@@ -253,7 +253,7 @@ const PRODUCTS = [
     name: "十四代 中取 播州山田錦 1.8L",
     category: "sake",
     categoryLabel: "Sake · 清酒",
-    image: "清酒 - 十四代 中取 播州山田錦.jpeg",
+    image: "清酒 - 十四代 中取 播州山田錦.png",
     prices: { bottle: 770, case: null, fiveCases: null }
   },
 

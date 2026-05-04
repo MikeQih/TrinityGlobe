@@ -4,7 +4,7 @@
       "name": "嗨啤精酿 拉格",
       "category": "beer",
       "categoryLabel": "Beer · 精酿",
-      "image": "/images/啤酒 - Lager.jpg",
+      "image": "/images/啤酒 - Lager.png",
       "prices": {
         "bottle": 6,
         "case": 120,
@@ -15,7 +15,7 @@
       "name": "嗨啤精酿 小麦",
       "category": "beer",
       "categoryLabel": "Beer · 精酿",
-      "image": "/images/啤酒 - 小麦啤.jpg",
+      "image": "/images/啤酒 - 小麦啤.png",
       "prices": {
         "bottle": 6,
         "case": 120,
@@ -26,7 +26,7 @@
       "name": "Blue Dash",
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
-      "image": "/images/伏特加 - Blue Dash.jpg",
+      "image": "/images/伏特加 - Blue Dash.png",
       "prices": {
         "bottle": 65,
         "case": 780,
@@ -37,7 +37,7 @@
       "name": "Premium Tequila",
       "category": "tequila",
       "categoryLabel": "Tequila",
-      "image": "/images/龙舌兰 - Premium Tequila.jpg",
+      "image": "/images/龙舌兰 - Premium Tequila.png",
       "prices": {
         "bottle": 78,
         "case": 936,
@@ -136,7 +136,7 @@
       "name": "The Macallan 12",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦12年.jpg",
+      "image": "/images/威士忌 - 麦卡伦12年.png",
       "prices": {
         "bottle": 170,
         "case": 2040,
@@ -158,7 +158,7 @@
       "name": "The Macallan 18",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦18年.jpg",
+      "image": "/images/威士忌 - 麦卡伦18年.png",
       "prices": {
         "bottle": 550,
         "case": 3300,
@@ -169,7 +169,7 @@
       "name": "The Macallan 25",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦25年.jpg",
+      "image": "/images/威士忌 - 麦卡伦25年.png",
       "prices": {
         "bottle": 3150,
         "case": 9450,
@@ -191,7 +191,7 @@
       "name": "Yamazaki 12",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 山崎12年.jpg",
+      "image": "/images/威士忌 - 山崎12年.png",
       "prices": {
         "bottle": 290,
         "case": 3480,
@@ -202,7 +202,7 @@
       "name": "Yamazaki 18",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 山崎18年.jpg",
+      "image": "/images/威士忌 - 山崎18年.png",
       "prices": {
         "bottle": 1500,
         "case": 18000,
@@ -213,7 +213,7 @@
       "name": "Hibiki Japanese Harmony",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 响和风.jpg",
+      "image": "/images/威士忌 - 响和风.png",
       "prices": {
         "bottle": 240,
         "case": 2880,
@@ -224,7 +224,7 @@
       "name": "Hibiki 21",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 响21年.jpg",
+      "image": "/images/威士忌 - 响21年.png",
       "prices": {
         "bottle": 1350,
         "case": 16200,
@@ -246,7 +246,7 @@
       "name": "Dom Pérignon 2013",
       "category": "champagne",
       "categoryLabel": "Champagne",
-      "image": "/images/香槟 - Dom Pérignon 2013.jpg",
+      "image": "/images/香槟 - Dom Pérignon 2013.png",
       "prices": {
         "bottle": 285,
         "case": null,
@@ -268,7 +268,7 @@
       "name": "Perrier-Jouët",
       "category": "champagne",
       "categoryLabel": "Champagne",
-      "image": "/images/香槟 - Perrier-Jouët.jpg",
+      "image": "/images/香槟 - Perrier-Jouët.png",
       "prices": {
         "bottle": 155,
         "case": 930,
@@ -301,7 +301,7 @@
       "name": "IT Extroso Appassimento Rosso",
       "category": "wine",
       "categoryLabel": "Red Wine",
-      "image": "/images/红酒 - IT Extroso Appassimento.jpg",
+      "image": "/images/红酒 - IT Extroso Appassimento.png",
       "prices": {
         "bottle": 60,
         "case": null,
@@ -312,7 +312,7 @@
       "name": "Sella & Mosca Monteoro 2020",
       "category": "wine",
       "categoryLabel": "White Wine",
-      "image": "/images/白葡萄酒 - Sella & Mosca Monteoro 2020.jpg",
+      "image": "/images/白葡萄酒 - Sella & Mosca Monteoro 2020.png",
       "prices": {
         "bottle": 60,
         "case": null,
@@ -323,7 +323,7 @@
       "name": "獺祭 23 1.8L",
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
-      "image": "/images/清酒 - Dassai 23 1.8L.jpg",
+      "image": "/images/清酒 - Dassai 23 1.8L.png",
       "prices": {
         "bottle": 230,
         "case": null,
@@ -367,7 +367,7 @@
       "name": "十四代 中取 播州山田錦 1.8L",
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
-      "image": "/images/清酒 - 十四代 中取 播州山田錦.jpeg",
+      "image": "/images/清酒 - 十四代 中取 播州山田錦.png",
       "prices": {
         "bottle": 770,
         "case": null,
