@@ -14,70 +14,94 @@
   <!-- ── NAV ── -->
   <nav id="navbar">
     <div class="nav-inner">
-      <a href="#hero" class="nav-logo">TRINITY GLOBE</a>
+      <a href="#hero" class="nav-logo">
+        <img class="nav-logo-img" src="images/logo-nowords.png" alt="TG" />
+        TRINITY GLOBE
+      </a>
       <ul class="nav-links">
+        <li><a href="#hero" class="nav-active">Home</a></li>
         <li><a href="#about">About</a></li>
-        <li><a href="#products">Products</a></li>
-        <li><a href="#contact">Contact</a></li>
+        <li><a href="#products">Collection</a></li>
       </ul>
-      <button class="nav-enquire" onclick="scrollToContact()">Enquire Now</button>
+      <button class="nav-enquire" onclick="scrollToContact()">Contact</button>
+      <button class="nav-hamburger" id="navHamburger" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </nav>
 
+  <!-- Mobile Menu Overlay -->
+  <div class="mobile-menu" id="mobileMenu">
+    <ul class="mobile-links">
+      <li><a href="#hero" onclick="closeMobileMenu()">Home</a></li>
+      <li><a href="#about" onclick="closeMobileMenu()">About</a></li>
+      <li><a href="#products" onclick="closeMobileMenu()">Collection</a></li>
+      <li><a href="#contact" onclick="closeMobileMenu()">Contact</a></li>
+    </ul>
+  </div>
+
   <!-- ── HERO ── -->
   <section id="hero">
+    <img class="hero-bg-img" src="images/首页轮播图/p1-首页图片.png" alt="" />
     <div class="hero-overlay"></div>
-    <div class="hero-content">
-      <p class="hero-sub">Singapore's Premier Spirits Supplier</p>
-      <h1 class="hero-title">TRINITY<br/><span>GLOBE</span></h1>
-      <p class="hero-tagline">Curating the world's finest spirits,<br/>delivered to your door.</p>
-      <div class="hero-btns">
-        <a href="#products" class="btn-gold">Explore Collection</a>
-        <a href="#contact" class="btn-outline">Get in Touch</a>
+    <div class="hero-main">
+      <div class="container">
+        <div class="hero-text">
+          <p class="hero-eyebrow">Singapore's Premier Spirits Distributor</p>
+          <h1 class="hero-title">TRINITY<br/><span>GLOBE</span></h1>
+          <div class="hero-divider"><em></em><i>✦</i></div>
+          <p class="hero-tagline">Curating the world's finest spirits,<br/>delivered to your door.</p>
+          <div class="hero-btns">
+            <a href="#products" class="btn-gold">Explore Collection <b>›</b></a>
+            <a href="#about" class="btn-dark">About Us <b>›</b></a>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="hero-scroll-hint">
-      <span>Scroll</span>
-      <div class="scroll-line"></div>
+    <div class="hero-features">
+      <div class="features-track-wrap">
+        <div class="features-track" id="featuresTrack">
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="12" rx="1"/><path d="M16 8h4l3 4v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+            <div><strong>Free Delivery</strong><span>Min. order S$120</span></div>
+          </div>
+          <span class="features-sep">✦</span>
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 22h8M12 22v-7M5 2h14l-3 9a5 5 0 01-8 0L5 2z"/></svg></div>
+            <div><strong>Free Tasting</strong><span>Available on request</span></div>
+          </div>
+          <span class="features-sep">✦</span>
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <div><strong>Exclusive Distributor</strong><span>Blue Dash spirits</span></div>
+          </div>
+          <span class="features-sep">✦</span>
+          <div class="feature-item">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg></div>
+            <div><strong>Dedicated Support</strong><span>We're here to help</span></div>
+          </div>
+          <span class="features-sep">✦</span>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- ── ABOUT ── -->
   <section id="about">
     <div class="container">
-      <div class="section-label">Who We Are</div>
       <div class="about-grid">
-        <div class="about-text">
-          <h2>Elevating Every<br/>Occasion</h2>
-          <p>Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the <strong>exclusive distributor of Blue Dash</strong>, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu — each chosen for its quality, heritage, and character.</p>
-          <p>Whether you're celebrating a milestone, entertaining guests, or looking for a distinguished gift, we deliver with care and professionalism.</p>
-          <div class="about-highlights">
-            <div class="highlight">
-              <span class="highlight-icon">✦</span>
-              <div>
-                <strong>Free Delivery</strong>
-                <span>Min. order S$120</span>
-              </div>
-            </div>
-            <div class="highlight">
-              <span class="highlight-icon">✦</span>
-              <div>
-                <strong>Free Tasting</strong>
-                <span>Available on request</span>
-              </div>
-            </div>
-            <div class="highlight">
-              <span class="highlight-icon">✦</span>
-              <div>
-                <strong>Exclusive Distributor</strong>
-                <span>Blue Dash spirits</span>
-              </div>
-            </div>
-          </div>
+        <div class="about-left">
+          <div class="about-eyebrow">About Trinity Globe</div>
+          <h2 class="about-title">Built on Passion.<br/>Driven by <span>Quality.</span></h2>
+          <p class="about-desc">Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the exclusive distributor of Blue Dash, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu.</p>
+          <a href="#products" class="btn-story">Our Collection</a>
         </div>
-        <div class="about-visual">
+        <div class="about-right">
           <div class="about-img-wrap">
-            <img src="images/干邑白兰地 - Hennessy XO.png" alt="Premium Spirits" />
+            <img src="images/首页轮播图/p2-品牌故事.png" alt="Trinity Globe Brand Story" />
+            <div class="about-badge">
+              <img src="images/logo-nowords.png" alt="TG" />
+            </div>
           </div>
         </div>
       </div>

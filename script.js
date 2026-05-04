@@ -1,7 +1,27 @@
-// ── NAV scroll effect ──
+// ── NAV scroll effect + active link ──
 const navbar = document.getElementById('navbar');
+const navEnquire = document.querySelector('.nav-enquire');
+const navSections = [
+  { id: 'hero',     link: document.querySelector('.nav-links a[href="#hero"]') },
+  { id: 'about',    link: document.querySelector('.nav-links a[href="#about"]') },
+  { id: 'products', link: document.querySelector('.nav-links a[href="#products"]') },
+  { id: 'contact',  link: null },
+];
+
 window.addEventListener('scroll', () => {
   navbar.classList.toggle('scrolled', window.scrollY > 60);
+
+  const scrollMid = window.scrollY + window.innerHeight / 3;
+  let current = navSections[0];
+  for (const s of navSections) {
+    const el = document.getElementById(s.id);
+    if (el && el.offsetTop <= scrollMid) current = s;
+  }
+  navSections.forEach(s => s.link?.classList.remove('nav-active'));
+  current.link?.classList.add('nav-active');
+
+  const inContact = current.id === 'contact';
+  navEnquire?.classList.toggle('nav-enquire-active', inContact);
 });
 
 // ── Format price ──
@@ -190,14 +210,58 @@ function initSearch() {
 
 // ── Smooth scroll for enquire button ──
 function scrollToContact() {
+  closeMobileMenu();
   document.getElementById('contact').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Mobile hamburger menu ──
+const hamburger = document.getElementById('navHamburger');
+const mobileMenu = document.getElementById('mobileMenu');
+
+hamburger?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpen = mobileMenu.classList.toggle('open');
+  hamburger.classList.toggle('open', isOpen);
+});
+
+document.addEventListener('click', (e) => {
+  if (mobileMenu?.classList.contains('open') &&
+      !mobileMenu.contains(e.target) && e.target !== hamburger) {
+    closeMobileMenu();
+  }
+});
+
+function closeMobileMenu() {
+  mobileMenu?.classList.remove('open');
+  hamburger?.classList.remove('open');
+}
+
+// ── Features marquee: clone until wider than 2× viewport ──
+function initMarquee() {
+  const track = document.getElementById('featuresTrack');
+  if (!track) return;
+
+  const originalHTML = track.innerHTML;
+  const originalWidth = track.scrollWidth;
+
+  // Clone until total width > 2× viewport
+  const needed = Math.ceil((window.innerWidth * 2.5) / originalWidth);
+  for (let i = 0; i < needed; i++) {
+    track.innerHTML += originalHTML;
+  }
+
+  // Total copies = needed + 1 (original). Offset = 1 / total copies
+  const totalCopies = needed + 1;
+  const offset = -(1 / totalCopies * 100).toFixed(4) + '%';
+  track.style.setProperty('--marquee-offset', offset);
 }
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
   loadProducts();
+  initMarquee();
 
-  const staticEls = document.querySelectorAll('.about-grid, .highlight');
+  const staticEls = document.querySelectorAll('.highlight');
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
