@@ -42,21 +42,21 @@ const PRODUCTS = [
     name: "Hennessy VSOP",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Hennessy VSOP test.png",
+    image: "干邑白兰地 - Hennessy VSOP.png",
     prices: { bottle: 105, case: 1260, fiveCases: null }
   },
   {
     name: "Hennessy XO",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Hennessy XO.jpg",
+    image: "干邑白兰地 - Hennessy XO.png",
     prices: { bottle: 235, case: 2820, fiveCases: null }
   },
   {
     name: "Hennessy Paradis",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Hennessy Paradis.jpg",
+    image: "干邑白兰地 - Hennessy Paradis.png",
     prices: { bottle: 1350, case: 16200, fiveCases: null }
   },
   {
@@ -70,28 +70,28 @@ const PRODUCTS = [
     name: "Martell Cordon Bleu",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Martell Cordon Bleu.jpg",
+    image: "干邑白兰地 - Martell Cordon Bleu.png",
     prices: { bottle: 230, case: 2760, fiveCases: null }
   },
   {
     name: "Martell XO",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Martell XO.jpg",
+    image: "干邑白兰地 - Martell XO.png",
     prices: { bottle: 240, case: 2880, fiveCases: null }
   },
   {
     name: "Gaulois XO 1L",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Gaulois XO.jpg",
+    image: "干邑白兰地 - Gaulois XO.png",
     prices: { bottle: 199, case: null, fiveCases: null }
   },
   {
     name: "GAVO XO 700ML",
     category: "cognac",
     categoryLabel: "Cognac",
-    image: "干邑白兰地 - Gavo XO.jpg",
+    image: "干邑白兰地 - Gavo XO.png",
     prices: { bottle: 199, case: null, fiveCases: null }
   },
 
@@ -262,7 +262,7 @@ const PRODUCTS = [
     name: "Moutai",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 飞天茅台.jpg",
+    image: "中国白酒 - 飞天茅台.png",
     prices: { bottle: 380, case: 4560, fiveCases: null }
   },
   {
@@ -276,56 +276,56 @@ const PRODUCTS = [
     name: "Guojiao 1573",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 国窖1573.jpg",
+    image: "中国白酒 - 国窖1573.png",
     prices: { bottle: 220, case: 1320, fiveCases: null }
   },
   {
     name: "泸州鉴藏 A8",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 泸州鉴藏A8.jpeg",
+    image: "中国白酒 - 泸州鉴藏A8.png",
     prices: { bottle: 129, case: null, fiveCases: null }
   },
   {
     name: "剑南春 东方红",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 剑南春东方红.jpg",
+    image: "中国白酒 - 剑南春东方红.png",
     prices: { bottle: 199, case: null, fiveCases: null }
   },
   {
     name: "剑南春 青铜纪",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 剑南春青铜纪.jpeg",
+    image: "中国白酒 - 剑南春青铜纪.png",
     prices: { bottle: 399, case: null, fiveCases: null }
   },
   {
     name: "精品茅台",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 精品茅台.webp",
+    image: "中国白酒 - 精品茅台.png",
     prices: { bottle: 599, case: null, fiveCases: null }
   },
   {
     name: "茅台 15年",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 茅台15年.jpg",
+    image: "中国白酒 - 茅台15年.png",
     prices: { bottle: 1399, case: null, fiveCases: null }
   },
   {
     name: "茅台 30年",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 茅台30年.jpeg",
+    image: "中国白酒 - 茅台30年.png",
     prices: { bottle: 3399, case: null, fiveCases: null }
   },
   {
     name: "茅台 50年",
     category: "baijiu",
     categoryLabel: "Baijiu",
-    image: "中国白酒 - 茅台50年.jpeg",
+    image: "中国白酒 - 茅台50年.png",
     prices: { bottle: 5399, case: null, fiveCases: null }
   },
 
@@ -376,7 +376,7 @@ const PRODUCTS = [
     name: "汾酒 陈酿30年",
     category: "baijiu",
     categoryLabel: "Baijiu · 汾酒",
-    image: "中国白酒 - 汾酒 - 陈酿30年.jpg",
+    image: "中国白酒 - 汾酒 - 陈酿30年.png",
     prices: { bottle: 175, case: null, fiveCases: null }
   },
   {
@@ -390,7 +390,7 @@ const PRODUCTS = [
     name: "汾酒 青花50度",
     category: "baijiu",
     categoryLabel: "Baijiu · 汾酒",
-    image: "中国白酒 - 汾酒 - 青花50度.jpg",
+    image: "中国白酒 - 汾酒 - 青花50度.png",
     prices: { bottle: 205, case: null, fiveCases: null }
   },
   {
@@ -411,14 +411,14 @@ const PRODUCTS = [
     name: "竹叶青 限量版",
     category: "baijiu",
     categoryLabel: "Baijiu · 汾酒",
-    image: "中国白酒 - 汾酒 - 竹叶青限量版.jpg",
+    image: "中国白酒 - 汾酒 - 竹叶青限量版.png",
     prices: { bottle: 425, case: null, fiveCases: null }
   },
   {
     name: "汾酒 丝绸之路",
     category: "baijiu",
     categoryLabel: "Baijiu · 汾酒",
-    image: "中国白酒 - 汾酒 - 丝绸之路.jpeg",
+    image: "中国白酒 - 汾酒 - 丝绸之路.png",
     prices: { bottle: 435, case: null, fiveCases: null }
   },
 
@@ -427,7 +427,7 @@ const PRODUCTS = [
     name: "洋河 大曲新天蓝",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 大曲新天蓝.jpg",
+    image: "中国白酒 - 洋河 - 大曲新天蓝.png",
     prices: { bottle: 40, case: null, fiveCases: null }
   },
   {
@@ -441,56 +441,56 @@ const PRODUCTS = [
     name: "洋河 天之蓝 42%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 天之蓝 42度.jpg",
+    image: "中国白酒 - 洋河 - 天之蓝 42度.png",
     prices: { bottle: 77, case: null, fiveCases: null }
   },
   {
     name: "洋河 天之蓝 52%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 天之蓝 52度.jpg",
+    image: "中国白酒 - 洋河 - 天之蓝 52度.png",
     prices: { bottle: 85, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝水晶版 40.8%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝水晶版 40.8度.jpeg",
+    image: "中国白酒 - 洋河 - 梦之蓝水晶版 40.8度.png",
     prices: { bottle: 105, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝水晶版 52%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝水晶版 52度.jpeg",
+    image: "中国白酒 - 洋河 - 梦之蓝水晶版 52度.png",
     prices: { bottle: 125, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝 M6+ 40.8%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝M6 40.8度.jpg",
+    image: "中国白酒 - 洋河 - 梦之蓝M6 40.8度.png",
     prices: { bottle: 140, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝 M6+ 52%",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝M6 52度.jpeg",
+    image: "中国白酒 - 洋河 - 梦之蓝M6 52度.png",
     prices: { bottle: 160, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝 M9",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝M9.jpg",
+    image: "中国白酒 - 洋河 - 梦之蓝M9.png",
     prices: { bottle: 285, case: null, fiveCases: null }
   },
   {
     name: "洋河 梦之蓝手工班",
     category: "baijiu",
     categoryLabel: "Baijiu · 洋河",
-    image: "中国白酒 - 洋河 - 梦之蓝手工班.jpg",
+    image: "中国白酒 - 洋河 - 梦之蓝手工班.png",
     prices: { bottle: 335, case: null, fiveCases: null }
   },
 ];
