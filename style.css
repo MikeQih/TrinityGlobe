@@ -835,6 +835,12 @@ footer .container {
   .hero-bg-img { width: 100%; height: 100%; opacity: 0.35; }
   .hero-overlay { height: 100%; background: linear-gradient(to bottom, rgba(5,5,5,0.5) 0%, rgba(5,5,5,0.85) 100%); }
   .hero-title { font-size: clamp(2.4rem, 11vw, 3.6rem); }
+  .hero-eyebrow { display: none; }
+  .hero-tagline { font-size: 0.85rem; margin-bottom: 1.5rem; }
+  .hero-divider { margin-bottom: 0.8rem; }
+  .hero-btns { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .btn-gold, .btn-dark { padding: 0.65rem 1.4rem; font-size: 0.72rem; }
+  .hero-main { padding-top: 5rem; align-items: center; margin-top: -4rem; }
 
   /* About */
   .about-grid { grid-template-columns: 1fr; gap: 2.5rem; }
