@@ -3,39 +3,6 @@
 // Prices are in SGD. Set a value to null to hide that price tier.
 
 const PRODUCTS = [
-  // ── Beer ──
-  {
-    name: "嗨啤精酿 拉格",
-    category: "beer",
-    categoryLabel: "Beer · 精酿",
-    image: "啤酒 - Lager.png",
-    prices: { bottle: 6, case: 120, fiveCases: null }
-  },
-  {
-    name: "嗨啤精酿 小麦",
-    category: "beer",
-    categoryLabel: "Beer · 精酿",
-    image: "啤酒 - 小麦啤.png",
-    prices: { bottle: 6, case: 120, fiveCases: null }
-  },
-
-  // ── Vodka ──
-  {
-    name: "Blue Dash",
-    category: "vodka",
-    categoryLabel: "Vodka · Exclusive",
-    image: "伏特加 - Blue Dash.png",
-    prices: { bottle: 65, case: 780, fiveCases: null }
-  },
-
-  // ── Tequila ──
-  {
-    name: "Premium Tequila",
-    category: "tequila",
-    categoryLabel: "Tequila",
-    image: "龙舌兰 - Premium Tequila.png",
-    prices: { bottle: 78, case: 936, fiveCases: null }
-  },
 
   // ── Cognac ──
   {
@@ -492,5 +459,39 @@ const PRODUCTS = [
     categoryLabel: "Baijiu · 洋河",
     image: "中国白酒 - 洋河 - 梦之蓝手工班.png",
     prices: { bottle: 335, case: null, fiveCases: null }
+  },
+
+  // ── Beer ──
+  {
+    name: "嗨啤精酿 拉格",
+    category: "beer",
+    categoryLabel: "Beer · 精酿",
+    image: "啤酒 - Lager.png",
+    prices: { bottle: 6, case: 120, fiveCases: null }
+  },
+  {
+    name: "嗨啤精酿 小麦",
+    category: "beer",
+    categoryLabel: "Beer · 精酿",
+    image: "啤酒 - 小麦啤.png",
+    prices: { bottle: 6, case: 120, fiveCases: null }
+  },
+
+  // ── Vodka ──
+  {
+    name: "Blue Dash",
+    category: "vodka",
+    categoryLabel: "Vodka · Exclusive",
+    image: "伏特加 - Blue Dash.png",
+    prices: { bottle: 65, case: 780, fiveCases: null }
+  },
+
+  // ── Tequila ──
+  {
+    name: "Premium Tequila",
+    category: "tequila",
+    categoryLabel: "Tequila",
+    image: "龙舌兰 - Premium Tequila.png",
+    prices: { bottle: 78, case: 936, fiveCases: null }
   },
 ];

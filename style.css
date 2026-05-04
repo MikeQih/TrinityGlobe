@@ -755,5 +755,34 @@ footer .container {
   }
   .filter-tabs::-webkit-scrollbar { display: none; }
   .tab { padding: 0.4rem 0.9rem; font-size: 0.68rem; white-space: nowrap; }
-  .product-grid { grid-template-columns: 1fr; }
+
+  .product-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .card-img-wrap {
+    aspect-ratio: 1 / 1;
+  }
+
+  .card-info {
+    padding: 0.75rem;
+  }
+
+  .card-cat { font-size: 0.55rem; letter-spacing: 0.12em; }
+
+  .card-info h3 {
+    font-size: 0.72rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .price-grid {
+    gap: 0.1rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .price-label { font-size: 0.34rem; letter-spacing: 0.03em; white-space: nowrap; }
+  .price-value { font-size: 0.46rem; white-space: nowrap; }
+  .price-value.price-na { font-size: 0.46rem; }
 }
