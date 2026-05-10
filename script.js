@@ -41,7 +41,7 @@ const translations = {
     'feat-support-title': '专属客服', 'feat-support-sub': '随时为您服务',
     'about-eyebrow': '关于 Trinity Globe',
     'about-title': '热情铸就，<br/>品质<span>驱动。</span>',
-    'about-desc': 'Trinity Globe Trading Pte. Ltd.<br/>新加坡顶级烈酒与精品饮品供应商。精选轩尼诗、马爹利、麦卡伦、飞天茅台、五粮液、山崎等国际名酒，涵盖干邑、威士忌、香槟及白酒。作为布鲁大师独家经销商，甄选世界级精品，送货上门。',
+    'about-desc': '新加坡顶级烈酒与精品饮品供应商。精选轩尼诗、马爹利、麦卡伦、飞天茅台、五粮液、山崎等国际名酒，涵盖干邑、威士忌、香槟及白酒。作为布鲁大师独家经销商，甄选世界级精品，送货上门。',
     'about-btn': '我们的产品',
     'products-label': '我们的产品', 'products-title': '臻选名酒，<br/>专为您甄选',
     'search-placeholder': '搜索产品…',
