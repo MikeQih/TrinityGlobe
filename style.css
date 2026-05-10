@@ -77,7 +77,8 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   list-style: none;
   gap: 2rem;
-  margin-left: auto;
+  margin: 0 0 0 auto;
+  padding: 0;
 }
 
 .nav-links a {
