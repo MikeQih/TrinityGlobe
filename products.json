@@ -89,13 +89,24 @@
       }
     },
     {
-      "name": "The Macallan 12",
+      "name": "Macallan 12 Double Cask",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦12年.png",
+      "image": "/images/威士忌 - 麦卡伦12年 Double Cask.png",
       "prices": {
         "bottle": 129,
         "case": 125,
+        "fiveCases": null
+      }
+    },
+    {
+      "name": "Macallan 12 Sherry Oak",
+      "category": "whisky",
+      "categoryLabel": "Whisky",
+      "image": "/images/威士忌 - 麦卡伦12年 Sherry Oak.png",
+      "prices": {
+        "bottle": 145,
+        "case": 140,
         "fiveCases": null
       }
     },
@@ -111,13 +122,24 @@
       }
     },
     {
-      "name": "The Macallan 18",
+      "name": "Macallan 18 Double Oak",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦18年.png",
+      "image": "/images/威士忌 - 麦卡伦18年 Double Oak.png",
       "prices": {
         "bottle": 445,
         "case": 430,
+        "fiveCases": null
+      }
+    },
+    {
+      "name": "Macallan 18 Sherry Oak",
+      "category": "whisky",
+      "categoryLabel": "Whisky",
+      "image": "/images/威士忌 - 麦卡伦18年 Sherry Oak.png",
+      "prices": {
+        "bottle": 520,
+        "case": 510,
         "fiveCases": null
       }
     },
@@ -133,13 +155,24 @@
       }
     },
     {
-      "name": "The Macallan 30",
+      "name": "Macallan 30 Double Cask",
       "category": "whisky",
       "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦30年.png",
+      "image": "/images/威士忌 - 麦卡伦30年 Double Cask.png",
       "prices": {
         "bottle": 4600,
         "case": 4500,
+        "fiveCases": null
+      }
+    },
+    {
+      "name": "Macallan 30 Sherry Oak",
+      "category": "whisky",
+      "categoryLabel": "Whisky",
+      "image": "/images/威士忌 - 麦卡伦30年 Sherry Oak.png",
+      "prices": {
+        "bottle": 6200,
+        "case": 6000,
         "fiveCases": null
       }
     },
