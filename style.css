@@ -138,6 +138,8 @@ a { text-decoration: none; color: inherit; }
   padding: 0 0 0.25rem 0;
   transition: color 0.3s, border-color 0.3s;
   text-transform: uppercase;
+  vertical-align: middle;
+  line-height: 1;
 }
 .nav-lang:hover { color: var(--gold); }
 
