@@ -19,11 +19,12 @@
         TRINITY GLOBE
       </a>
       <ul class="nav-links">
-        <li><a href="#hero" class="nav-active">Home</a></li>
-        <li><a href="#about">About</a></li>
-        <li><a href="#products">Collection</a></li>
+        <li><a href="#hero" class="nav-active" data-i18n="nav-home">Home</a></li>
+        <li><a href="#about" data-i18n="nav-about">About</a></li>
+        <li><a href="#products" data-i18n="nav-collection">Collection</a></li>
       </ul>
-      <button class="nav-enquire" onclick="scrollToContact()">Contact</button>
+      <button class="nav-enquire" onclick="scrollToContact()" data-i18n="nav-contact">Contact</button>
+      <button class="nav-lang" id="langToggle" onclick="toggleLanguage()">中文</button>
       <button class="nav-hamburger" id="navHamburger" aria-label="Menu">
         <span></span><span></span><span></span>
       </button>
@@ -33,10 +34,10 @@
   <!-- Mobile Menu Overlay -->
   <div class="mobile-menu" id="mobileMenu">
     <ul class="mobile-links">
-      <li><a href="#hero" onclick="closeMobileMenu()">Home</a></li>
-      <li><a href="#about" onclick="closeMobileMenu()">About</a></li>
-      <li><a href="#products" onclick="closeMobileMenu()">Collection</a></li>
-      <li><a href="#contact" onclick="closeMobileMenu()">Contact</a></li>
+      <li><a href="#hero" onclick="closeMobileMenu()" data-i18n="nav-home">Home</a></li>
+      <li><a href="#about" onclick="closeMobileMenu()" data-i18n="nav-about">About</a></li>
+      <li><a href="#products" onclick="closeMobileMenu()" data-i18n="nav-collection">Collection</a></li>
+      <li><a href="#contact" onclick="closeMobileMenu()" data-i18n="nav-contact">Contact</a></li>
     </ul>
   </div>
 
@@ -47,13 +48,13 @@
     <div class="hero-main">
       <div class="container">
         <div class="hero-text">
-          <p class="hero-eyebrow">Singapore's Premier Spirits Distributor</p>
+          <p class="hero-eyebrow" data-i18n="hero-eyebrow">Singapore's Premier Spirits Distributor</p>
           <h1 class="hero-title">TRINITY<br/><span>GLOBE</span></h1>
           <div class="hero-divider"><em></em><i>✦</i></div>
-          <p class="hero-tagline">Curating the world's finest spirits,<br/>delivered to your door.</p>
+          <p class="hero-tagline" data-i18n="hero-tagline">Curating the world's finest spirits,<br/>delivered to your door.</p>
           <div class="hero-btns">
-            <a href="#products" class="btn-gold">Explore Collection <b>›</b></a>
-            <a href="#about" class="btn-dark">About Us <b>›</b></a>
+            <a href="#products" class="btn-gold" data-i18n="hero-btn-explore">Explore Collection <b>›</b></a>
+            <a href="#about" class="btn-dark" data-i18n="hero-btn-about">About Us <b>›</b></a>
           </div>
         </div>
       </div>
@@ -63,22 +64,22 @@
         <div class="features-track" id="featuresTrack">
           <div class="feature-item">
             <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="12" rx="1"/><path d="M16 8h4l3 4v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
-            <div><strong>Free Delivery</strong><span>Min. order S$120</span></div>
+            <div><strong data-i18n="feat-delivery-title">Free Delivery</strong><span data-i18n="feat-delivery-sub">Min. order S$120</span></div>
           </div>
           <span class="features-sep">✦</span>
           <div class="feature-item">
             <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 22h8M12 22v-7M5 2h14l-3 9a5 5 0 01-8 0L5 2z"/></svg></div>
-            <div><strong>Free Tasting</strong><span>Available on request</span></div>
+            <div><strong data-i18n="feat-tasting-title">Free Tasting</strong><span data-i18n="feat-tasting-sub">Available on request</span></div>
           </div>
           <span class="features-sep">✦</span>
           <div class="feature-item">
             <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-            <div><strong>Exclusive Distributor</strong><span>Blue Dash spirits</span></div>
+            <div><strong data-i18n="feat-exclusive-title">Exclusive Distributor</strong><span data-i18n="feat-exclusive-sub">Blue Dash spirits</span></div>
           </div>
           <span class="features-sep">✦</span>
           <div class="feature-item">
             <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg></div>
-            <div><strong>Dedicated Support</strong><span>We're here to help</span></div>
+            <div><strong data-i18n="feat-support-title">Dedicated Support</strong><span data-i18n="feat-support-sub">We're here to help</span></div>
           </div>
           <span class="features-sep">✦</span>
         </div>
@@ -91,10 +92,10 @@
     <div class="container">
       <div class="about-grid">
         <div class="about-left">
-          <div class="about-eyebrow">About Trinity Globe</div>
-          <h2 class="about-title">Built on Passion.<br/>Driven by <span>Quality.</span></h2>
-          <p class="about-desc">Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the exclusive distributor of Blue Dash, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu.</p>
-          <a href="#products" class="btn-story">Our Collection</a>
+          <div class="about-eyebrow" data-i18n="about-eyebrow">About Trinity Globe</div>
+          <h2 class="about-title" data-i18n="about-title">Built on Passion.<br/>Driven by <span>Quality.</span></h2>
+          <p class="about-desc" data-i18n="about-desc">Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the exclusive distributor of Blue Dash, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu.</p>
+          <a href="#products" class="btn-story" data-i18n="about-btn">Our Collection</a>
         </div>
         <div class="about-right">
           <div class="about-img-wrap">
@@ -108,13 +109,13 @@
   <!-- ── PRODUCTS ── -->
   <section id="products">
     <div class="container">
-      <div class="section-label">Our Collection</div>
-      <h2 class="section-title">Finest Spirits,<br/>Curated for You</h2>
+      <div class="section-label" data-i18n="products-label">Our Collection</div>
+      <h2 class="section-title" data-i18n="products-title">Finest Spirits,<br/>Curated for You</h2>
 
       <!-- Search -->
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
-        <input type="text" id="searchInput" class="search-input" placeholder="Search spirits…" autocomplete="off" />
+        <input type="text" id="searchInput" class="search-input" placeholder="Search spirits…" data-i18n-placeholder="search-placeholder" autocomplete="off" />
         <button class="search-clear" id="searchClear" aria-label="Clear search">✕</button>
       </div>
 
@@ -129,9 +130,9 @@
   <!-- ── CONTACT ── -->
   <section id="contact">
     <div class="container">
-      <div class="section-label">Get in Touch</div>
-      <h2 class="section-title">Ready to Order?</h2>
-      <p class="contact-sub">Reach out via WhatsApp or WeChat. Free delivery on orders above S$120.</p>
+      <div class="section-label" data-i18n="contact-label">Get in Touch</div>
+      <h2 class="section-title" data-i18n="contact-title">Ready to Order?</h2>
+      <p class="contact-sub" data-i18n="contact-sub">Reach out via WhatsApp or WeChat. Free delivery on orders above S$120.</p>
 
       <div class="contact-cards">
         <a class="contact-card" href="https://wa.me/6598680555" target="_blank">
@@ -149,7 +150,7 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 01.213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 00.167-.054l1.903-1.114a.864.864 0 01.717-.098 10.16 10.16 0 002.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-3.895-6.348-7.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178A1.17 1.17 0 014.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178 1.17 1.17 0 01-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 01.598.082l1.584.926a.272.272 0 00.14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 01-.023-.156.49.49 0 01.201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-7.062-6.122zm-3.08 3.013c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.982.969-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 01-.969.983.976.976 0 01-.969-.983c0-.542.434-.982.969-.982z"/></svg>
           </div>
           <div class="contact-details">
-            <strong>WeChat</strong>
+            <strong data-i18n="contact-wechat">WeChat</strong>
             <span>Ryanwangleee</span>
           </div>
         </div>
@@ -159,13 +160,13 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
           </div>
           <div class="contact-details">
-            <strong>Phone</strong>
+            <strong data-i18n="contact-phone">Phone</strong>
             <span>+65 9868 0555</span>
           </div>
         </a>
       </div>
 
-      <p class="contact-note">✦ Free delivery on orders S$120 and above &nbsp;·&nbsp; Free tasting available on request</p>
+      <p class="contact-note" data-i18n="contact-note">✦ Free delivery on orders S$120 and above &nbsp;·&nbsp; Free tasting available on request</p>
     </div>
   </section>
 
@@ -173,7 +174,7 @@
   <footer>
     <div class="container">
       <span class="footer-logo">TRINITY GLOBE TRADING</span>
-      <span class="footer-copy">© 2025 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier</span>
+      <span class="footer-copy" data-i18n="footer-copy">© 2025 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier</span>
     </div>
   </footer>
 

@@ -1,3 +1,103 @@
+// ── i18n ──
+let currentLang = 'en';
+let cachedProducts = null;
+let marqueeOriginalHTML = null;
+
+const translations = {
+  en: {
+    'nav-home': 'Home', 'nav-about': 'About', 'nav-collection': 'Collection', 'nav-contact': 'Contact',
+    'hero-eyebrow': "Singapore's Premier Spirits Distributor",
+    'hero-tagline': "Curating the world's finest spirits,<br/>delivered to your door.",
+    'hero-btn-explore': 'Explore Collection <b>›</b>', 'hero-btn-about': 'About Us <b>›</b>',
+    'feat-delivery-title': 'Free Delivery', 'feat-delivery-sub': 'Min. order S$120',
+    'feat-tasting-title': 'Free Tasting', 'feat-tasting-sub': 'Available on request',
+    'feat-exclusive-title': 'Exclusive Distributor', 'feat-exclusive-sub': 'Blue Dash spirits',
+    'feat-support-title': 'Dedicated Support', 'feat-support-sub': "We're here to help",
+    'about-eyebrow': 'About Trinity Globe',
+    'about-title': 'Built on Passion.<br/>Driven by <span>Quality.</span>',
+    'about-desc': "Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the exclusive distributor of Blue Dash, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu.",
+    'about-btn': 'Our Collection',
+    'products-label': 'Our Collection', 'products-title': 'Finest Spirits,<br/>Curated for You',
+    'search-placeholder': 'Search spirits…',
+    'contact-label': 'Get in Touch', 'contact-title': 'Ready to Order?',
+    'contact-sub': 'Reach out via WhatsApp or WeChat. Free delivery on orders above S$120.',
+    'contact-wechat': 'WeChat', 'contact-phone': 'Phone',
+    'contact-note': '✦ Free delivery on orders S$120 and above &nbsp;·&nbsp; Free tasting available on request',
+    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier',
+    'price-bottle': '1 Bottle', 'price-case': '1 Case', 'price-five': '5 Cases',
+    'filter-all': 'All',
+    'cat-cognac': 'Cognac', 'cat-whisky': 'Whisky', 'cat-champagne': 'Champagne',
+    'cat-wine': 'Wine', 'cat-sake': 'Sake', 'cat-baijiu': 'Baijiu',
+    'cat-beer': 'Beer', 'cat-vodka': 'Vodka', 'cat-tequila': 'Tequila', 'cat-other': 'Others',
+  },
+  zh: {
+    'nav-home': '首页', 'nav-about': '关于', 'nav-collection': '产品', 'nav-contact': '联系我们',
+    'hero-eyebrow': '新加坡顶级烈酒供应商',
+    'hero-tagline': '甄选全球顶级名酒，<br/>送货上门。',
+    'hero-btn-explore': '浏览产品 <b>›</b>', 'hero-btn-about': '关于我们 <b>›</b>',
+    'feat-delivery-title': '免费配送', 'feat-delivery-sub': '最低消费 S$120',
+    'feat-tasting-title': '免费品鉴', 'feat-tasting-sub': '可预约申请',
+    'feat-exclusive-title': '独家经销商', 'feat-exclusive-sub': 'Blue Dash 烈酒',
+    'feat-support-title': '专属客服', 'feat-support-sub': '随时为您服务',
+    'about-eyebrow': '关于 Trinity Globe',
+    'about-title': '热情铸就，<br/>品质<span>驱动。</span>',
+    'about-desc': 'Trinity Globe Trading Pte. Ltd. 是新加坡值得信赖的顶级烈酒与精品饮品供应商。作为 Blue Dash 的独家经销商，我们甄选干邑、威士忌、香槟及白酒等世界级名酒。',
+    'about-btn': '我们的产品',
+    'products-label': '我们的产品', 'products-title': '臻选名酒，<br/>专为您甄选',
+    'search-placeholder': '搜索产品…',
+    'contact-label': '联系我们', 'contact-title': '准备下单？',
+    'contact-sub': '通过 WhatsApp 或微信联系我们，订单满 S$120 免费配送。',
+    'contact-wechat': '微信', 'contact-phone': '电话',
+    'contact-note': '✦ 订单满 S$120 免费配送 &nbsp;·&nbsp; 可预约免费品鉴',
+    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · 新加坡 · 顶级烈酒供应商',
+    'price-bottle': '单瓶', 'price-case': '一箱', 'price-five': '五箱',
+    'filter-all': '全部',
+    'cat-cognac': '干邑', 'cat-whisky': '威士忌', 'cat-champagne': '香槟',
+    'cat-wine': '葡萄酒', 'cat-sake': '清酒', 'cat-baijiu': '白酒',
+    'cat-beer': '啤酒', 'cat-vodka': '伏特加', 'cat-tequila': '龙舌兰', 'cat-other': '其他',
+  },
+};
+
+function t(key) {
+  return translations[currentLang][key] ?? translations.en[key] ?? key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+}
+
+function toggleLanguage() {
+  currentLang = currentLang === 'en' ? 'zh' : 'en';
+  const btn = document.getElementById('langToggle');
+  btn.textContent = currentLang === 'en' ? '中文' : 'EN';
+
+  applyTranslations();
+
+  // Re-render dynamic content with new language
+  if (cachedProducts) {
+    renderProducts(cachedProducts);
+    buildFilterTabs(cachedProducts);
+    initFilter();
+    initSearch();
+    initReveal();
+  }
+
+  // Rebuild marquee with new language
+  const track = document.getElementById('featuresTrack');
+  if (track && marqueeOriginalHTML) {
+    track.innerHTML = marqueeOriginalHTML;
+    track.querySelectorAll('[data-i18n]').forEach(el => {
+      el.innerHTML = t(el.dataset.i18n);
+    });
+    initMarquee();
+  }
+}
+
 // ── NAV scroll effect + active link ──
 const navbar = document.getElementById('navbar');
 const navEnquire = document.querySelector('.nav-enquire');
@@ -33,9 +133,9 @@ function fmt(price) {
 function buildPriceGrid(prices) {
   if (!prices) prices = {};
   const tiers = [
-    { key: 'bottle',    label: '1 Bottle' },
-    { key: 'case',      label: '1 Case'   },
-    { key: 'fiveCases', label: '5 Cases'  },
+    { key: 'bottle',    label: t('price-bottle') },
+    { key: 'case',      label: t('price-case')   },
+    { key: 'fiveCases', label: t('price-five')   },
   ];
 
   const cols = tiers.map(t => {
@@ -65,6 +165,7 @@ async function loadProducts() {
     })) : [];
   }
 
+  cachedProducts = products;
   renderProducts(products);
   buildFilterTabs(products);
   initFilter();
@@ -94,16 +195,16 @@ function buildFilterTabs(products) {
 
   // Tab display labels for known categories
   const labelMap = {
-    cognac:   'Cognac',
-    whisky:   'Whisky',
-    champagne:'Champagne',
-    wine:     'Wine',
-    sake:     'Sake',
-    baijiu:   'Baijiu',
-    beer:     'Beer',
-    vodka:    'Vodka',
-    tequila:  'Tequila',
-    other:    'Others',
+    cognac:    t('cat-cognac'),
+    whisky:    t('cat-whisky'),
+    champagne: t('cat-champagne'),
+    wine:      t('cat-wine'),
+    sake:      t('cat-sake'),
+    baijiu:    t('cat-baijiu'),
+    beer:      t('cat-beer'),
+    vodka:     t('cat-vodka'),
+    tequila:   t('cat-tequila'),
+    other:     t('cat-other'),
   };
 
   // Preserve category order: known ones first, then any new ones alphabetically
@@ -116,7 +217,7 @@ function buildFilterTabs(products) {
   ];
 
   const tabs = ['all', ...ordered].map((cat, i) => {
-    const label = cat === 'all' ? 'All' : (labelMap[cat] || cat.charAt(0).toUpperCase() + cat.slice(1));
+    const label = cat === 'all' ? t('filter-all') : (labelMap[cat] || cat.charAt(0).toUpperCase() + cat.slice(1));
     return `<button class="tab${i === 0 ? ' active' : ''}" data-filter="${cat}">${label}</button>`;
   }).join('');
 
@@ -241,16 +342,16 @@ function initMarquee() {
   const track = document.getElementById('featuresTrack');
   if (!track) return;
 
-  const originalHTML = track.innerHTML;
+  if (!marqueeOriginalHTML) marqueeOriginalHTML = track.innerHTML;
+
+  const singleHTML = track.innerHTML;
   const originalWidth = track.scrollWidth;
 
-  // Clone until total width > 2× viewport
   const needed = Math.ceil((window.innerWidth * 2.5) / originalWidth);
   for (let i = 0; i < needed; i++) {
-    track.innerHTML += originalHTML;
+    track.innerHTML += singleHTML;
   }
 
-  // Total copies = needed + 1 (original). Offset = 1 / total copies
   const totalCopies = needed + 1;
   const offset = -(1 / totalCopies * 100).toFixed(4) + '%';
   track.style.setProperty('--marquee-offset', offset);
