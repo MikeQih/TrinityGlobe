@@ -613,40 +613,31 @@
       "prices": { "bottle": 6, "case": 5, "fiveCases": null }
     },
     {
-      "name": "Blue Dash",
-      "nameEn": "Blue Dash",
-      "nameZh": "Blue Dash",
+      "name": "Blue Dash Cucumber Flavor 730ml",
+      "nameEn": "Blue Dash<br>Cucumber Flavor 730ml",
+      "nameZh": "布鲁大师<br>青瓜味 730ml",
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
       "prices": { "bottle": 58, "case": 38, "fiveCases": null }
     },
     {
-      "name": "Blue Dash Cucumber Flavor 730ml",
-      "nameEn": "Blue Dash Cucumber Flavor 730ml",
-      "nameZh": "布鲁大师 青瓜味 730ml",
-      "category": "vodka",
-      "categoryLabel": "Vodka · Exclusive",
-      "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 68, "case": null, "fiveCases": null }
-    },
-    {
       "name": "Blue Dash Lime Flavor 730ml",
-      "nameEn": "Blue Dash Lime Flavor 730ml",
-      "nameZh": "布鲁大师 青柠味 730ml",
+      "nameEn": "Blue Dash<br>Lime Flavor 730ml",
+      "nameZh": "布鲁大师<br>青柠味 730ml",
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 68, "case": null, "fiveCases": null }
+      "prices": { "bottle": 58, "case": 38, "fiveCases": null }
     },
     {
       "name": "Blue Dash White Grape Flavor 730ml",
-      "nameEn": "Blue Dash White Grape Flavor 730ml",
-      "nameZh": "布鲁大师 白葡萄味 730ml",
+      "nameEn": "Blue Dash<br>White Grape Flavor 730ml",
+      "nameZh": "布鲁大师<br>白葡萄味 730ml",
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 68, "case": null, "fiveCases": null }
+      "prices": { "bottle": 58, "case": 38, "fiveCases": null }
     },
     {
       "name": "Premium Tequila",
