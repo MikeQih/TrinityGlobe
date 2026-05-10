@@ -52,7 +52,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Martell XO.png",
-      "prices": { "bottle": 240, "case": 2880, "fiveCases": null }
+      "prices": { "bottle": 240, "case": 230, "fiveCases": null }
     },
     {
       "name": "Gaulois XO 1L",
@@ -628,7 +628,7 @@
       "category": "tequila",
       "categoryLabel": "Tequila",
       "image": "/images/龙舌兰 - Premium Tequila.png",
-      "prices": { "bottle": 78, "case": 936, "fiveCases": null }
+      "prices": { "bottle": 78, "case": 58, "fiveCases": null }
     }
   ]
 }
