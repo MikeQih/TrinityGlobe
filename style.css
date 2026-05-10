@@ -219,6 +219,21 @@ a { text-decoration: none; color: inherit; }
 
 .mobile-links a:hover { color: var(--gold); }
 
+.mobile-lang-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.9rem 0;
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold);
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+
 /* ── HERO ── */
 #hero {
   position: relative;
@@ -852,6 +867,7 @@ footer .container {
 @media (max-width: 768px) {
   .nav-links { display: none; }
   .nav-enquire { display: none; }
+  .nav-lang { display: none; }
   .nav-hamburger { display: flex; }
   .hero-main .container { padding: 0 1.5rem; }
 

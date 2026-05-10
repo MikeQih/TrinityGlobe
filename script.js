@@ -73,8 +73,10 @@ function applyTranslations() {
 
 function toggleLanguage() {
   currentLang = currentLang === 'en' ? 'zh' : 'en';
-  const btn = document.getElementById('langToggle');
-  btn.textContent = currentLang === 'en' ? 'English' : '中文';
+  const label = currentLang === 'en' ? 'English' : '中文';
+  document.getElementById('langToggle').textContent = label;
+  const mobileBtn = document.getElementById('mobileLangToggle');
+  if (mobileBtn) mobileBtn.textContent = label;
 
   applyTranslations();
 
