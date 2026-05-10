@@ -15,7 +15,7 @@ const translations = {
     'feat-support-title': 'Dedicated Support', 'feat-support-sub': "We're here to help",
     'about-eyebrow': 'About Trinity Globe',
     'about-title': 'Built on Passion.<br/>Driven by <span>Quality.</span>',
-    'about-desc': "Trinity Globe Trading Pte. Ltd. is Singapore's trusted supplier of premium spirits and fine beverages. As the exclusive distributor of Blue Dash, we curate an exceptional selection of world-class cognacs, whiskies, champagnes, and baijiu.",
+    'about-desc': "Singapore's premier supplier of fine spirits. We carry Hennessy, Martell, Macallan, Moutai, Wuliangye, Yamazaki and more — spanning cognac, whisky, champagne and baijiu. As the exclusive distributor of Blue Dash, we bring world-class spirits to your door.",
     'about-btn': 'Our Collection',
     'products-label': 'Our Collection', 'products-title': 'Finest Spirits,<br/>Curated for You',
     'search-placeholder': 'Search spirits…',
