@@ -177,9 +177,8 @@ async function loadProducts() {
 function renderProducts(products) {
   const grid = document.getElementById('productGrid');
   grid.innerHTML = products.map(p => {
-    const primary   = currentLang === 'en' ? (p.nameEn || p.name) : (p.nameZh || p.name);
-    const secondary = currentLang === 'en' ? (p.nameZh || '')     : (p.nameEn || '');
-    const catLabel  = t('cat-' + p.category) || p.categoryLabel;
+    const primary  = currentLang === 'en' ? (p.nameEn || p.name) : (p.nameZh || p.name);
+    const catLabel = t('cat-' + p.category) || p.categoryLabel;
     return `
     <div class="product-card" data-category="${p.category}">
       <div class="card-img-wrap">
@@ -188,7 +187,6 @@ function renderProducts(products) {
       <div class="card-info">
         <span class="card-cat">${catLabel}</span>
         <h3>${primary}</h3>
-        ${secondary ? `<p class="card-name-alt">${secondary}</p>` : ''}
         ${buildPriceGrid(p.prices)}
       </div>
     </div>`;
