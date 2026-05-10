@@ -107,7 +107,7 @@ const navSections = [
   { id: 'hero',     link: document.querySelector('.nav-links a[href="#hero"]') },
   { id: 'about',    link: document.querySelector('.nav-links a[href="#about"]') },
   { id: 'products', link: document.querySelector('.nav-links a[href="#products"]') },
-  { id: 'contact',  link: null },
+  { id: 'contact',  link: document.querySelector('.nav-links a[href="#contact"]') },
 ];
 
 window.addEventListener('scroll', () => {
