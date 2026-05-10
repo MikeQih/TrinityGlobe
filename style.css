@@ -117,6 +117,15 @@ a { text-decoration: none; color: inherit; }
   color: var(--bg);
 }
 
+.card-name-alt {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin: -0.25rem 0 0.35rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
 .nav-lang {
   background: none;
   border: none;

@@ -74,7 +74,7 @@ function applyTranslations() {
 function toggleLanguage() {
   currentLang = currentLang === 'en' ? 'zh' : 'en';
   const btn = document.getElementById('langToggle');
-  btn.textContent = currentLang === 'en' ? '中文' : 'EN';
+  btn.textContent = currentLang === 'en' ? 'English' : '中文';
 
   applyTranslations();
 
@@ -176,17 +176,23 @@ async function loadProducts() {
 // ── Render product cards ──
 function renderProducts(products) {
   const grid = document.getElementById('productGrid');
-  grid.innerHTML = products.map(p => `
+  grid.innerHTML = products.map(p => {
+    const primary   = currentLang === 'en' ? (p.nameEn || p.name) : (p.nameZh || p.name);
+    const secondary = currentLang === 'en' ? (p.nameZh || '')     : (p.nameEn || '');
+    const catLabel  = t('cat-' + p.category) || p.categoryLabel;
+    return `
     <div class="product-card" data-category="${p.category}">
       <div class="card-img-wrap">
-        <img src="${p.image}" alt="${p.name}" loading="lazy" />
+        <img src="${p.image}" alt="${p.nameEn || p.name}" loading="lazy" />
       </div>
       <div class="card-info">
-        <span class="card-cat">${p.categoryLabel}</span>
-        <h3>${p.name}</h3>
+        <span class="card-cat">${catLabel}</span>
+        <h3>${primary}</h3>
+        ${secondary ? `<p class="card-name-alt">${secondary}</p>` : ''}
         ${buildPriceGrid(p.prices)}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── Build filter tabs dynamically from product categories ──
@@ -287,9 +293,10 @@ function initSearch() {
     const activeFilter = document.querySelector('.tab.active')?.dataset.filter || 'all';
 
     grid.querySelectorAll('.product-card').forEach(card => {
-      const name = (card.querySelector('h3')?.textContent || '').toLowerCase();
-      const cat  = (card.querySelector('.card-cat')?.textContent || '').toLowerCase();
-      const matchesSearch = !q || name.includes(q) || cat.includes(q);
+      const name    = (card.querySelector('h3')?.textContent || '').toLowerCase();
+      const nameAlt = (card.querySelector('.card-name-alt')?.textContent || '').toLowerCase();
+      const cat     = (card.querySelector('.card-cat')?.textContent || '').toLowerCase();
+      const matchesSearch = !q || name.includes(q) || nameAlt.includes(q) || cat.includes(q);
       const matchesFilter = activeFilter === 'all' || card.dataset.category === activeFilter;
       card.classList.toggle('hidden', !(matchesSearch && matchesFilter));
     });
