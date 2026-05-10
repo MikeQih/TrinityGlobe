@@ -136,10 +136,12 @@ a { text-decoration: none; color: inherit; }
   font-family: 'Inter', sans-serif;
   cursor: pointer;
   padding: 0 0 0.25rem 0;
+  margin: 0;
   transition: color 0.3s, border-color 0.3s;
   text-transform: uppercase;
-  vertical-align: middle;
+  align-self: center;
   line-height: 1;
+  display: block;
 }
 .nav-lang:hover { color: var(--gold); }
 
