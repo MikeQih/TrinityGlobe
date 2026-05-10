@@ -128,19 +128,18 @@ a { text-decoration: none; color: inherit; }
 
 .nav-lang {
   background: none;
-  border: 1px solid var(--gold);
-  border-radius: 3px;
-  color: var(--gold);
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
   font-family: 'Inter', sans-serif;
   cursor: pointer;
-  padding: 0.4rem 0.75rem;
-  opacity: 0.85;
-  transition: opacity 0.2s, background 0.2s;
+  padding: 0 0 0.25rem 0;
+  transition: color 0.3s, border-color 0.3s;
   text-transform: uppercase;
 }
-.nav-lang:hover { opacity: 1; background: rgba(196,160,80,0.1); }
+.nav-lang:hover { color: var(--gold); }
 
 .nav-hamburger {
   display: none;
