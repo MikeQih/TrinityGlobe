@@ -140,15 +140,18 @@ function buildPriceGrid(prices) {
     { key: 'fiveCases', label: t('price-five')   },
   ];
 
-  const cols = tiers.map(t => {
-    const val = prices[t.key];
-    const display = (val != null && val !== '' && val > 0)
+  const labels = tiers.map(tier => `<span class="price-label">${tier.label}</span>`).join('');
+  const values = tiers.map(tier => {
+    const val = prices[tier.key];
+    return (val != null && val !== '' && val > 0)
       ? `<span class="price-value">${fmt(val)}</span>`
-      : `<span class="price-value price-na">—</span>`;
-    return `<div class="price-item"><span class="price-label">${t.label}</span>${display}</div>`;
+      : `<a class="enquire-link" href="https://wa.me/6598680555" target="_blank">
+          <span class="icon-dash">—</span>
+          <span class="hover-text"><span class="enquire-label">Enquire</span></span>
+        </a>`;
   }).join('');
 
-  return `<div class="price-grid">${cols}</div>`;
+  return `<div class="price-grid">${labels}${values}</div>`;
 }
 
 // ── Load products: fetch products.json (live), fallback to products-data.js (local) ──

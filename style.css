@@ -709,16 +709,12 @@ a { text-decoration: none; color: inherit; }
 .price-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.2rem;
+  grid-template-rows: auto auto;
+  gap: 0.25rem 0.2rem;
   margin-top: 0.9rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
-}
-
-.price-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: baseline;
 }
 
 .price-label {
@@ -739,6 +735,48 @@ a { text-decoration: none; color: inherit; }
 .price-value.price-na {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.enquire-link {
+  display: inline-grid;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text-muted);
+}
+.enquire-link .icon-dash,
+.enquire-link .hover-text {
+  grid-area: 1 / 1;
+  transition: opacity 0.25s ease;
+  transition-delay: 0s;
+}
+.enquire-link .icon-dash {
+  font-size: 0.85rem;
+  opacity: 1;
+}
+.enquire-link .hover-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.enquire-link .hover-text .enquire-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  line-height: 1;
+  white-space: nowrap;
+}
+.enquire-link:hover .icon-dash {
+  opacity: 0;
+  transition-delay: 0s;
+}
+.enquire-link:hover .hover-text {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.28s;
 }
 
 /* ── CONTACT ── */
@@ -939,4 +977,8 @@ footer .container {
   .price-label { font-size: 0.34rem; letter-spacing: 0.03em; white-space: nowrap; }
   .price-value { font-size: 0.46rem; white-space: nowrap; }
   .price-value.price-na { font-size: 0.46rem; }
+  .enquire-link { display: block; line-height: 1; }
+  .enquire-link .icon-dash { display: none; }
+  .enquire-link .hover-text { display: block; opacity: 1; pointer-events: auto; transition: none; line-height: 1; }
+  .enquire-link .hover-text .enquire-label { display: block; font-size: 0.46rem; font-weight: 500; letter-spacing: 0.05em; line-height: 1; }
 }
