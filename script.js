@@ -24,7 +24,7 @@ const translations = {
     'contact-wechat': 'WeChat', 'contact-phone': 'Phone',
     'contact-note': '✦ Free delivery on orders S$120 and above &nbsp;·&nbsp; Free tasting available on request',
     'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier',
-    'price-bottle': '1 Bottle', 'price-case': '1 Case', 'price-five': '5 Cases',
+    'price-bottle': '1 Bottle', 'price-case': '1 Case', 'price-five': '5 Cases', 'price-enquire': 'Enquire',
     'filter-all': 'All',
     'cat-cognac': 'Cognac', 'cat-whisky': 'Whisky', 'cat-champagne': 'Champagne',
     'cat-wine': 'Wine', 'cat-sake': 'Sake', 'cat-baijiu': 'Baijiu',
@@ -50,7 +50,7 @@ const translations = {
     'contact-wechat': '微信', 'contact-phone': '电话',
     'contact-note': '✦ 订单满 S$120 免费配送 &nbsp;·&nbsp; 可预约免费品鉴',
     'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · 新加坡 · 顶级烈酒供应商',
-    'price-bottle': '单瓶', 'price-case': '一箱', 'price-five': '五箱',
+    'price-bottle': '单瓶', 'price-case': '一箱', 'price-five': '五箱', 'price-enquire': '限量供应',
     'filter-all': '全部',
     'cat-cognac': '干邑', 'cat-whisky': '威士忌', 'cat-champagne': '香槟',
     'cat-wine': '葡萄酒', 'cat-sake': '清酒', 'cat-baijiu': '白酒',
@@ -147,7 +147,7 @@ function buildPriceGrid(prices) {
       ? `<span class="price-value">${fmt(val)}</span>`
       : `<a class="enquire-link" href="https://wa.me/6598680555" target="_blank">
           <span class="icon-dash">—</span>
-          <span class="hover-text"><span class="enquire-label">Enquire</span></span>
+          <span class="hover-text"><span class="enquire-label">${t('price-enquire')}</span></span>
         </a>`;
   }).join('');
 
