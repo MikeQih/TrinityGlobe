@@ -187,8 +187,7 @@ function renderProducts(products) {
     return `
     <div class="product-card" data-category="${p.category}">
       <div class="card-img-wrap">
-        <img class="card-product-img" src="${p.image}" alt="${(p.nameEn || p.name).replace(/<br\s*\/?>/gi, ' ')}" loading="lazy" />
-        <img class="card-logo" src="images/logo-tg-transparent.png" alt="" loading="lazy" />
+        <img src="${p.image}" alt="${(p.nameEn || p.name).replace(/<br\s*\/?>/gi, ' ')}" loading="lazy" />
       </div>
       <div class="card-info">
         <span class="card-cat">${catLabel}</span>

@@ -668,10 +668,9 @@ a { text-decoration: none; color: inherit; }
   aspect-ratio: 3/4;
   overflow: hidden;
   background: #111;
-  position: relative;
 }
 
-.card-img-wrap img.card-product-img {
+.card-img-wrap img {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -680,18 +679,8 @@ a { text-decoration: none; color: inherit; }
   transition: transform 0.5s ease;
 }
 
-.product-card:hover .card-img-wrap img.card-product-img {
+.product-card:hover .card-img-wrap img {
   transform: scale(1.06);
-}
-
-.card-logo {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 36%;
-  opacity: 0.8;
-  pointer-events: none;
-  z-index: 1;
 }
 
 .card-info {
