@@ -320,8 +320,8 @@
       "categoryLabel": "Red Wine",
       "image": "/images/红酒 - Penfolds Bin 389.png",
       "prices": {
-        "bottle": 99,
-        "case": 95,
+        "bottle": 110,
+        "case": 105,
         "fiveCases": null
       }
     },
