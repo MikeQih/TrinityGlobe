@@ -105,19 +105,6 @@
       }
     },
     {
-      "name": "Macallan 12 Double Cask",
-      "nameEn": "Macallan 12 Double Cask",
-      "nameZh": "麦卡伦12年 双桶",
-      "category": "whisky",
-      "categoryLabel": "Whisky",
-      "image": "/images/威士忌 - 麦卡伦12年 Double Cask.png",
-      "prices": {
-        "bottle": 129,
-        "case": 125,
-        "fiveCases": null
-      }
-    },
-    {
       "name": "Macallan 12 Sherry Oak",
       "nameEn": "Macallan 12 Sherry Oak",
       "nameZh": "麦卡伦12年 雪莉桶",
@@ -127,6 +114,19 @@
       "prices": {
         "bottle": 155,
         "case": 150,
+        "fiveCases": null
+      }
+    },
+    {
+      "name": "Macallan 12 Double Cask",
+      "nameEn": "Macallan 12 Double Cask",
+      "nameZh": "麦卡伦12年 双桶",
+      "category": "whisky",
+      "categoryLabel": "Whisky",
+      "image": "/images/威士忌 - 麦卡伦12年 Double Cask.png",
+      "prices": {
+        "bottle": 129,
+        "case": 125,
         "fiveCases": null
       }
     },
@@ -261,6 +261,19 @@
       }
     },
     {
+      "name": "Louis Roederer Cristal 2014",
+      "nameEn": "Louis Roederer Cristal 2014",
+      "nameZh": "路易王妃 水晶香槟 2014",
+      "category": "champagne",
+      "categoryLabel": "Champagne",
+      "image": "/images/香槟 - Louis Roederer Cristal 2014.png",
+      "prices": {
+        "bottle": 485,
+        "case": 470,
+        "fiveCases": null
+      }
+    },
+    {
       "name": "Dom Pérignon 2015",
       "nameEn": "Dom Pérignon 2015",
       "nameZh": "唐培里侬 2015",
@@ -268,8 +281,8 @@
       "categoryLabel": "Champagne",
       "image": "/images/香槟 - Dom Pérignon 2015.png",
       "prices": {
-        "bottle": 249,
-        "case": 230,
+        "bottle": 285,
+        "case": 280,
         "fiveCases": null
       }
     },
@@ -283,19 +296,6 @@
       "prices": {
         "bottle": 285,
         "case": 270,
-        "fiveCases": null
-      }
-    },
-    {
-      "name": "Louis Roederer Cristal 2014",
-      "nameEn": "Louis Roederer Cristal 2014",
-      "nameZh": "路易王妃 水晶香槟 2014",
-      "category": "champagne",
-      "categoryLabel": "Champagne",
-      "image": "/images/香槟 - Louis Roederer Cristal 2014.png",
-      "prices": {
-        "bottle": 485,
-        "case": 470,
         "fiveCases": null
       }
     },
