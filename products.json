@@ -40,7 +40,7 @@
       }
     },
     {
-      "name": "Martell VSOP",
+      "name": "Martell Noblige",
       "nameEn": "Martell VSOP",
       "nameZh": "马爹利 VSOP",
       "category": "cognac",
@@ -79,12 +79,12 @@
       }
     },
     {
-      "name": "Gaulois XO 1L",
-      "nameEn": "Gaulois XO 1L",
-      "nameZh": "高路易 XO 1L",
+      "name": "GAVO XO 700ML",
+      "nameEn": "GAVO XO 700ML",
+      "nameZh": "GAVO XO 700ML",
       "category": "cognac",
       "categoryLabel": "Cognac",
-      "image": "/images/干邑白兰地 - Gaulois XO.png",
+      "image": "/images/干邑白兰地 - Gavo XO.png",
       "prices": {
         "bottle": 199,
         "case": 180,
@@ -92,12 +92,12 @@
       }
     },
     {
-      "name": "GAVO XO 700ML",
-      "nameEn": "GAVO XO 700ML",
-      "nameZh": "GAVO XO 700ML",
+      "name": "Gaulois XO 1L",
+      "nameEn": "Gaulois XO 1L",
+      "nameZh": "高路易 XO 1L",
       "category": "cognac",
       "categoryLabel": "Cognac",
-      "image": "/images/干邑白兰地 - Gavo XO.png",
+      "image": "/images/干邑白兰地 - Gaulois XO.png",
       "prices": {
         "bottle": 199,
         "case": 180,
@@ -736,8 +736,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 大曲新天蓝.png",
       "prices": {
-        "bottle": 40,
-        "case": 38,
+        "bottle": 45,
+        "case": 40,
         "fiveCases": null
       }
     },
@@ -762,7 +762,7 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 天之蓝 42度.png",
       "prices": {
-        "bottle": 77,
+        "bottle": 80,
         "case": 75,
         "fiveCases": null
       }
@@ -775,8 +775,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 天之蓝 52度.png",
       "prices": {
-        "bottle": 85,
-        "case": 83,
+        "bottle": 90,
+        "case": 85,
         "fiveCases": null
       }
     },
@@ -788,8 +788,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝水晶版 40.8度.png",
       "prices": {
-        "bottle": 105,
-        "case": 100,
+        "bottle": 115,
+        "case": 110,
         "fiveCases": null
       }
     },
@@ -801,8 +801,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝水晶版 52度.png",
       "prices": {
-        "bottle": 125,
-        "case": 120,
+        "bottle": 135,
+        "case": 130,
         "fiveCases": null
       }
     },
@@ -840,8 +840,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝M9.png",
       "prices": {
-        "bottle": 285,
-        "case": 270,
+        "bottle": 295,
+        "case": 280,
         "fiveCases": null
       }
     },
@@ -853,8 +853,8 @@
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝手工班.png",
       "prices": {
-        "bottle": 335,
-        "case": 320,
+        "bottle": 350,
+        "case": 340,
         "fiveCases": null
       }
     },
