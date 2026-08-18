@@ -89,6 +89,16 @@
       }
     },
     {
+      "name": "LOUIS XIII",
+      "category": "cognac",
+      "categoryLabel": "Cognac",
+      "image": "/images/img_1920.jpeg",
+      "prices": {
+        "bottle": 3800,
+        "case": 3700
+      }
+    },
+    {
       "name": "GAVO XO 700ML",
       "nameEn": "GAVO XO 700ML",
       "nameZh": "GAVO XO 700ML",
