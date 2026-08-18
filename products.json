@@ -235,6 +235,16 @@
       }
     },
     {
+      "name": "HAKUSHU DISTILLER'S RESERVE 700ML 43%",
+      "category": "whisky",
+      "categoryLabel": "whisky",
+      "image": "/images/img_1910.jpeg",
+      "prices": {
+        "bottle": 135,
+        "case": 130
+      }
+    },
+    {
       "name": "Hibiki Japanese Harmony",
       "nameEn": "Hibiki Japanese Harmony",
       "nameZh": "响 和风",
