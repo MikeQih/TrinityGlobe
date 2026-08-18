@@ -113,3 +113,60 @@
 4. 下载 Result 文件（**Result 文件只包含失败的行**，成功行不显示）
 5. 查看最后一列 **Fail Reason** 了解每行的失败原因
 6. 修正后重新生成补充文件，只上传失败的产品即可（不会重复已成功的）
+
+---
+
+## Mass Update（批量改价/改库存，不是新建产品）
+
+跟 Mass Upload 的区别：**Mass Upload 是新建 listing**（会丢失原有销量/评价/排名），**Mass Update 是更新已有 listing 的字段**（按 Item ID 匹配，不影响历史数据）。批量改价格、改库存一律用 Mass Update，不要用 Mass Upload。
+
+### 操作路径
+Seller Centre → **My Products → Mass Function → Mass Update**
+
+### 模板类型（Download 标签里选）
+| 模板 | 包含字段 | 用途 |
+|------|---------|------|
+| Basic Info | 标题、图片、描述 | 改基础信息 |
+| **Sales Info** | Product ID / Product Name / Variation ID / **Parent SKU / SKU / Price / GTIN / Stock**（可编辑） | **改价格、改库存用这个** |
+| Shipping Info | 物流渠道设置 | 改配送方式 |
+| BCRS Info | Beverage Container Return Scheme / Quantity per Pack / Volume(ML) / Packaging Type | 饮料容器回收计划合规申报（见下方说明，跟Specification标签的Volume是两回事） |
+
+### Sales Info 模板结构
+- 数据从第 **7 行**开始（1-6 行是系统表头，含字段说明和校验规则文字，不能动）
+- 列：A=Product ID, B=Product Name, C=Variation ID, D=Variation Name, E=Parent SKU, F=SKU, **G=Price**, H=GTIN, **I=Stock**, J=Fail Reason
+- **只改 G(Price) 列**，其余列（尤其 I 库存列）保持原样，否则会被覆盖成过期的库存数字
+
+### 标准流程
+1. Download 标签 → Template 选 **Sales Info** → Generate → 等 Records 处理完 → 下载（拿到的是当前**实时**价格库存）
+2. 只修改 Price 列，其余不动
+3. Upload 标签 → 上传改好的文件
+4. 记录里 **Processed 显示 "成功数/总数"**（例如 64/71），有失败的话点 **Download** 拿结果文件，最后一列 Fail Reason 看失败原因
+
+### 已知问题：价格超过 200 新币，自提渠道报错
+**现象**：`The max price of the product is over max limit. Channel detail: Pick Lockers / Collection Points / SPX Express Lockers`
+
+**原因**：Pick Lockers、Collection Points、SPX Express Lockers 这三个"自提"配送渠道有 **SGD 200 价格上限**（新加坡自提柜/自提点对物品价值的限制）。产品价格一旦从 ≤200 涨到 >200，会触发这个校验；已经在 200 以上的产品继续涨价不受影响（说明系统只在"首次跨过 200 门槛"时校验，已经在门槛以上的产品这几个渠道其实早就对其失效了）。
+
+**Mass Update 批量上传不会自动处理这个问题**——价格超限但渠道还开着，直接报错拒绝整行更新。
+
+**解决方法：改成手动编辑单个产品**（Sales Information 标签改 Price → 点 Update）。手动编辑时系统会**自动把这三个自提渠道禁用**（变灰、显示"Price Exceeded $200.00"），价格能顺利保存到位，不需要额外去 Shipping 标签手动关渠道。经实测这个方法对所有卡在 200 上限的产品都有效，价格能涨到完整目标值，不用退而求其次封顶在 200。
+
+**不要尝试的方法**：
+- 在 Shipping 标签手动关闭 Pick Lockers / Collection Points / SPX Express Lockers 这三个开关——这几个渠道跟 Doorstep Delivery 是**同一个 Shopee Supported Logistics（SSL）物流商的不同腿**，只要店铺只接入了 SPX 一家物流，这几个渠道就是绑定在一起的，关掉自提会连 Doorstep 一起关掉，导致"没有任何配送方式"保存失败。
+- 全部渠道关闭后指望买家私信下单——技术上保存不了（Shopee 强制要求至少一个渠道开启），而且这属于平台外交易，违反 Shopee 规则，有封号风险。
+
+### xlsx 文件读取报错（activePane invalid）
+Shopee 导出的 Mass Update 结果/模板文件，`xl/worksheets/sheetN.xml` 里 `activePane` 属性有时是 `bottom_left`（下划线），不是 openpyxl 要求的驼峰写法 `bottomLeft`，会导致 `openpyxl.load_workbook()` 报错 `ValueError: Value must be one of {'topLeft', 'bottomLeft', 'topRight', 'bottomRight'}`。
+
+修复方法：
+```bash
+unzip -o file.xlsx -d /tmp/extract
+sed -i '' 's/activePane="bottom_left"/activePane="bottomLeft"/' /tmp/extract/xl/worksheets/sheet*.xml
+cd /tmp/extract && zip -q -r -X /tmp/fixed.xlsx . -x '.*'
+```
+修复后用 openpyxl 正常读取 `/tmp/fixed.xlsx` 即可。
+
+### BCRS（饮料容器回收计划）跟 Specification 的 Volume 不是一回事
+- **Specification 标签**的 Volume / Packaging Type：产品常规必填属性（下拉选择，如 500ml / Bottle），跟回收计划无关，正常按实际规格填。
+- **Sales Information 标签**里的 **"NEA Beverage Container Return Scheme"**（Yes/No）：这个才是 BCRS 合规申报开关。只有**罐装/塑料瓶装**饮料（150-3000ml）才需要选 Yes 并填 Packaging Type=罐；**玻璃瓶装**选 **No** 即可，不需要额外填 Volume(ML)/Packaging Type。
+- Mass Update 的 BCRS Info 模板导出的就是这个 Sales Information 里的开关状态，跟 Specification 的 Volume 字段是两套独立数据，互不影响。
