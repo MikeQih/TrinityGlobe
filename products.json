@@ -40,14 +40,14 @@
       }
     },
     {
-      "name": "Martell Noblige",
+      "name": "Martell Noblige ",
       "nameEn": "Martell VSOP",
       "nameZh": "马爹利 VSOP",
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Martell VSOP.png",
       "prices": {
-        "bottle": 99,
+        "bottle": 100,
         "case": 95,
         "fiveCases": null
       }
