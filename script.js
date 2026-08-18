@@ -29,6 +29,32 @@ const translations = {
     'cat-cognac': 'Cognac', 'cat-whisky': 'Whisky', 'cat-champagne': 'Champagne',
     'cat-wine': 'Wine', 'cat-sake': 'Sake', 'cat-baijiu': 'Baijiu',
     'cat-beer': 'Beer', 'cat-vodka': 'Vodka', 'cat-tequila': 'Tequila', 'cat-other': 'Others',
+
+    // Cart / checkout (rendered by assets/storefront.js, src/cart.ts)
+    'cart-add-btn': 'Add to Cart', 'cart-added': 'Added ✓',
+    'cart-title': 'Your Cart', 'cart-empty': 'Your cart is empty.',
+    'cart-continue-shopping': 'Continue Shopping',
+    'cart-subtotal': 'Subtotal', 'cart-remove': 'Remove',
+    'cart-qty-decrease': 'Decrease quantity', 'cart-qty-increase': 'Increase quantity',
+    'cart-checkout-btn': 'Checkout',
+    'cart-free-shipping-hint': 'Add {amount} more for free delivery',
+    'cart-free-shipping-met': "You've unlocked free delivery!",
+    'cart-close': 'Close cart',
+    'checkout-back-to-cart': '‹ Back to cart',
+    'checkout-title': 'Checkout',
+    'checkout-name': 'Full Name', 'checkout-phone': 'Phone Number', 'checkout-email': 'Email',
+    'checkout-address': 'Delivery Address', 'checkout-postal': 'Postal Code',
+    'checkout-notes': 'Order Notes (optional)',
+    'checkout-delivery-method': 'Delivery Method',
+    'checkout-standard-delivery': 'Standard Delivery', 'checkout-self-collection': 'Self Collection',
+    'checkout-age-confirm': 'I confirm I am at least 18 years old. It is illegal to purchase alcohol if you are under the legal age.',
+    'checkout-age-required': 'Please confirm you are 18 or older to continue.',
+    'checkout-shipping-fee': 'Shipping Fee', 'checkout-free': 'Free', 'checkout-gst': 'GST',
+    'checkout-total': 'Total',
+    'checkout-submit': 'Proceed to Payment', 'checkout-submitting': 'Processing…',
+    'checkout-field-required': 'This field is required.',
+    'checkout-error-generic': 'Something went wrong. Please try again, or contact us on WhatsApp.',
+    'checkout-error-stock': 'Some items in your cart are no longer available in the requested quantity.',
   },
   zh: {
     'nav-home': '首页', 'nav-about': '关于', 'nav-collection': '产品', 'nav-contact': '联系我们',
@@ -55,12 +81,50 @@ const translations = {
     'cat-cognac': '干邑', 'cat-whisky': '威士忌', 'cat-champagne': '香槟',
     'cat-wine': '葡萄酒', 'cat-sake': '清酒', 'cat-baijiu': '白酒',
     'cat-beer': '啤酒', 'cat-vodka': '伏特加', 'cat-tequila': '龙舌兰', 'cat-other': '其他',
+
+    // 购物车 / 结账（由 assets/storefront.js 即 src/cart.ts 渲染）
+    'cart-add-btn': '加入购物车', 'cart-added': '已加入 ✓',
+    'cart-title': '购物车', 'cart-empty': '购物车是空的。',
+    'cart-continue-shopping': '继续购物',
+    'cart-subtotal': '小计', 'cart-remove': '移除',
+    'cart-qty-decrease': '减少数量', 'cart-qty-increase': '增加数量',
+    'cart-checkout-btn': '去结账',
+    'cart-free-shipping-hint': '再购 {amount} 即可免运费',
+    'cart-free-shipping-met': '已享受免运费！',
+    'cart-close': '关闭购物车',
+    'checkout-back-to-cart': '‹ 返回购物车',
+    'checkout-title': '结账',
+    'checkout-name': '姓名', 'checkout-phone': '手机号', 'checkout-email': '邮箱',
+    'checkout-address': '收货地址', 'checkout-postal': '邮编',
+    'checkout-notes': '订单备注（选填）',
+    'checkout-delivery-method': '配送方式',
+    'checkout-standard-delivery': '标准配送', 'checkout-self-collection': '自提',
+    'checkout-age-confirm': '我确认已达到法定饮酒年龄。未达法定年龄购买酒类属违法行为。',
+    'checkout-age-required': '请先确认您已达到法定饮酒年龄。',
+    'checkout-shipping-fee': '运费', 'checkout-free': '免费', 'checkout-gst': '消费税(GST)',
+    'checkout-total': '总计',
+    'checkout-submit': '前往支付', 'checkout-submitting': '处理中…',
+    'checkout-field-required': '此项为必填。',
+    'checkout-error-generic': '出现问题，请重试，或通过 WhatsApp 联系我们。',
+    'checkout-error-stock': '购物车中部分商品库存不足，请调整数量。',
   },
 };
 
 function t(key) {
   return translations[currentLang][key] ?? translations.en[key] ?? key;
 }
+
+// ── Bridge for assets/storefront.js (src/cart.ts) ──
+// `t` and `currentLang` live in this file's module-less top-level scope;
+// currentLang is a `let` so it never becomes a `window` property on its own.
+// Cart/checkout code needs to read the live language and re-render its own
+// (non data-i18n) DOM — like formatted prices — whenever it changes, so we
+// expose a tiny explicit API instead of relying on incidental globals.
+window.TG_I18N = {
+  t,
+  getLang: () => currentLang,
+};
+window.TG_ON_LANG_CHANGE = [];
 
 function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -98,6 +162,10 @@ function toggleLanguage() {
     });
     initMarquee();
   }
+
+  window.TG_ON_LANG_CHANGE.forEach(cb => {
+    try { cb(); } catch (err) { console.error(err); }
+  });
 }
 
 // ── NAV scroll effect + active link ──
@@ -171,6 +239,7 @@ async function loadProducts() {
   }
 
   cachedProducts = products;
+  window.TG_PRODUCTS = products; // read by src/cart.ts to resolve sku -> name/image/price for optimistic cart UI
   renderProducts(products);
   buildFilterTabs(products);
   initFilter();
@@ -185,7 +254,7 @@ function renderProducts(products) {
     const primary  = currentLang === 'en' ? (p.nameEn || p.name) : (p.nameZh || p.name);
     const catLabel = t('cat-' + p.category) || p.categoryLabel;
     return `
-    <div class="product-card" data-category="${p.category}">
+    <div class="product-card" data-category="${p.category}" data-sku="${p.sku || ''}">
       <div class="card-img-wrap">
         <img src="${p.image}" alt="${(p.nameEn || p.name).replace(/<br\s*\/?>/gi, ' ')}" loading="lazy" />
       </div>
@@ -193,6 +262,7 @@ function renderProducts(products) {
         <span class="card-cat">${catLabel}</span>
         <h3>${primary}</h3>
         ${buildPriceGrid(p.prices)}
+        ${p.prices && p.prices.bottle > 0 ? `<button class="add-cart-btn" type="button" data-sku="${p.sku || ''}" data-i18n="cart-add-btn">${t('cart-add-btn')}</button>` : ''}
       </div>
     </div>`;
   }).join('');

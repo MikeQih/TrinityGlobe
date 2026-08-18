@@ -21,6 +21,11 @@ collections:
               - label: "Product Name"
                 name: "name"
                 widget: "string"
+              - label: "SKU"
+                name: "sku"
+                widget: "string"
+                required: true
+                hint: "Must be unique and match the sku in the Supabase product_variants table exactly — this is what links this product to its live price and stock."
               - label: "Category"
                 name: "category"
                 widget: "string"

@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# release-expired-reservations' schedule is declared via its own
+# `export const config: Config = { schedule: ... }` (Netlify Functions v2
+# style) rather than here, to keep one source of truth for it.
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Local dev: `netlify dev` serves the static root files, proxies /assets from
+# the Vite build, and runs the functions in `netlify/functions` on the same
+# origin so fetch("/.netlify/functions/...") works without CORS setup.
+[dev]
+  publish = "."
+  functions = "netlify/functions"
