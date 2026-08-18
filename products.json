@@ -385,19 +385,6 @@
       }
     },
     {
-      "name": "十四代 本丸 1.8L",
-      "nameEn": "Juyondai Honmaru 1.8L",
-      "nameZh": "十四代 本丸 1.8L",
-      "category": "sake",
-      "categoryLabel": "Sake · 清酒",
-      "image": "/images/清酒 - 十四代 本丸.png",
-      "prices": {
-        "bottle": 650,
-        "case": 630,
-        "fiveCases": null
-      }
-    },
-    {
       "name": "獺祭 23 1.8L",
       "nameEn": "Dassai 23 1.8L",
       "nameZh": "獺祭 23 1.8L",
@@ -407,6 +394,19 @@
       "prices": {
         "bottle": 230,
         "case": 210,
+        "fiveCases": null
+      }
+    },
+    {
+      "name": "十四代 本丸 1.8L",
+      "nameEn": "Juyondai Honmaru 1.8L",
+      "nameZh": "十四代 本丸 1.8L",
+      "category": "sake",
+      "categoryLabel": "Sake · 清酒",
+      "image": "/images/清酒 - 十四代 本丸.png",
+      "prices": {
+        "bottle": 650,
+        "case": 630,
         "fiveCases": null
       }
     },
