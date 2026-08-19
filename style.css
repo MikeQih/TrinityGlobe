@@ -1329,6 +1329,8 @@ footer .container {
 }
 
 .checkout-age-confirm input { accent-color: var(--gold); margin-top: 0.2rem; flex-shrink: 0; }
+.checkout-age-confirm a { color: var(--gold); border-bottom: 1px solid rgba(201, 168, 76, 0.4); white-space: nowrap; }
+.checkout-age-confirm a:hover { border-color: var(--gold); }
 
 .checkout-summary {
   border-top: 1px solid var(--border);
@@ -1347,4 +1349,122 @@ footer .container {
 
 @media (max-width: 480px) {
   .cart-drawer { width: 100vw; }
+}
+
+/* ── FOOTER POLICY LINKS ── */
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+}
+
+.footer-links a {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.footer-links a:hover { color: var(--gold); }
+
+/* ── STATIC POLICY PAGES (Terms, Privacy, Delivery, Refund, Age Restriction) ── */
+
+.policy-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(8, 8, 8, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 1.1rem 2rem;
+}
+
+.policy-nav .nav-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.policy-nav .nav-logo-img { height: 40px; width: auto; }
+
+.policy-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 4rem 2rem 6rem;
+}
+
+.policy-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0.6rem;
+}
+
+.policy-main h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.policy-updated {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 2.5rem;
+}
+
+.policy-draft-notice {
+  background: rgba(217, 122, 108, 0.1);
+  border: 1px solid rgba(217, 122, 108, 0.4);
+  color: #e8998c;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  padding: 1rem 1.2rem;
+  margin-bottom: 2.5rem;
+}
+
+.policy-main h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  color: var(--gold);
+  margin: 2.2rem 0 0.8rem;
+}
+
+.policy-main p, .policy-main li {
+  font-size: 0.92rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.policy-main p { margin-bottom: 1rem; }
+
+.policy-main ul, .policy-main ol {
+  margin: 0 0 1rem 1.3rem;
+}
+
+.policy-main li { margin-bottom: 0.4rem; }
+
+.policy-main a { color: var(--gold); border-bottom: 1px solid rgba(201, 168, 76, 0.4); }
+.policy-main a:hover { border-color: var(--gold); }
+
+.policy-main strong { color: var(--gold-light); }
+
+.policy-placeholder {
+  color: #e8c97a;
+  background: rgba(201, 168, 76, 0.12);
+  padding: 0.05em 0.4em;
+  border-radius: 2px;
+  font-size: 0.9em;
+}
+
+@media (max-width: 600px) {
+  .policy-main { padding: 3rem 1.25rem 4rem; }
+  .policy-main h1 { font-size: 1.5rem; }
 }

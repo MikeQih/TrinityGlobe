@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Trinity Globe Trading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+  <nav class="policy-nav">
+    <a href="../index.html" class="nav-logo">
+      <img class="nav-logo-img" src="../images/logo-transparent.png" alt="TG" />
+      TRINITY GLOBE
+    </a>
+  </nav>
+
+  <main class="policy-main">
+    <div class="policy-eyebrow">Legal</div>
+    <h1>Privacy Policy</h1>
+    <p class="policy-updated">Internal draft — prepared for review, not yet published to customers.</p>
+
+    <div class="policy-draft-notice">
+      <strong>This is a first-pass draft, not final legal text.</strong> It describes what the site actually
+      collects and where it actually goes, based on how checkout is built (see the PRD and
+      <code>supabase/migrations/</code> in the repo). It has not been checked against Singapore's Personal Data
+      Protection Act (PDPA) by a qualified reviewer — do that before publishing. Anything marked
+      <span class="policy-placeholder">like this</span> still needs a decision or confirmation.
+    </div>
+
+    <h2>1. What we collect</h2>
+    <p>When you place an order, we collect:</p>
+    <ul>
+      <li>Name, phone number, and email address</li>
+      <li>Delivery address and postal code (not collected if you choose self-collection)</li>
+      <li>Order details — items, quantities, amount paid</li>
+      <li>Any notes you add to your order</li>
+    </ul>
+    <p>
+      We don't collect or store your payment card details — those go directly to our payment processor, Stripe
+      (see Section 3).
+    </p>
+
+    <h2>2. How we use it</h2>
+    <ul>
+      <li>To process and fulfil your order, including contacting you about delivery</li>
+      <li>To send an order confirmation and, if something goes wrong, to reach you about it</li>
+      <li>To verify you meet the legal age requirement for purchasing alcohol</li>
+      <li>To meet our own record-keeping and tax obligations</li>
+    </ul>
+    <p>
+      We don't sell your information. We don't send marketing email unless you separately opt in to that —
+      <span class="policy-placeholder">confirm whether marketing email is planned; if not, remove this line</span>.
+    </p>
+
+    <h2>3. Payment information</h2>
+    <p>
+      Payment is handled by <strong>Stripe</strong>. When you pay, your card details go directly to Stripe over an
+      encrypted connection — they never pass through our own servers or database. Stripe is PCI-DSS compliant.
+      Their handling of your data is governed by
+      <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's own privacy policy</a>.
+    </p>
+
+    <h2>4. Where your data is stored</h2>
+    <p>
+      Order and account data is stored in a Postgres database hosted by <strong>Supabase</strong>, behind
+      access controls that restrict it to staff whose role requires it (see our internal Row Level Security
+      policies). Order confirmation and internal notification emails are sent through <strong>Resend</strong>.
+    </p>
+
+    <h2>5. Who we share it with</h2>
+    <p>We share the minimum necessary data with:</p>
+    <ul>
+      <li><strong>Stripe</strong> — to process your payment</li>
+      <li><strong>Supabase</strong> — to store your order</li>
+      <li><strong>Resend</strong> — to send order emails</li>
+      <li><strong>Our delivery <span class="policy-placeholder">courier/partner [name once confirmed]</span></strong> — your name, phone number, and delivery address, so they can deliver your order</li>
+    </ul>
+    <p>We disclose personal data beyond this only if required by Singapore law.</p>
+
+    <h2>6. How long we keep it</h2>
+    <p>
+      We keep order records for as long as needed for accounting, tax, and legal purposes
+      (<span class="policy-placeholder">confirm retention period, e.g. 5 years per IRAS record-keeping requirements</span>).
+      You can ask us to delete personal data we're not legally required to retain — see Section 7.
+    </p>
+
+    <h2>7. Your rights</h2>
+    <p>
+      Under Singapore's Personal Data Protection Act, you can ask us what personal data we hold about you, ask us
+      to correct it, or ask us to stop using or delete it (subject to our legal retention obligations). To do
+      any of this, contact us using the details in Section 9.
+    </p>
+
+    <h2>8. Cookies</h2>
+    <p>
+      The site uses your browser's local storage to remember what's in your cart between visits. This stays on
+      your device — it isn't sent to us until you check out.
+      <span class="policy-placeholder">Confirm whether any analytics/marketing cookies are in use; if so, add them here.</span>
+    </p>
+
+    <h2>9. Contact</h2>
+    <p>
+      Questions about this policy, or to exercise your rights above: WhatsApp
+      <a href="https://wa.me/6598680555">+65 9868 0555</a> or email
+      <span class="policy-placeholder">orders@trinityglobe.sg [confirm this mailbox is live]</span>.
+    </p>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span class="footer-logo">TRINITY GLOBE TRADING</span>
+      <span class="footer-copy">© 2026 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier</span>
+    </div>
+  </footer>
+
+</body>
+</html>

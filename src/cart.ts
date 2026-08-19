@@ -265,7 +265,7 @@ function checkoutViewHtml(): string {
 
         <label class="checkout-age-confirm">
           <input type="checkbox" name="ageConfirmed" ${ageConfirmed ? "checked" : ""} />
-          <span>${t("checkout-age-confirm")}</span>
+          <span>${t("checkout-age-confirm")} <a href="/policies/age-restriction.html" target="_blank" rel="noopener">${t("checkout-age-learn-more")}</a></span>
         </label>
       </form>
     </div>
