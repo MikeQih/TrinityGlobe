@@ -142,6 +142,8 @@ Seller Centre → **My Products → Mass Function → Mass Update**
 3. Upload 标签 → 上传改好的文件
 4. 记录里 **Processed 显示 "成功数/总数"**（例如 64/71），有失败的话点 **Download** 拿结果文件，最后一列 Fail Reason 看失败原因
 
+**不要用之前导出/生成过的 Mass Update 文件当涨价基准**，哪怕文件名看起来是"最新版"或"最终版"。价格和库存会因为中间的手动改价（例如处理 200 门槛用手动 Update 改的价格，往往不是整数、也不等于批量算出来的目标价）、库存变动等原因跟线上实际值不一致。每次要在"当前价格"基础上加价，都要重新走一遍上面第 1 步现下载，在这份新下载的文件上改 Price，不要复用旧文件历史价格再叠加。
+
 ### 已知问题：价格超过 200 新币，自提渠道报错
 **现象**：`The max price of the product is over max limit. Channel detail: Pick Lockers / Collection Points / SPX Express Lockers`
 
@@ -170,3 +172,4 @@ cd /tmp/extract && zip -q -r -X /tmp/fixed.xlsx . -x '.*'
 - **Specification 标签**的 Volume / Packaging Type：产品常规必填属性（下拉选择，如 500ml / Bottle），跟回收计划无关，正常按实际规格填。
 - **Sales Information 标签**里的 **"NEA Beverage Container Return Scheme"**（Yes/No）：这个才是 BCRS 合规申报开关。只有**罐装/塑料瓶装**饮料（150-3000ml）才需要选 Yes 并填 Packaging Type=罐；**玻璃瓶装**选 **No** 即可，不需要额外填 Volume(ML)/Packaging Type。
 - Mass Update 的 BCRS Info 模板导出的就是这个 Sales Information 里的开关状态，跟 Specification 的 Volume 字段是两套独立数据，互不影响。
+- **本地文件（Mass Update 各模板、`TrinityGlobe_Shopee_upload.xlsx` 的 Template/Description）都不存 Volume/ml 数据**，只有部分产品把容量写进了 Product Name（如 "Gaulois XO **1L**"），没写的产品名称里就查不到容量。要查某产品实际 ml，得去 Shopee 后台该产品的 Specification 标签看，别凭产品名或描述猜。
