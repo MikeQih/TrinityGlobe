@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { CartStore, MAX_QTY_PER_ITEM } from "../src/cart-store";
 
-const ITEM_A = { sku: "SKU-A", name: "Whisky A", image: "/a.png", unitPriceCents: 5000 };
-const ITEM_B = { sku: "SKU-B", name: "Whisky B", image: "/b.png", unitPriceCents: 3000 };
+const ITEM_A = { sku: "SKU-A", name: "Whisky A", image: "/a.png", priceTiers: { bottlePriceCents: 5000 } };
+const ITEM_B = { sku: "SKU-B", name: "Whisky B", image: "/b.png", priceTiers: { bottlePriceCents: 3000 } };
+const ITEM_TIERED = {
+  sku: "SKU-C",
+  name: "Wine C",
+  image: "/c.png",
+  priceTiers: { bottlePriceCents: 8500, caseSize: 6, casePriceCents: 8000 },
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -77,6 +83,39 @@ describe("CartStore", () => {
     store.addItem(ITEM_B, 3); // 3 * 3000 = 9000
     expect(store.getSubtotalCents()).toBe(19000);
     expect(store.getItemCount()).toBe(5);
+  });
+
+  it("updatePriceTiers refreshes a line's tiers and notifies subscribers when they actually changed", () => {
+    const store = new CartStore();
+    store.addItem(ITEM_TIERED, 2);
+
+    let calls = 0;
+    store.subscribe(() => (calls += 1));
+
+    store.updatePriceTiers(ITEM_TIERED.sku, { bottlePriceCents: 9000, caseSize: 6, casePriceCents: 8500 });
+    expect(store.getItems()[0]?.priceTiers).toEqual({ bottlePriceCents: 9000, caseSize: 6, casePriceCents: 8500 });
+    expect(calls).toBe(1);
+
+    // Same tiers again -> no-op, no spurious notification/localStorage write
+    store.updatePriceTiers(ITEM_TIERED.sku, { bottlePriceCents: 9000, caseSize: 6, casePriceCents: 8500 });
+    expect(calls).toBe(1);
+  });
+
+  it("updatePriceTiers is a no-op for a sku that isn't in the cart", () => {
+    const store = new CartStore();
+    store.addItem(ITEM_A);
+    store.updatePriceTiers("SKU-NOT-IN-CART", { bottlePriceCents: 1 });
+    expect(store.getItems()).toHaveLength(1);
+  });
+
+  it("automatically re-prices the whole line once accumulated qty crosses into a case tier", () => {
+    const store = new CartStore();
+    store.addItem(ITEM_TIERED, 2); // below case size (6) -> bottle price
+    expect(store.getSubtotalCents()).toBe(2 * 8500);
+
+    store.addItem(ITEM_TIERED, 4); // total qty 6 -> hits case size -> case price applies to all 6
+    expect(store.getItems()[0]?.qty).toBe(6);
+    expect(store.getSubtotalCents()).toBe(6 * 8000);
   });
 
   it("notifies subscribers on every mutation", () => {

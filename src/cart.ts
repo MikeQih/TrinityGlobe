@@ -1,8 +1,10 @@
 import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
-import { computeShippingFeeCents, computeRemainingForFreeShippingCents } from "./pricing";
-import type { CartItem, CheckoutRecipient, DeliveryMethod } from "./types";
+import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
+import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod } from "./types";
+
+type PriceTier = "bottle" | "case" | "fiveCase";
 
 // Mirrors the store_settings defaults seeded in supabase/migrations/0001_init.sql.
 // This is a display-only estimate for the drawer — create-checkout-session
@@ -79,22 +81,99 @@ export function initCart(): void {
   });
 
   renderBadge();
+  handleCheckoutRedirect();
+}
+
+// Stripe redirects back to `${SITE_URL}/?checkout=success|cancelled&order_id=...`
+// (see create-checkout-session.ts's success_url/cancel_url). A successful
+// payment means the reservation this cart represents was already confirmed
+// server-side, so the local cart is stale and must be cleared — otherwise
+// the customer sees the same items sitting in their cart right after paying
+// for them. A cancelled/abandoned checkout leaves the cart untouched so they
+// can resume it.
+function handleCheckoutRedirect(): void {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("checkout");
+  if (status !== "success" && status !== "cancelled") return;
+
+  if (status === "success") {
+    store.clear();
+    showToast(t("cart-order-success"));
+  } else {
+    showToast(t("cart-order-cancelled"));
+  }
+
+  params.delete("checkout");
+  params.delete("order_id");
+  const query = params.toString();
+  const newUrl = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
+  window.history.replaceState(null, "", newUrl);
+}
+
+function showToast(message: string): void {
+  const toast = document.createElement("div");
+  toast.className = "cart-toast";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  window.requestAnimationFrame(() => toast.classList.add("is-visible"));
+  window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+    window.setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+/** null when the product isn't found or has no bottle price — same "can't sell this" guard used everywhere a SKU is resolved against the live catalog. */
+function buildPriceTiers(sku: string): CartItemPriceTiers | null {
+  const product = getProductBySku(sku);
+  const prices = product?.prices;
+  const bottlePrice = prices?.bottle;
+  if (bottlePrice == null || bottlePrice <= 0) return null;
+  return {
+    bottlePriceCents: Math.round(bottlePrice * 100),
+    caseSize: prices?.caseSize ?? null,
+    casePriceCents: prices?.case != null ? Math.round(prices.case * 100) : null,
+    fiveCaseSize: prices?.fiveCaseSize ?? null,
+    fiveCasePriceCents: prices?.fiveCases != null ? Math.round(prices.fiveCases * 100) : null,
+  };
+}
+
+// A cart persists in localStorage across page loads, but each item's
+// priceTiers is a snapshot taken when it was added — if pricing/case-size
+// data changes afterwards (e.g. we fill in a case size the day after a
+// customer added a bottle), their already-in-cart item would otherwise keep
+// quoting the stale tier forever. Called once the catalog is guaranteed to
+// be loaded — i.e. right as the drawer opens (see openDrawer) — rather than
+// on every render, since it's a reconciliation pass, not a per-render cost.
+function reconcilePriceTiers(): void {
+  for (const item of store.getItems()) {
+    const fresh = buildPriceTiers(item.sku);
+    if (fresh) store.updatePriceTiers(item.sku, fresh);
+  }
 }
 
 function handleAddToCart(btn: HTMLButtonElement): void {
   const sku = btn.dataset.sku;
   if (!sku) return;
+  const priceTiers = buildPriceTiers(sku);
   const product = getProductBySku(sku);
-  const bottlePrice = product?.prices?.bottle;
-  if (!product || bottlePrice == null || bottlePrice <= 0) return;
+  if (!product || !priceTiers) return;
+
+  const tier = (btn.dataset.tier as PriceTier | undefined) ?? "bottle";
+
+  // The button is only ever rendered (see script.js#buildPriceGrid) for a
+  // case/five-case tier once its size is known, but guard here too in case
+  // a stale bundle renders a card from before that size was added.
+  const addQty =
+    tier === "case" ? priceTiers.caseSize : tier === "fiveCase" ? priceTiers.fiveCaseSize : 1;
+  if (!addQty) return;
 
   const item: Omit<CartItem, "qty"> = {
     sku,
     name: product.nameEn || product.name,
     image: product.image,
-    unitPriceCents: Math.round(bottlePrice * 100),
+    priceTiers,
   };
-  store.addItem(item);
+  store.addItem(item, addQty);
 
   const original = btn.textContent;
   btn.classList.add("is-added");
@@ -119,6 +198,7 @@ function openDrawer(): void {
   document.getElementById("cartToggle")?.setAttribute("aria-expanded", "true");
   overlayEl.classList.add("open");
   drawerEl.classList.add("open");
+  reconcilePriceTiers();
   renderDrawer();
 }
 
@@ -181,15 +261,32 @@ function cartViewHtml(): string {
 }
 
 function itemRowHtml(item: CartItem): string {
+  const unitPriceCents = effectiveUnitPriceCents(item.qty, item.priceTiers);
+  const tierBadge =
+    item.priceTiers.fiveCasePriceCents != null && unitPriceCents === item.priceTiers.fiveCasePriceCents
+      ? `<span class="cart-item-tier">${t("cart-tier-five-case")}</span>`
+      : item.priceTiers.casePriceCents != null && unitPriceCents === item.priceTiers.casePriceCents
+      ? `<span class="cart-item-tier">${t("cart-tier-case")}</span>`
+      : "";
+
   return `
     <div class="cart-item" data-sku="${escapeAttr(item.sku)}">
       <div class="cart-item-img"><img src="${escapeAttr(item.image)}" alt="" loading="lazy" /></div>
       <div>
         <div class="cart-item-name">${escapeHtml(item.name)}</div>
-        <div class="cart-item-price">${formatCents(item.unitPriceCents)}</div>
+        <div class="cart-item-price">${formatCents(unitPriceCents)} ${tierBadge}</div>
         <div class="cart-item-qty">
           <button type="button" class="cart-qty-btn" data-action="qty-dec" aria-label="${t("cart-qty-decrease")}">&minus;</button>
-          <span class="cart-item-qty-value">${item.qty}</span>
+          <input
+            type="number"
+            class="cart-item-qty-input"
+            value="${item.qty}"
+            min="1"
+            max="${MAX_QTY_PER_ITEM}"
+            step="1"
+            inputmode="numeric"
+            aria-label="${t("cart-qty-label")}"
+          />
           <button type="button" class="cart-qty-btn" data-action="qty-inc" aria-label="${t("cart-qty-increase")}" ${
     item.qty >= MAX_QTY_PER_ITEM ? "disabled" : ""
   }>+</button>
@@ -244,6 +341,7 @@ function checkoutViewHtml(): string {
             ${t("checkout-self-collection")}
           </label>
         </div>
+        <p id="ck-delivery-info" class="checkout-delivery-info">${deliveryInfoHtml(deliveryMethod)}</p>
 
         <div id="ck-address-group" ${deliveryMethod === "self_collection" ? "hidden" : ""}>
           <div class="${cls("address")}">
@@ -271,6 +369,14 @@ function checkoutViewHtml(): string {
     </div>
     ${checkoutFooterHtml()}
   `;
+}
+
+// Neither delivery option is self-explanatory to a first-time buyer — standard
+// delivery needs its fee/threshold stated up front, and self collection is
+// meaningless without an address. Both texts live in i18n (script.js) so they
+// stay in sync with the wording on policies/delivery.html.
+function deliveryInfoHtml(method: DeliveryMethod): string {
+  return method === "self_collection" ? t("checkout-self-collection-info") : t("checkout-standard-delivery-info");
 }
 
 function checkoutFooterHtml(): string {
@@ -341,6 +447,23 @@ function wireDrawerEvents(): void {
     });
   });
 
+  // Typing a qty directly (rather than clicking +/- one at a time) matters
+  // for a wholesale-sized order — e.g. a customer buying a few hundred
+  // bottles. `change` (fires on blur/Enter, not per keystroke) so a
+  // half-typed value never triggers a store update mid-edit.
+  drawerEl.querySelectorAll<HTMLInputElement>(".cart-item-qty-input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const sku = input.closest<HTMLElement>(".cart-item")?.dataset.sku;
+      if (!sku) return;
+      const parsed = Math.floor(Number(input.value));
+      if (!Number.isFinite(parsed)) {
+        input.value = String(store.getItems().find((i) => i.sku === sku)?.qty ?? 1);
+        return;
+      }
+      store.updateQty(sku, parsed); // handles qty <= 0 (removes) and the MAX_QTY_PER_ITEM cap itself
+    });
+  });
+
   if (view === "checkout") wireCheckoutForm();
 }
 
@@ -361,6 +484,8 @@ function wireCheckoutForm(): void {
       deliveryMethod = target.value as DeliveryMethod;
       const addressGroup = document.getElementById("ck-address-group");
       if (addressGroup) addressGroup.hidden = deliveryMethod === "self_collection";
+      const infoEl = document.getElementById("ck-delivery-info");
+      if (infoEl) infoEl.innerHTML = deliveryInfoHtml(deliveryMethod);
       updateCheckoutFooter();
     } else if (target.name === "ageConfirmed") {
       ageConfirmed = target.checked;

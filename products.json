@@ -8,7 +8,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Hennessy VSOP.png",
-      "prices": { "bottle": 85, "case": 80, "fiveCases": null }
+      "prices": { "bottle": 85, "case": 80, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Hennessy XO",
@@ -18,7 +18,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Hennessy XO.png",
-      "prices": { "bottle": 230, "case": 220, "fiveCases": null }
+      "prices": { "bottle": 230, "case": 220, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Hennessy Paradis",
@@ -28,7 +28,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Hennessy Paradis.png",
-      "prices": { "bottle": 1350, "case": 1320, "fiveCases": null }
+      "prices": { "bottle": 1350, "case": 1320, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Martell VSOP",
@@ -38,7 +38,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Martell VSOP.png",
-      "prices": { "bottle": 90, "case": 85, "fiveCases": null }
+      "prices": { "bottle": 90, "case": 85, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Martell Cordon Bleu",
@@ -48,7 +48,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Martell Cordon Bleu.png",
-      "prices": { "bottle": 220, "case": 200, "fiveCases": null }
+      "prices": { "bottle": 220, "case": 200, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Martell XO",
@@ -58,7 +58,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Martell XO.png",
-      "prices": { "bottle": 240, "case": 230, "fiveCases": null }
+      "prices": { "bottle": 240, "case": 230, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Gaulois XO 1L",
@@ -68,7 +68,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Gaulois XO.png",
-      "prices": { "bottle": 199, "case": 180, "fiveCases": null }
+      "prices": { "bottle": 199, "case": 180, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "GAVO XO 700ML",
@@ -78,7 +78,7 @@
       "category": "cognac",
       "categoryLabel": "Cognac",
       "image": "/images/干邑白兰地 - Gavo XO.png",
-      "prices": { "bottle": 199, "case": 180, "fiveCases": null }
+      "prices": { "bottle": 199, "case": 180, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 12 Double Cask",
@@ -88,7 +88,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦12年 Double Cask.png",
-      "prices": { "bottle": 129, "case": 125, "fiveCases": null }
+      "prices": { "bottle": 129, "case": 125, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 12 Sherry Oak",
@@ -98,7 +98,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦12年 Sherry Oak.png",
-      "prices": { "bottle": 145, "case": 140, "fiveCases": null }
+      "prices": { "bottle": 145, "case": 140, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "The Macallan 15",
@@ -108,7 +108,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦15年.png",
-      "prices": { "bottle": 235, "case": 225, "fiveCases": null }
+      "prices": { "bottle": 235, "case": 225, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 18 Double Oak",
@@ -118,7 +118,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦18年 Double Oak.png",
-      "prices": { "bottle": 445, "case": 430, "fiveCases": null }
+      "prices": { "bottle": 445, "case": 430, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 18 Sherry Oak",
@@ -128,7 +128,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦18年 Sherry Oak.png",
-      "prices": { "bottle": 520, "case": 510, "fiveCases": null }
+      "prices": { "bottle": 520, "case": 510, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 25 Sherry Oak",
@@ -138,7 +138,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦25年.png",
-      "prices": { "bottle": 3000, "case": 2900, "fiveCases": null }
+      "prices": { "bottle": 3000, "case": 2900, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 30 Double Cask",
@@ -148,7 +148,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦30年 Double Cask.png",
-      "prices": { "bottle": 4600, "case": 4500, "fiveCases": null }
+      "prices": { "bottle": 4600, "case": 4500, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Macallan 30 Sherry Oak",
@@ -158,7 +158,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 麦卡伦30年 Sherry Oak.png",
-      "prices": { "bottle": 6200, "case": 6000, "fiveCases": null }
+      "prices": { "bottle": 6200, "case": 6000, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Yamazaki 12",
@@ -168,7 +168,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 山崎12年.png",
-      "prices": { "bottle": 245, "case": 235, "fiveCases": null }
+      "prices": { "bottle": 245, "case": 235, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Yamazaki 18",
@@ -178,7 +178,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 山崎18年.png",
-      "prices": { "bottle": 1000, "case": 970, "fiveCases": null }
+      "prices": { "bottle": 1000, "case": 970, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Hibiki Japanese Harmony",
@@ -188,7 +188,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 响和风.png",
-      "prices": { "bottle": 138, "case": 130, "fiveCases": null }
+      "prices": { "bottle": 138, "case": 130, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Hibiki 21",
@@ -198,7 +198,7 @@
       "category": "whisky",
       "categoryLabel": "Whisky",
       "image": "/images/威士忌 - 响21年.png",
-      "prices": { "bottle": 950, "case": 900, "fiveCases": null }
+      "prices": { "bottle": 950, "case": 900, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Dom Pérignon 2015",
@@ -208,7 +208,7 @@
       "category": "champagne",
       "categoryLabel": "Champagne",
       "image": "/images/香槟 - Dom Pérignon 2015.png",
-      "prices": { "bottle": 249, "case": 230, "fiveCases": null }
+      "prices": { "bottle": 249, "case": 230, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Dom Pérignon 2013",
@@ -218,7 +218,7 @@
       "category": "champagne",
       "categoryLabel": "Champagne",
       "image": "/images/香槟 - Dom Pérignon 2013.png",
-      "prices": { "bottle": 285, "case": 270, "fiveCases": null }
+      "prices": { "bottle": 285, "case": 270, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Louis Roederer Cristal 2014",
@@ -228,7 +228,7 @@
       "category": "champagne",
       "categoryLabel": "Champagne",
       "image": "/images/香槟 - Louis Roederer Cristal 2014.png",
-      "prices": { "bottle": 485, "case": 470, "fiveCases": null }
+      "prices": { "bottle": 485, "case": 470, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Perrier-Jouët",
@@ -238,7 +238,7 @@
       "category": "champagne",
       "categoryLabel": "Champagne",
       "image": "/images/香槟 - Perrier-Jouët.png",
-      "prices": { "bottle": 99, "case": 88, "fiveCases": null }
+      "prices": { "bottle": 99, "case": 88, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Penfolds Bin 389",
@@ -248,7 +248,7 @@
       "category": "wine",
       "categoryLabel": "Red Wine",
       "image": "/images/红酒 - Penfolds Bin 389.png",
-      "prices": { "bottle": 99, "case": 95, "fiveCases": null }
+      "prices": { "bottle": 99, "case": 95, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Penfolds Bin 407",
@@ -258,7 +258,7 @@
       "category": "wine",
       "categoryLabel": "Red Wine",
       "image": "/images/红酒 - Penfolds Bin 407.png",
-      "prices": { "bottle": 105, "case": 100, "fiveCases": null }
+      "prices": { "bottle": 105, "case": 100, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "IT Extroso Appassimento Rosso",
@@ -268,7 +268,7 @@
       "category": "wine",
       "categoryLabel": "Red Wine",
       "image": "/images/红酒 - IT Extroso Appassimento.png",
-      "prices": { "bottle": 60, "case": 55, "fiveCases": null }
+      "prices": { "bottle": 60, "case": 55, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Sella & Mosca Monteoro 2020",
@@ -278,7 +278,7 @@
       "category": "wine",
       "categoryLabel": "White Wine",
       "image": "/images/白葡萄酒 - Sella & Mosca Monteoro 2020.png",
-      "prices": { "bottle": 60, "case": 55, "fiveCases": null }
+      "prices": { "bottle": 60, "case": 55, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "獺祭 23 1.8L",
@@ -288,7 +288,7 @@
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - Dassai 23 1.8L.png",
-      "prices": { "bottle": 230, "case": 210, "fiveCases": null }
+      "prices": { "bottle": 230, "case": 210, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "十四代 本丸 1.8L",
@@ -298,7 +298,7 @@
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - 十四代 本丸.png",
-      "prices": { "bottle": 650, "case": 630, "fiveCases": null }
+      "prices": { "bottle": 650, "case": 630, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "十四代 中取 無濾過 純米 1.8L",
@@ -308,7 +308,7 @@
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - 十四代 中取 無濾過 純米.png",
-      "prices": { "bottle": 670, "case": 650, "fiveCases": null }
+      "prices": { "bottle": 670, "case": 650, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "十四代 中取 純米吟醸 1.8L",
@@ -318,7 +318,7 @@
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - 十四代 中取 純米吟醸.png",
-      "prices": { "bottle": 720, "case": 700, "fiveCases": null }
+      "prices": { "bottle": 720, "case": 700, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "十四代 中取 播州山田錦 1.8L",
@@ -328,7 +328,7 @@
       "category": "sake",
       "categoryLabel": "Sake · 清酒",
       "image": "/images/清酒 - 十四代 中取 播州山田錦.png",
-      "prices": { "bottle": 770, "case": 750, "fiveCases": null }
+      "prices": { "bottle": 770, "case": 750, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "茅台",
@@ -338,7 +338,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 飞天茅台.png",
-      "prices": { "bottle": 300, "case": 290, "fiveCases": null }
+      "prices": { "bottle": 300, "case": 290, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "五粮液",
@@ -348,7 +348,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 五粮液.png",
-      "prices": { "bottle": 210, "case": 190, "fiveCases": null }
+      "prices": { "bottle": 210, "case": 190, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "国窖1573",
@@ -358,7 +358,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 国窖1573.png",
-      "prices": { "bottle": 199, "case": 190, "fiveCases": null }
+      "prices": { "bottle": 199, "case": 190, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "泸州鉴藏 A8",
@@ -368,7 +368,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 泸州鉴藏A8.png",
-      "prices": { "bottle": 110, "case": 100, "fiveCases": null }
+      "prices": { "bottle": 110, "case": 100, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "剑南春 东方红",
@@ -378,7 +378,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 剑南春东方红.png",
-      "prices": { "bottle": 199, "case": 180, "fiveCases": null }
+      "prices": { "bottle": 199, "case": 180, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "剑南春 青铜纪",
@@ -388,7 +388,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 剑南春青铜纪.png",
-      "prices": { "bottle": 399, "case": 380, "fiveCases": null }
+      "prices": { "bottle": 399, "case": 380, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "精品茅台",
@@ -398,7 +398,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 精品茅台.png",
-      "prices": { "bottle": 599, "case": 570, "fiveCases": null }
+      "prices": { "bottle": 599, "case": 570, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "茅台 15年",
@@ -408,7 +408,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 茅台15年.png",
-      "prices": { "bottle": 1150, "case": 1125, "fiveCases": null }
+      "prices": { "bottle": 1150, "case": 1125, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "茅台 30年",
@@ -418,7 +418,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 茅台30年.png",
-      "prices": { "bottle": 2800, "case": 2500, "fiveCases": null }
+      "prices": { "bottle": 2800, "case": 2500, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "茅台 50年",
@@ -428,7 +428,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu",
       "image": "/images/中国白酒 - 茅台50年.png",
-      "prices": { "bottle": 5100, "case": 4800, "fiveCases": null }
+      "prices": { "bottle": 5100, "case": 4800, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 玻璃汾",
@@ -438,7 +438,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 玻璃汾.png",
-      "prices": { "bottle": 62, "case": 57, "fiveCases": null }
+      "prices": { "bottle": 62, "case": 57, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 10年",
@@ -448,7 +448,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 汾酒10.png",
-      "prices": { "bottle": 90, "case": 85, "fiveCases": null }
+      "prices": { "bottle": 90, "case": 85, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "竹叶青 10年",
@@ -458,7 +458,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 竹叶青10.png",
-      "prices": { "bottle": 130, "case": 125, "fiveCases": null }
+      "prices": { "bottle": 130, "case": 125, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 巴拿马1915",
@@ -468,7 +468,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 巴拿马1915.png",
-      "prices": { "bottle": 135, "case": 130, "fiveCases": null }
+      "prices": { "bottle": 135, "case": 130, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 青花20度",
@@ -478,7 +478,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 青花20度.png",
-      "prices": { "bottle": 145, "case": 140, "fiveCases": null }
+      "prices": { "bottle": 145, "case": 140, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 青花30 (48% Vol)",
@@ -488,7 +488,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 青花30度.png",
-      "prices": { "bottle": 170, "case": 165, "fiveCases": null }
+      "prices": { "bottle": 170, "case": 165, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 陈酿30年",
@@ -498,7 +498,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 陈酿30年.png",
-      "prices": { "bottle": 175, "case": 170, "fiveCases": null }
+      "prices": { "bottle": 175, "case": 170, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 青花30 (53% Vol)",
@@ -508,7 +508,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 青花30度.png",
-      "prices": { "bottle": 200, "case": 190, "fiveCases": null }
+      "prices": { "bottle": 200, "case": 190, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 青花50度",
@@ -518,7 +518,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 青花50度.png",
-      "prices": { "bottle": 205, "case": 195, "fiveCases": null }
+      "prices": { "bottle": 205, "case": 195, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 复兴版青花30",
@@ -528,7 +528,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 复兴版青花30.png",
-      "prices": { "bottle": 225, "case": 215, "fiveCases": null }
+      "prices": { "bottle": 225, "case": 215, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "玫瑰汾酒",
@@ -538,7 +538,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 玫瑰汾酒.png",
-      "prices": { "bottle": 415, "case": 400, "fiveCases": null }
+      "prices": { "bottle": 415, "case": 400, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "竹叶青 限量版",
@@ -548,7 +548,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 竹叶青限量版.png",
-      "prices": { "bottle": 425, "case": 410, "fiveCases": null }
+      "prices": { "bottle": 425, "case": 410, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "汾酒 丝绸之路",
@@ -558,7 +558,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 汾酒",
       "image": "/images/中国白酒 - 汾酒 - 丝绸之路.png",
-      "prices": { "bottle": 435, "case": 420, "fiveCases": null }
+      "prices": { "bottle": 435, "case": 420, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 大曲新天蓝",
@@ -568,7 +568,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 大曲新天蓝.png",
-      "prices": { "bottle": 40, "case": 38, "fiveCases": null }
+      "prices": { "bottle": 40, "case": 38, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 微分子 33.8%",
@@ -578,7 +578,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 微分子 33.8度.png",
-      "prices": { "bottle": 60, "case": 58, "fiveCases": null }
+      "prices": { "bottle": 60, "case": 58, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 天之蓝 42%",
@@ -588,7 +588,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 天之蓝 42度.png",
-      "prices": { "bottle": 77, "case": 75, "fiveCases": null }
+      "prices": { "bottle": 77, "case": 75, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 天之蓝 52%",
@@ -598,7 +598,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 天之蓝 52度.png",
-      "prices": { "bottle": 85, "case": 83, "fiveCases": null }
+      "prices": { "bottle": 85, "case": 83, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝水晶版 40.8%",
@@ -608,7 +608,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝水晶版 40.8度.png",
-      "prices": { "bottle": 105, "case": 100, "fiveCases": null }
+      "prices": { "bottle": 105, "case": 100, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝水晶版 52%",
@@ -618,7 +618,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝水晶版 52度.png",
-      "prices": { "bottle": 125, "case": 120, "fiveCases": null }
+      "prices": { "bottle": 125, "case": 120, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝 M6+ 40.8%",
@@ -628,7 +628,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝M6 40.8度.png",
-      "prices": { "bottle": 140, "case": 135, "fiveCases": null }
+      "prices": { "bottle": 140, "case": 135, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝 M6+ 52%",
@@ -638,7 +638,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝M6 52度.png",
-      "prices": { "bottle": 160, "case": 155, "fiveCases": null }
+      "prices": { "bottle": 160, "case": 155, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝 M9",
@@ -648,7 +648,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝M9.png",
-      "prices": { "bottle": 285, "case": 270, "fiveCases": null }
+      "prices": { "bottle": 285, "case": 270, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "洋河 梦之蓝手工班",
@@ -658,7 +658,7 @@
       "category": "baijiu",
       "categoryLabel": "Baijiu · 洋河",
       "image": "/images/中国白酒 - 洋河 - 梦之蓝手工班.png",
-      "prices": { "bottle": 335, "case": 320, "fiveCases": null }
+      "prices": { "bottle": 335, "case": 320, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "嗨啤精酿 拉格",
@@ -668,7 +668,7 @@
       "category": "beer",
       "categoryLabel": "Beer · 精酿",
       "image": "/images/啤酒 - Lager.png",
-      "prices": { "bottle": 6, "case": 5, "fiveCases": null }
+      "prices": { "bottle": 6, "case": 5, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "嗨啤精酿 小麦",
@@ -678,7 +678,7 @@
       "category": "beer",
       "categoryLabel": "Beer · 精酿",
       "image": "/images/啤酒 - Wheat.png",
-      "prices": { "bottle": 6, "case": 5, "fiveCases": null }
+      "prices": { "bottle": 6, "case": 5, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Blue Dash Cucumber Flavor 730ml",
@@ -688,7 +688,7 @@
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 58, "case": 38, "fiveCases": null }
+      "prices": { "bottle": 58, "case": 38, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Blue Dash Lime Flavor 730ml",
@@ -698,7 +698,7 @@
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 58, "case": 38, "fiveCases": null }
+      "prices": { "bottle": 58, "case": 38, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Blue Dash White Grape Flavor 730ml",
@@ -708,7 +708,7 @@
       "category": "vodka",
       "categoryLabel": "Vodka · Exclusive",
       "image": "/images/伏特加 - Blue Dash.png",
-      "prices": { "bottle": 58, "case": 38, "fiveCases": null }
+      "prices": { "bottle": 58, "case": 38, "caseSize": 12, "fiveCases": null }
     },
     {
       "name": "Premium Tequila",
@@ -718,7 +718,7 @@
       "category": "tequila",
       "categoryLabel": "Tequila",
       "image": "/images/龙舌兰 - Premium Tequila.png",
-      "prices": { "bottle": 78, "case": 58, "fiveCases": null }
+      "prices": { "bottle": 78, "case": 58, "caseSize": 12, "fiveCases": null }
     }
   ]
 }

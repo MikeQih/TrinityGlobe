@@ -1116,6 +1116,35 @@ footer .container {
 
 .cart-drawer-close:hover { color: var(--gold); }
 
+.cart-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 2rem;
+  z-index: 300;
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  max-width: min(90vw, 420px);
+  padding: 0.9rem 1.4rem;
+  background: rgba(8, 8, 8, 0.96);
+  border: 1px solid var(--gold);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: center;
+  border-radius: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.cart-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-toast { transition: none; }
+}
+
 .cart-drawer-body {
   flex: 1;
   overflow-y: auto;
@@ -1161,6 +1190,16 @@ footer .container {
   color: var(--text-muted);
 }
 
+.cart-item-tier {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  border: 1px solid var(--border);
+}
+
 .cart-item-qty {
   display: flex;
   align-items: center;
@@ -1182,11 +1221,34 @@ footer .container {
 
 .cart-qty-btn:hover { border-color: var(--gold); color: var(--gold); }
 
-.cart-item-qty-value {
-  min-width: 1.4rem;
+.cart-item-qty-input {
+  width: 2.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
   text-align: center;
   font-size: 0.8rem;
+  font-family: 'Inter', sans-serif;
   font-variant-numeric: tabular-nums;
+  padding: 0.15rem 0.1rem;
+  transition: border-color 0.2s;
+}
+
+.cart-item-qty-input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* Hide the native spinner arrows — the +/- buttons already do that job, and
+   typing a large qty (a wholesale order) is easier without them in the way. */
+.cart-item-qty-input::-webkit-outer-spin-button,
+.cart-item-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cart-item-qty-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 .cart-item-remove {
@@ -1317,6 +1379,16 @@ footer .container {
 }
 
 .checkout-radio input { accent-color: var(--gold); }
+
+.checkout-delivery-info {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1.1rem;
+}
 
 .checkout-age-confirm {
   display: flex;

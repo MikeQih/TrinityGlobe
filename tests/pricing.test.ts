@@ -3,6 +3,7 @@ import {
   computeShippingFeeCents,
   computeRemainingForFreeShippingCents,
   computeInclusiveGstCents,
+  effectiveUnitPriceCents,
 } from "../src/pricing";
 
 describe("computeShippingFeeCents", () => {
@@ -72,5 +73,40 @@ describe("computeInclusiveGstCents", () => {
 
   it("is zero for a zero amount", () => {
     expect(computeInclusiveGstCents({ amountCents: 0, gstRate: 0.09, gstRegistered: true })).toBe(0);
+  });
+});
+
+describe("effectiveUnitPriceCents", () => {
+  const tiers = {
+    bottlePriceCents: 8500,
+    caseSize: 6,
+    casePriceCents: 8000,
+    fiveCaseSize: 30,
+    fiveCasePriceCents: 7500,
+  };
+
+  it("charges bottle price below the case threshold", () => {
+    expect(effectiveUnitPriceCents(1, tiers)).toBe(8500);
+    expect(effectiveUnitPriceCents(5, tiers)).toBe(8500);
+  });
+
+  it("charges case price once qty reaches the case size", () => {
+    expect(effectiveUnitPriceCents(6, tiers)).toBe(8000);
+    expect(effectiveUnitPriceCents(29, tiers)).toBe(8000);
+  });
+
+  it("charges five-case price once qty reaches the five-case size", () => {
+    expect(effectiveUnitPriceCents(30, tiers)).toBe(7500);
+    expect(effectiveUnitPriceCents(100, tiers)).toBe(7500);
+  });
+
+  it("falls back to bottle price when a tier's size is unknown, even if a price exists", () => {
+    const partial = { bottlePriceCents: 8500, casePriceCents: 8000 }; // no caseSize
+    expect(effectiveUnitPriceCents(12, partial)).toBe(8500);
+  });
+
+  it("falls back to bottle price when a tier's price is unknown, even if a size exists", () => {
+    const partial = { bottlePriceCents: 8500, caseSize: 6 }; // no casePriceCents
+    expect(effectiveUnitPriceCents(12, partial)).toBe(8500);
   });
 });

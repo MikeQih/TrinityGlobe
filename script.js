@@ -35,11 +35,14 @@ const translations = {
     'cart-title': 'Your Cart', 'cart-empty': 'Your cart is empty.',
     'cart-continue-shopping': 'Continue Shopping',
     'cart-subtotal': 'Subtotal', 'cart-remove': 'Remove',
-    'cart-qty-decrease': 'Decrease quantity', 'cart-qty-increase': 'Increase quantity',
+    'cart-qty-decrease': 'Decrease quantity', 'cart-qty-increase': 'Increase quantity', 'cart-qty-label': 'Quantity',
     'cart-checkout-btn': 'Checkout',
     'cart-free-shipping-hint': 'Add {amount} more for free delivery',
     'cart-free-shipping-met': "You've unlocked free delivery!",
     'cart-close': 'Close cart',
+    'cart-order-success': 'Payment received — thank you! We’ll email you a confirmation shortly.',
+    'cart-order-cancelled': 'Checkout was cancelled — your cart has been saved.',
+    'cart-tier-case': 'Case price', 'cart-tier-five-case': '5-case price',
     'checkout-back-to-cart': '‹ Back to cart',
     'checkout-title': 'Checkout',
     'checkout-name': 'Full Name', 'checkout-phone': 'Phone Number', 'checkout-email': 'Email',
@@ -47,6 +50,8 @@ const translations = {
     'checkout-notes': 'Order Notes (optional)',
     'checkout-delivery-method': 'Delivery Method',
     'checkout-standard-delivery': 'Standard Delivery', 'checkout-self-collection': 'Self Collection',
+    'checkout-standard-delivery-info': 'Delivered to the address below. Free above S$120, otherwise a flat S$15 delivery fee applies (shown in the total below).',
+    'checkout-self-collection-info': 'Free — no delivery fee. We\'ll send the collection address, hours, and pickup instructions to the phone/email above once your order is confirmed; please wait for that notice before coming down.',
     'checkout-age-confirm': 'I confirm I am at least 18 years old. It is illegal to purchase alcohol if you are under the legal age.',
     'checkout-age-learn-more': 'Learn more',
     'checkout-age-required': 'Please confirm you are 18 or older to continue.',
@@ -88,11 +93,14 @@ const translations = {
     'cart-title': '购物车', 'cart-empty': '购物车是空的。',
     'cart-continue-shopping': '继续购物',
     'cart-subtotal': '小计', 'cart-remove': '移除',
-    'cart-qty-decrease': '减少数量', 'cart-qty-increase': '增加数量',
+    'cart-qty-decrease': '减少数量', 'cart-qty-increase': '增加数量', 'cart-qty-label': '数量',
     'cart-checkout-btn': '去结账',
     'cart-free-shipping-hint': '再购 {amount} 即可免运费',
     'cart-free-shipping-met': '已享受免运费！',
     'cart-close': '关闭购物车',
+    'cart-order-success': '支付成功，感谢您的订购！确认邮件稍后发送。',
+    'cart-order-cancelled': '结账已取消 —— 购物车内容已保留。',
+    'cart-tier-case': '整箱价', 'cart-tier-five-case': '五箱价',
     'checkout-back-to-cart': '‹ 返回购物车',
     'checkout-title': '结账',
     'checkout-name': '姓名', 'checkout-phone': '手机号', 'checkout-email': '邮箱',
@@ -100,6 +108,8 @@ const translations = {
     'checkout-notes': '订单备注（选填）',
     'checkout-delivery-method': '配送方式',
     'checkout-standard-delivery': '标准配送', 'checkout-self-collection': '自提',
+    'checkout-standard-delivery-info': '配送至下方填写的地址。订单满 S$120 免运费，未满则收取 S$15 运费（详见下方总计）。',
+    'checkout-self-collection-info': '免费自提，不收取运费。订单确认后，我们会将具体自提地址、开放时间和取货说明发送到您填写的电话/邮箱，请等待通知后再前来取货。',
     'checkout-age-confirm': '我确认已达到法定饮酒年龄。未达法定年龄购买酒类属违法行为。',
     'checkout-age-learn-more': '了解详情',
     'checkout-age-required': '请先确认您已达到法定饮酒年龄。',
@@ -202,6 +212,13 @@ function fmt(price) {
 }
 
 // ── Build price grid HTML (always show all 3 tiers, "—" when null) ──
+// Purely informational — the actual "add to cart" control is the single
+// button rendered below it in renderProducts (always adds 1 bottle). Buying
+// case-size quantities happens by adjusting qty in the cart drawer instead,
+// where it auto-prices to the case/five-case tier once qty crosses that
+// threshold (src/pricing.ts#effectiveUnitPriceCents) — tried making each
+// tier its own tap target on the card, but the price cells are too narrow
+// on mobile to be a reliable tap target, so reverted to this.
 function buildPriceGrid(prices) {
   if (!prices) prices = {};
   const tiers = [

@@ -5,6 +5,33 @@
 // customer sees in the drawer can't silently drift from what they're
 // actually charged.
 
+export interface PriceTiers {
+  bottlePriceCents: number;
+  caseSize?: number | null;
+  casePriceCents?: number | null;
+  fiveCaseSize?: number | null;
+  fiveCasePriceCents?: number | null;
+}
+
+/**
+ * A line's per-bottle price depends on how many bottles of that SKU are in
+ * it — buying enough to fill a case (or five) earns that tier's price on
+ * the *whole* line, not just the bottles bought past the threshold. This is
+ * the single source of truth for that rule: the cart drawer estimate
+ * (src/cart.ts) and the authoritative recompute
+ * (netlify/functions/create-checkout-session.ts) both call it, so a
+ * customer is never quoted one price and charged another.
+ */
+export function effectiveUnitPriceCents(qty: number, tiers: PriceTiers): number {
+  if (tiers.fiveCaseSize && tiers.fiveCasePriceCents != null && qty >= tiers.fiveCaseSize) {
+    return tiers.fiveCasePriceCents;
+  }
+  if (tiers.caseSize && tiers.casePriceCents != null && qty >= tiers.caseSize) {
+    return tiers.casePriceCents;
+  }
+  return tiers.bottlePriceCents;
+}
+
 export interface ShippingInput {
   subtotalCents: number;
   freeShippingThresholdCents: number;

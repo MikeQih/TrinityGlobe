@@ -3,7 +3,7 @@ import { getStripe } from "./_lib/stripe";
 import { requireEnv } from "./_lib/env";
 import { jsonResponse, errorResponse } from "./_lib/responses";
 import { createCheckoutSessionRequestSchema } from "./_lib/schemas";
-import { computeShippingFeeCents, computeInclusiveGstCents } from "../../src/pricing";
+import { computeShippingFeeCents, computeInclusiveGstCents, effectiveUnitPriceCents } from "../../src/pricing";
 
 // Kept identical to the reservation TTL passed into create_pending_order, and
 // used again below as the Stripe Checkout Session's own `expires_at`. Without
@@ -32,6 +32,10 @@ interface ProductVariantRow {
   sku: string;
   name_snapshot: string;
   unit_price_cents: number;
+  case_size: number | null;
+  case_price_cents: number | null;
+  five_case_size: number | null;
+  five_case_price_cents: number | null;
   is_active: boolean;
   allow_self_collection: boolean;
 }
@@ -68,7 +72,9 @@ export default async (req: Request): Promise<Response> => {
   const skus = items.map((i) => i.sku);
   const { data: variants, error: variantsError } = await supabase
     .from("product_variants")
-    .select("sku, name_snapshot, unit_price_cents, is_active, allow_self_collection")
+    .select(
+      "sku, name_snapshot, unit_price_cents, case_size, case_price_cents, five_case_size, five_case_price_cents, is_active, allow_self_collection"
+    )
     .in("sku", skus)
     .returns<ProductVariantRow[]>();
 
@@ -89,14 +95,25 @@ export default async (req: Request): Promise<Response> => {
     }
   }
 
+  // Tiered per-bottle pricing: buying enough of one SKU to fill a case (or
+  // five) earns that tier's price on the whole line. Uses the same function
+  // src/cart.ts uses for its estimate, so what the drawer showed and what
+  // gets charged here can't drift apart.
   const lineItems = items.map((item) => {
     const variant = variantBySku.get(item.sku) as ProductVariantRow;
+    const unitPriceCents = effectiveUnitPriceCents(item.qty, {
+      bottlePriceCents: variant.unit_price_cents,
+      caseSize: variant.case_size,
+      casePriceCents: variant.case_price_cents,
+      fiveCaseSize: variant.five_case_size,
+      fiveCasePriceCents: variant.five_case_price_cents,
+    });
     return {
       sku: item.sku,
       nameSnapshot: variant.name_snapshot,
-      unitPriceCents: variant.unit_price_cents,
+      unitPriceCents,
       qty: item.qty,
-      lineTotalCents: variant.unit_price_cents * item.qty,
+      lineTotalCents: unitPriceCents * item.qty,
     };
   });
 
