@@ -31,6 +31,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Covers paths back into /login that don't go through Login.tsx's own
+// post-submit navigate() — browser back/forward, a stale bookmark, or a
+// tab that was already signed in when it loaded this route.
+function LoginRoute() {
+  const { loading, session } = useAuth();
+  if (!loading && session) return <Navigate to="/orders" replace />;
+  return <Login />;
+}
+
 function Protected({ children }: { children: React.ReactNode }) {
   const { loading, session, role } = useAuth();
   if (isInviteFlow) return <Navigate to="/set-password" replace />;
@@ -51,7 +60,7 @@ export function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<LoginRoute />} />
           <Route path="/set-password" element={<SetPassword />} />
           <Route
             path="/orders"

@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 export function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +15,15 @@ export function Login() {
     setError(null);
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(false);
-    if (signInError) setError(signInError.message);
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
+    // signInWithPassword succeeding updates AuthContext's session via its
+    // onAuthStateChange subscription, but nothing about that automatically
+    // moves you off /login — without this, sign-in "succeeds" (the network
+    // tab shows 200s) while the page just sits there.
+    navigate("/orders", { replace: true });
   }
 
   return (

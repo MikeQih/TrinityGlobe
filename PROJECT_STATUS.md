@@ -107,6 +107,26 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 **⚠️ 注意**：因为测试时生成了一个新的邀请令牌，**之前发到 `qihengchang1014@gmail.com` 的邀请邮件（包括重发的那封）大概率已经失效**。用户要用的时候需要再触发一次全新的邀请邮件（我可以随时重新发）。
 
+---
+
+## 2026-08-20（第四轮）：admin-app 正式部署上线
+
+用户确认要处理"重发邀请邮件"和"admin-app部署上线"这两件事。
+
+**过程中发现**：`inviteUserByEmail` 对已经确认过邮箱（哪怕没设密码）的账号会报错"already registered"——原因是之前测试邀请链接时，访问那个链接本身就把邮箱标记成"已确认"了，即使没有真正设置密码。改用 `resetPasswordForEmail`（更准确的说是"设置/重置密码"这条路，跟前端逻辑复用同一套 `isInviteFlow` 检测）来解决，但 Supabase 自带邮件服务的默认速率限制很低，连续测试后触发了"email rate limit exceeded"。**后续都改用「生成链接但不发邮件 + 直接写入本机剪贴板」的方式**给用户，不再依赖 Supabase 自带的邮件发送。
+
+**admin-app 已经正式部署上线**：`https://trinity-globe-admin.netlify.app`（Netlify 新建了一个独立站点 `trinity-globe-admin`，部署源是同一个 GitHub 仓库、`dev` 分支、`admin-app/` 子目录）。
+
+**部署过程踩了一个坑，已经修复并 push**：Netlify 后台的"Publish directory"设置显示是对的（`admin-app/dist`），但实际发布出来的却是没构建过的源代码（浏览器打开是空白页，`index.html` 里引用的是 `/src/main.tsx` 而不是构建后的 `assets/xxx.js`）。排查发现是**仓库根目录那个 `netlify.toml`（storefront 项目用的）被 Netlify 误当成了 admin-app 这个新站点的配置在用**，它的 `publish = "."` 覆盖了后台界面上填的值。修复：新增了 `admin-app/netlify.toml`（只属于这个站点自己的配置，不影响根目录那份），里面除了正确的 `publish = "dist"`，还加了 React Router 需要的 SPA fallback 重定向规则（不然邀请邮件链接跳到 `/set-password` 这种非首页路径会直接 404）。**这个改动已经 commit + push 到 `dev` 分支**（连同之前两次未推送的 commit 一起推了上去，用户已确认）。
+
+重新生成了一个指向正式网址（而不是本地 `localhost:5173`）的"设置密码"链接，直接写进了本机剪贴板，用户可以自己粘贴到浏览器打开、设置密码、正式登录测试。
+
+**当前 admin-app 部署配的环境变量**：`VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`、`VITE_STOREFRONT_FUNCTIONS_URL`（设成了 `https://trinityglobe.sg`，这个要等 dev 合并进 main、storefront 的 Functions 真正上线才会生效，现在配着算是提前占位）。
+
+**又发现并修复一个坑：Supabase Auth 的 Site URL 还是初始建项目时的默认值**。用户第一次点"设置密码"链接时报错"localhost refused to connect"——查了 Supabase 后台 Authentication → URL Configuration，发现 `Site URL` 还停留在项目刚建好时的默认值 `http://localhost:3000`，`Redirect URLs` 允许列表是空的。Supabase 的规则是：如果 `generateLink`/`inviteUserByEmail` 传的 `redirectTo` 不在允许列表里，会被直接忽略、退回到 `Site URL`——这就是之前生成的链接为什么跳去了 localhost。**已修复**：`Site URL` 改成了 `https://trinity-globe-admin.netlify.app`，`Redirect URLs` 加了这个正式地址和本地 `localhost:5173`（方便以后本地调试）两条，都带 `/**` 通配符。已重新生成一个新链接（旧的、之前生成的两个都已作废），生成后打印确认了 `redirect_to` 参数确实指向正式网址，再放进用户剪贴板。
+
+**用户还没有完成设置密码这一步**——如果下次还遇到登录问题，先确认这一步有没有走完。
+
 - [x] 切片6 订单后台 `admin-app/`（登录页已验证渲染正常，OrdersList/OrderDetail 已写但未接入真实管理员账号测试）
 - [x] 切片7 测试：42个 Vitest 单测全过；Playwright e2e 骨架已写，因需真实密钥暂未跑
 
@@ -160,14 +180,28 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ## 尚未开始（部署相关）
 
-- [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）
+- [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`，或先给 `dev` 建分支预览
 - [ ] Stripe webhook 指向生产环境公网 URL，拿到 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配
-- [ ] Netlify 后台生产环境变量：`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`STRIPE_SECRET_KEY`（届时切换成 sk_live_）/`RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`STAFF_NOTIFICATION_EMAILS`/`SITE_URL`/`ADMIN_APP_ORIGIN`
-- [ ] `admin-app/` 部署上线，配好 `ADMIN_APP_ORIGIN` 让 `admin-refund-order.ts` 的 CORS 认得它
-- [ ] 在 Supabase Auth 建第一个真实管理员账号 + 插入对应 `admin_profiles` 行
+- [x] Netlify（storefront `trinity-globe` 站点）生产环境变量已配置（`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`STRIPE_SECRET_KEY`(还是sk_test_)/`RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`STAFF_NOTIFICATION_EMAILS`/`FREE_SHIPPING_THRESHOLD_CENTS`/`STANDARD_SHIPPING_FEE_CENTS`/`SITE_URL`），`STRIPE_WEBHOOK_SECRET`/`ADMIN_APP_ORIGIN` 还是空的
+- [x] `admin-app/` **已部署上线**：`https://trinity-globe-admin.netlify.app`（独立 Netlify 站点，见上面第四轮记录）。`ADMIN_APP_ORIGIN` 也已经配到 storefront（`trinity-globe`）项目的环境变量里了，值就是这个正式地址
+- [x] 在 Supabase Auth 建了第一个管理员账号（`qihengchang1014@gmail.com`，role: admin），密码还没设置，等用户自己点链接设置
 - [ ] 库存：目前所有72个SKU都是**占位库存20**（用户已明确说"先放着，后续再调整"），真实上线前要换成真实库存数
 - [ ] 政策页面（`policies/*.html`）法律审阅：目前 UEN、运费(S$15)、免运费门槛(S$120)、自提地址（11-03 The Suites Central, 57A Devonshire Road, S239897）、自提时间（24小时）已确认写死；配送时效/配送范围/派送失败处理流程仍是占位符，等业务决定；用户说"后续会找人过"法律
 - [ ] GST：数据库 `store_settings.gst_registered` 目前是 **false（占位）**。**这次对话发现一个重要合规提醒**：公司年营收已超S$1M，按新加坡IRAS规定这已经触发强制注册GST的义务（超门槛后30天内需注册），**需要尽快跟老板/会计确认公司是否已经注册GST**，这直接影响网站价格是否要显示含税、以及是否已经存在合规风险
+
+---
+
+## 2026-08-20（第五轮）：登录页"点了没反应"的真实bug
+
+用户设置完密码、第一次通过邀请链接能正常进后台看到订单列表（订单数据也确认是真实的，跟这次session之前创建的测试订单对得上）。但 Sign out 之后再用邮箱+密码在普通登录页登录，点 Sign in 没反应。
+
+用户截图里的浏览器 Network 面板帮了大忙：`token?grant_type=password` 和 `admin_profiles?select=role...` 都返回 200，说明**账号密码是对的、登录请求本身成功了**。真正的问题是**代码bug**：`Login.tsx` 里 `signInWithPassword` 成功后，没有任何代码告诉页面"该跳转去订单页了"——`AuthContext` 内部状态确实更新了，但 `/login` 这个路由本身没有监听这个状态变化去跳转，所以停在原地，看起来像卡死。（第一次能进去是因为走的是"设置密码"页面，那个页面代码里专门写了`navigate("/orders")`，普通登录页少了这一步。）
+
+**已修复**：
+- `Login.tsx`：登录成功后显式调用 `navigate("/orders", { replace: true })`
+- `App.tsx`：新增 `LoginRoute` 包装组件，如果已经有session了还停在 `/login`（比如浏览器后退），也会自动跳到 `/orders`，双重保险
+
+已过 typecheck。**这个改动还没 commit/push**——需要推送到 `dev` 分支、Netlify 重新构建后，`https://trinity-globe-admin.netlify.app` 上才会生效。
 
 ---
 
