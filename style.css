@@ -1447,6 +1447,9 @@ footer .container {
   position: sticky;
   top: 0;
   z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: rgba(8, 8, 8, 0.95);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -1472,6 +1475,43 @@ footer .container {
   padding: 4rem 2rem 6rem;
 }
 
+.policy-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 2.5rem;
+  text-decoration: none;
+  border-bottom: none;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.policy-breadcrumb:hover { color: var(--text-muted); border-color: transparent; }
+.policy-breadcrumb:hover .policy-breadcrumb-label { color: var(--gold); }
+.policy-breadcrumb:hover .policy-breadcrumb-logo { opacity: 1; }
+
+/* Reuses the brand mark rather than a generic house glyph — a customer
+   already recognises this from the top nav on every page, so it doubles as
+   both "you're on a Trinity Globe page" and "click to go back". */
+.policy-breadcrumb-logo {
+  height: 1.7rem;
+  width: auto;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+
+.policy-breadcrumb-chevron {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.policy-breadcrumb-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  transition: color 0.2s;
+}
+
 .policy-eyebrow {
   font-size: 0.75rem;
   letter-spacing: 0.2em;
@@ -1489,6 +1529,15 @@ footer .container {
 .policy-updated {
   font-size: 0.78rem;
   color: var(--text-muted);
+  margin-bottom: 2.5rem;
+}
+
+.policy-lang-notice {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border);
+  padding-left: 0.8rem;
   margin-bottom: 2.5rem;
 }
 

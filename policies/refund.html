@@ -16,12 +16,19 @@
       <img class="nav-logo-img" src="../images/logo-transparent.png" alt="TG" />
       TRINITY GLOBE
     </a>
+    <a class="nav-lang" id="langToggle" href="#" onclick="togglePolicyLanguage(); return false;">English</a>
   </nav>
 
   <main class="policy-main">
-    <div class="policy-eyebrow">Legal</div>
-    <h1>Refund &amp; Return Policy</h1>
+    <a href="../index.html" class="policy-breadcrumb" aria-label="Back to home">
+      <img class="policy-breadcrumb-logo" src="../images/logo-transparent.png" alt="" />
+      <span class="policy-breadcrumb-chevron">&rsaquo;</span>
+      <span class="policy-breadcrumb-label" data-i18n="breadcrumb-refund">Refund &amp; Returns</span>
+    </a>
+    <div class="policy-eyebrow" data-i18n="policy-eyebrow-legal">Legal</div>
+    <h1 data-i18n="h1-refund">Refund &amp; Return Policy</h1>
     <p class="policy-updated">Internal draft — prepared for review, not yet published to customers.</p>
+    <p class="policy-lang-notice" id="policyLangNotice" data-i18n="policy-lang-notice" hidden></p>
 
     <div class="policy-draft-notice">
       <strong>This is a first-pass draft.</strong> The refund <em>mechanism</em> (Stripe refund to original
@@ -92,5 +99,6 @@
     </div>
   </footer>
 
+  <script src="policy-i18n.js"></script>
 </body>
 </html>
