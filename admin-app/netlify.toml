@@ -1,0 +1,16 @@
+# Scoped to this site only (Netlify's "package directory" for this project
+# is admin-app/, so it reads this file instead of the repo-root netlify.toml
+# — that root one is the storefront's config and must not be reused here,
+# its `publish = "."` was getting applied to this project too, which
+# published the unbuilt source instead of the Vite build in admin-app/dist).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# React Router (BrowserRouter) needs every path to resolve to index.html so
+# client-side routing can take over — without this, refreshing on e.g.
+# /orders/123 or opening an invite-email link at /set-password 404s.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

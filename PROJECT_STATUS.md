@@ -83,7 +83,30 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 浏览器实测：面包屑点击返回首页正常；语言按钮切换后标题/面包屑/提示文案正确变中文，正文保持英文；切换到另一个政策页面语言选择保持不变。
 
-以上（footer去Contact、5个政策页面面包屑、政策页面中英文切换框架）还没 commit。
+以上（footer去Contact、5个政策页面面包屑、政策页面中英文切换框架）**已经 commit**（`16ccaa3`，2026-08-20，在 `dev` 分支，还没 push）。
+
+---
+
+## 2026-08-20（第三轮）：Netlify 生产环境变量 + 第一个管理员账号
+
+用户确认"不依赖外部信息的部署准备工作"可以先做，做了两件事：
+
+**Netlify 生产环境变量已配置**：登录 `app.netlify.com`（trinity-globe 项目，浏览器一直保持登录状态），通过"Import from .env file"一次性导入了10个变量：`SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/`STRIPE_SECRET_KEY`（还是测试用的 `sk_test_`）/`RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`STAFF_NOTIFICATION_EMAILS`/`FREE_SHIPPING_THRESHOLD_CENTS`/`STANDARD_SHIPPING_FEE_CENTS`/`SITE_URL`（设成了正式域名 `https://trinityglobe.sg`，跟本地 `.env` 里的 `localhost:8888` 不一样）。全部标记为 secret，作用域 Builds/Functions/Runtime，覆盖 Production 在内的5个部署环境。**`STRIPE_WEBHOOK_SECRET` 和 `ADMIN_APP_ORIGIN` 还是空的**，要等真正部署、有公网URL后才能配。
+
+确认了 Netlify 项目的生产部署分支是 **`main`**（当前 `main@3c4e996`），跟之前的判断一致——dev分支的改动要合并到main才会真正上线。
+
+**`admin-app` 是什么，为什么需要登录**：这是给内部员工（老板/客服）用的订单管理后台，不是给客户用的——类似 Shopee 卖家后台，用来看订单列表/详情、流转订单状态（待付款→已付款→备货中→自提/配送中→完成）、处理退款。因为涉及客户姓名/电话/地址/金额这类内部数据，所以要登录才能进，不能谁都能看。开通一个员工账号的流程是：在 Supabase 后台建一条记录（选好权限：admin/ops/finance_readonly）→ 系统发邀请邮件到员工邮箱 → 员工点链接自己设置密码 → 以后用"邮箱+密码"登录。
+
+**创建了第一个管理员账号**：用 Supabase Auth 的 `inviteUserByEmail` 给 `qihengchang1014@gmail.com` 发了邀请邮件（用户自己选的），并在 `admin_profiles` 表插入了对应行（`role: 'admin'`）。**密码由收件人自己在邀请邮件里设置，没有经过我手上**。
+
+**发现一个待办缺口，已经修复**：`admin-app/src/pages/Login.tsx` 当时只有邮箱+密码登录表单，完全没有处理 Supabase 邀请邮件里那个"设置密码"跳转链接（`#access_token=...&type=invite`）的逻辑。已修复：
+- 新增 `admin-app/src/pages/SetPassword.tsx`，一个"设置新密码"表单页
+- `App.tsx` 新增 `isInviteFlow` 检测（在模块加载时同步读取 `window.location.hash` 里的 `type=invite`/`type=recovery`，抢在 Supabase 客户端自动清掉这个hash之前拿到），检测到就路由到 `/set-password`，而不是直接放行进 `/orders`（`Protected` 组件和兜底路由都加了这个判断，双重保险）
+- **顺带发现第一次发的邀请邮件本身也配错了**：`redirectTo` 当时写成了 `http://localhost:8888`（storefront 的端口），而 `admin-app` 本地实际跑在 `5173`。已改正并重新发送邀请邮件到 `qihengchang1014@gmail.com`
+- 用 Supabase API 单独生成了一个测试用邀请链接（没有实际发邮件），在浏览器里走了一遍，确认能正确跳转到新建的"设置密码"页面。**没有替用户设置密码**——这一步应该由账号所有者自己完成，我只验证了跳转链接对不对。
+
+**⚠️ 注意**：因为测试时生成了一个新的邀请令牌，**之前发到 `qihengchang1014@gmail.com` 的邀请邮件（包括重发的那封）大概率已经失效**。用户要用的时候需要再触发一次全新的邀请邮件（我可以随时重新发）。
+
 - [x] 切片6 订单后台 `admin-app/`（登录页已验证渲染正常，OrdersList/OrderDetail 已写但未接入真实管理员账号测试）
 - [x] 切片7 测试：42个 Vitest 单测全过；Playwright e2e 骨架已写，因需真实密钥暂未跑
 
@@ -109,7 +132,8 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 ### Resend —— 已完成
 - 域名 `trinityglobe.sg` DNS 验证通过，发信测试成功
 - `RESEND_FROM_EMAIL=orders@trinityglobe.sg`
-- `STAFF_NOTIFICATION_EMAILS=2537175447@qq.com`（临时用自己的邮箱测试，**后续要换成老板真实邮箱**）
+- `STAFF_NOTIFICATION_EMAILS=2537175447@qq.com`（临时用自己的邮箱测试，**后续要换成老板真实邮箱**，目前还没换）
+- 订单确认邮件（`netlify/functions/_lib/email.ts`）已支持按配送方式动态调整内容：自提订单会自动附上完整地址/时间/联系方式，详见上面"修复2"
 
 ### Airwallex —— 正在注册中，进行到 KYC 流程
 - **重要：这不是替换 Stripe，只是先注册占位**，因为 Airwallex 更适合大宗跨境批发场景，跟 Trinity Globe 现阶段"个人零售"模式不完全匹配，已跟同事说明两次
