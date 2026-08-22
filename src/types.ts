@@ -83,3 +83,31 @@ export interface CreateCheckoutSessionResponse {
   checkoutUrl: string;
   orderId: string;
 }
+
+export type OrderStatus =
+  | "pending_payment"
+  | "paid"
+  | "preparing"
+  | "ready_for_collection"
+  | "out_for_delivery"
+  | "completed"
+  | "cancelled"
+  | "refunded"
+  | "payment_failed";
+
+export interface MyOrderItem {
+  name: string;
+  qty: number;
+  unitPriceCents: number;
+}
+
+/** Shape returned by GET /.netlify/functions/get-my-orders — see orders.html / src/orders-page.ts. */
+export interface MyOrder {
+  id: string;
+  status: OrderStatus;
+  totalCents: number;
+  currency: string;
+  deliveryMethod: DeliveryMethod;
+  createdAt: string;
+  items: MyOrderItem[];
+}

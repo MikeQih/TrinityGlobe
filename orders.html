@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Orders — Trinity Globe Trading</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="policy-nav">
+    <a href="index.html" class="nav-logo">
+      <img class="nav-logo-img" src="images/logo-transparent.png" alt="TG" />
+      TRINITY GLOBE
+    </a>
+    <div class="policy-nav-right">
+      <div class="nav-account" id="navAccount"></div>
+      <a class="nav-lang" id="langToggle" href="#" onclick="toggleOrdersLanguage(); return false;">English</a>
+    </div>
+  </nav>
+
+  <main class="policy-main">
+    <a href="index.html" class="policy-breadcrumb" aria-label="Back to home">
+      <img class="policy-breadcrumb-logo" src="images/logo-transparent.png" alt="" />
+      <span class="policy-breadcrumb-chevron">&rsaquo;</span>
+      <span class="policy-breadcrumb-label" data-i18n="page-title-orders">My Orders</span>
+    </a>
+    <h1 data-i18n="page-title-orders">My Orders</h1>
+
+    <div id="myOrdersRoot" class="orders-list"></div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span class="footer-logo">TRINITY GLOBE TRADING</span>
+      <span class="footer-copy">© 2026 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier</span>
+    </div>
+  </footer>
+
+  <script src="orders-i18n.js"></script>
+  <script type="module" src="/assets/storefront.js" defer></script>
+</body>
+</html>

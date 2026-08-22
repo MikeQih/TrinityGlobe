@@ -1027,6 +1027,38 @@ footer .container {
 .cart-toggle:hover { color: var(--gold); }
 .cart-toggle svg { width: 20px; height: 20px; }
 
+/* Account nav indicator — populated by src/cart.ts#initAccountNav() on
+   index.html's #navAccount (inside #navbar) and orders.html's (inside
+   .policy-nav-right). A flex item itself (not display:contents) so its own
+   "My Orders · Sign Out" pairing gets a tighter gap than the surrounding
+   nav's, reading as one grouped control rather than two separate links. */
+.nav-account {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.nav-account-signin,
+.nav-account-link,
+.nav-account-signout {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.nav-account-signin:hover,
+.nav-account-link:hover,
+.nav-account-signout:hover {
+  color: var(--gold);
+}
+
 .cart-count {
   position: absolute;
   top: -2px;
@@ -1611,6 +1643,95 @@ footer .container {
 
 .checkout-otp-resend:hover { color: var(--gold-light); }
 
+/* orders.html — My Orders page (src/orders-page.ts) */
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  margin-top: 2.5rem;
+}
+
+.orders-status {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.orders-signin-btn {
+  display: inline-flex;
+  margin-top: 1rem;
+  border: none;
+  font-family: 'Inter', sans-serif;
+}
+
+.order-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.3rem 1.5rem;
+}
+
+.order-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-card-id {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.order-card-date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.order-status-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+}
+
+.order-status-badge[data-status='cancelled'],
+.order-status-badge[data-status='payment_failed'],
+.order-status-badge[data-status='refunded'] {
+  color: #e8998c;
+  background: rgba(217, 122, 108, 0.12);
+}
+
+.order-status-badge[data-status='completed'] {
+  color: #8fceb0;
+  background: rgba(143, 206, 176, 0.12);
+}
+
+.order-card-items {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.order-card-total {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
 @media (max-width: 480px) {
   .cart-drawer { width: 100vw; }
 }
@@ -1660,6 +1781,12 @@ footer .container {
 }
 
 .policy-nav .nav-logo-img { height: 40px; width: auto; }
+
+.policy-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
 
 .policy-main {
   max-width: 760px;

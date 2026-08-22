@@ -1,7 +1,9 @@
+import { getSession } from "./auth";
 import type {
   CreateCheckoutSessionRequest,
   CreateCheckoutSessionResponse,
   LiveProductInfo,
+  MyOrder,
 } from "./types";
 
 const FUNCTIONS_BASE = "/.netlify/functions";
@@ -60,10 +62,30 @@ export async function fetchLivePrices(skus: string[]): Promise<LiveProductInfo[]
 export async function createCheckoutSession(
   payload: CreateCheckoutSessionRequest
 ): Promise<CreateCheckoutSessionResponse> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  // Optional — when the customer is signed in, this is how
+  // create-checkout-session.ts attaches the resulting order to their
+  // account (see netlify/functions/_lib/supabase.ts#getUserIdFromRequest).
+  // Guest checkout just omits it.
+  const session = getSession();
+  if (session?.access_token) headers.authorization = `Bearer ${session.access_token}`;
+
   const res = await fetch(`${FUNCTIONS_BASE}/create-checkout-session`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
   return (await parseJsonOrThrow(res)) as CreateCheckoutSessionResponse;
+}
+
+/** The signed-in customer's own past orders — see orders.html / src/orders-page.ts. */
+export async function fetchMyOrders(): Promise<MyOrder[]> {
+  const session = getSession();
+  if (!session?.access_token) throw new ApiError("Not signed in", 401);
+
+  const res = await fetch(`${FUNCTIONS_BASE}/get-my-orders`, {
+    headers: { authorization: `Bearer ${session.access_token}` },
+  });
+  const body = (await parseJsonOrThrow(res)) as { orders: MyOrder[] };
+  return body.orders;
 }

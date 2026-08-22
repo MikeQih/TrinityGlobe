@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireEnv } from "./env";
 
 let client: SupabaseClient | null = null;
+let anonClient: SupabaseClient | null = null;
 
 /**
  * Server-side only. Uses the service_role key, which bypasses Row Level
@@ -15,6 +16,31 @@ export function getSupabaseAdmin(): SupabaseClient {
     auth: { persistSession: false },
   });
   return client;
+}
+
+function getSupabaseAnon(): SupabaseClient {
+  if (anonClient) return anonClient;
+  anonClient = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_ANON_KEY"), {
+    auth: { persistSession: false },
+  });
+  return anonClient;
+}
+
+/**
+ * Resolves the signed-in user's id from a storefront request's
+ * `Authorization: Bearer <access_token>` header, or null if there isn't one
+ * or it doesn't check out. Used to attach an order to an account without
+ * trusting a client-supplied user id — this verifies the token against
+ * Supabase Auth itself rather than just decoding it, so a request can't
+ * claim to be a different customer than the one who's actually signed in.
+ */
+export async function getUserIdFromRequest(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice("Bearer ".length);
+  const { data, error } = await getSupabaseAnon().auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user.id;
 }
 
 /** Releases every still-pending-or-confirmed reservation for an order (used when checkout can't proceed after the order row was already created). */

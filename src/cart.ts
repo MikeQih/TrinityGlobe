@@ -16,6 +16,7 @@ import {
   signUpWithPassword,
   verifySignupOtp,
 } from "./auth";
+import { escapeAttr, escapeHtml } from "./html-escape";
 import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod, Gender, SignupProfile } from "./types";
 
 type PriceTier = "bottle" | "case" | "fiveCase";
@@ -168,6 +169,73 @@ async function bootAuth(): Promise<void> {
     if (isOpen && view === "checkout") renderDrawer();
   });
   maybeReopenCheckoutAfterAuth();
+  maybeOpenSignInFromQuery();
+}
+
+// Companion to the nav's "Sign In" entry on pages without a cart drawer of
+// their own (orders.html) — it redirects here with ?signin=1 instead of
+// trying to render the auth UI a second time.
+function maybeOpenSignInFromQuery(): void {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("signin") !== "1") return;
+  params.delete("signin");
+  const query = params.toString();
+  const newUrl = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
+  window.history.replaceState(null, "", newUrl);
+  if (getSession()) return;
+  openAccountDrawer();
+}
+
+// Opens the drawer straight to the sign-in/sign-up screen, independent of
+// checkout — used by the nav's "Sign In" entry, which has nothing to do
+// with what's in the cart. Bypasses goToCheckout()'s "cart must have items"
+// guard and its "ask once" accountChoiceMade shortcut on purpose, since this
+// is an explicit "I want to sign in" action, not a checkout attempt.
+export function openAccountDrawer(): void {
+  if (getSession()) return;
+  view = "checkout";
+  checkoutStage = "account";
+  isOpen = true;
+  document.getElementById("cartToggle")?.setAttribute("aria-expanded", "true");
+  overlayEl.classList.add("open");
+  drawerEl.classList.add("open");
+  renderDrawer();
+}
+
+// ── Nav account indicator (index.html's #navAccount, orders.html's too) ──
+// Self-contained: initAuth() is idempotent, so this works whether or not
+// initCart() already called it on this page.
+export function initAccountNav(): void {
+  const container = document.getElementById("navAccount");
+  if (!container) return;
+  const hasDrawer = document.getElementById("cartRoot") != null;
+
+  const render = (): void => {
+    const session = getSession();
+    container.innerHTML = session
+      ? `<a href="/orders.html" class="nav-account-link">${escapeHtml(t("nav-my-orders"))}</a>
+         <button type="button" class="nav-account-signout" data-nav-account-action="signout">${escapeHtml(
+           t("nav-sign-out")
+         )}</button>`
+      : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
+
+    container.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        const action = el.dataset.navAccountAction;
+        if (action === "signin") {
+          if (hasDrawer) openAccountDrawer();
+          else window.location.href = "/?signin=1";
+        } else if (action === "signout") {
+          void signOut();
+        }
+      });
+    });
+  };
+
+  void initAuth().then(render);
+  onAuthChange(render);
+  onLangChange(render);
 }
 
 // After signInWithGoogle() redirects away and Google sends the browser back,
@@ -775,8 +843,16 @@ function wireDrawerEvents(): void {
           break;
         case "continue-guest": {
           accountChoiceMade = true;
-          checkoutStage = "form";
-          renderDrawer();
+          // Empty cart means this was reached via the nav's "Sign In" entry,
+          // not an actual checkout attempt — nothing to check out, so just
+          // land back on the (empty) cart view instead of a checkout form
+          // for zero items.
+          if (store.getItems().length === 0) {
+            backToCart();
+          } else {
+            checkoutStage = "form";
+            renderDrawer();
+          }
           break;
         }
         case "signin-google":
@@ -1092,9 +1168,15 @@ async function handleResendOtp(): Promise<void> {
 // Shared tail end of both the sign-in and OTP-verify success paths.
 function enterCheckoutFormAfterAuth(): void {
   accountChoiceMade = true;
-  checkoutStage = "form";
   const session = getSession();
   if (session?.user.email && !recipient.email) recipient.email = session.user.email;
+  // Same empty-cart guard as "continue-guest" above — signing in from the
+  // nav has no cart items to check out.
+  if (store.getItems().length === 0) {
+    view = "cart";
+  } else {
+    checkoutStage = "form";
+  }
   renderDrawer();
 }
 
@@ -1116,10 +1198,3 @@ function validateRecipient(
   return errors;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/"/g, "&quot;");
-}

@@ -307,15 +307,26 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 - 真实注册（见上面 Resend 那段）→ 正确进入验证码页 → 输错验证码正确报错 → 换 Sign In 标签用同一账号密码登录，因为邮箱还没验证通过，Supabase 正确拒绝并显示"邮箱或密码不正确"（不会泄露"账号存在但没验证"这种细节）
 - 分阶段返回按钮、"以访客继续"路径都验证过没有被这次改动影响到，行为和之前一致
 
-**这次改动（Netlify 分支预览、`netlify.toml` 密钥扫描修复、Facebook 资料、Resend SMTP + OTP 模板、`customer_profiles` 迁移、完整注册/登录/验证码 UI）还没 commit**——按惯例等用户确认后再提交。`supabase/migrations/0004_customer_profiles.sql`、Resend SMTP 配置、Supabase 邮件模板、Facebook 后台设置这几项是**线上配置改动，不在 git 里**，但已经在真实项目里生效了，不需要额外部署步骤。
+### 订单关联账号 + "我的订单"页面 + 导航栏登录状态（老板反馈2真正落地）
+
+新增 `supabase/migrations/0005_orders_customer_link.sql`：`orders` 表加 `user_id`（关联 `auth.users`，可为空——访客下单仍然允许），RLS 新增一条"顾客只能看自己的订单"的 select 策略，跟原有的"内部员工可看全部订单"策略并存（加法式叠加，没有动原来那条）。
+
+**服务端信任链**：`netlify/functions/_lib/supabase.ts` 新增 `getUserIdFromRequest(req)`——不相信客户端传来的任何 user id 声明，而是拿请求头里的 `Authorization: Bearer <access_token>` 去问 Supabase Auth 本身（`auth.getUser(token)`）验真，验出来的 id 才会传给 `create_pending_order` 这个 RPC 写进订单。`src/api-client.ts` 的 `createCheckoutSession()` 在有登录态时会自动带上这个 token（访客结账不受影响，就是不带这个头）。
+
+**"我的订单"页面**：新增 `orders.html`（独立静态页，跟 `policies/*.html` 一样的结构）+ 独立的 `orders-i18n.js`（因为 `script.js` 的启动流程假设首页那些 DOM 都在，不能直接给子页面复用，这个做法沿用了 `policies/policy-i18n.js` 的先例）。新增 `netlify/functions/get-my-orders.ts`（要求 Bearer token，没有就 401，查出该用户名下的 `orders` + `order_items` 返回）+ `src/orders-page.ts` 的 `initOrdersPage()`，处理未登录/加载中/空列表/出错/正常展示几种状态。
+
+**导航栏登录状态**：`index.html` 新增 `#navAccount` 容器，`src/cart.ts` 里新增 `initAccountNav()`（导出，任何页面只要有这个容器就会渲染），未登录显示"Sign In"，登录后显示"My Orders / Sign Out"。点"Sign In"会打开购物车抽屉里原来那套账号选择 UI（新加了 `openAccountDrawer()`，绕开了原来"购物车得有东西才能打开"的限制，因为现在是从导航栏单独触发登录，不一定带着购物车）。
+
+**已做真实端到端测试（非 mock）**：用 Supabase Admin API 建了一个已确认的测试账号，用真实 magic link 建立登录态，在浏览器里实际加购 → 结账 → 提交表单 → 真的跳转到了一个 Stripe Checkout 页面（金额、商品行都对），然后用 SQL 直接查 `orders` 表确认这笔订单的 `user_id` 确实写成了测试账号的 UID；又直接访问 `orders.html`，确认这笔订单能通过真实的 `get-my-orders.ts` 请求正确渲染出来（订单号、状态"待付款"、商品明细、总价全部正确）。测试完毕后已清理：`release_inventory_reservation` 释放了这笔订单占用的库存预留、订单状态改成 `cancelled`、测试账号已从 Supabase Auth 删除，不留痕迹。
+
+**这次改动（Netlify 分支预览、`netlify.toml` 密钥扫描修复、Facebook 资料、Resend SMTP + OTP 模板、`customer_profiles` 迁移、完整注册/登录/验证码 UI、订单关联账号 + 我的订单页面 + 导航栏登录状态）还没 commit**——按惯例等用户确认后再提交。`supabase/migrations/0004_customer_profiles.sql`、`0005_orders_customer_link.sql`、Resend SMTP 配置、Supabase 邮件模板、Facebook 后台设置这几项是**线上配置改动，不在 git 里**，但已经在真实项目里生效了，不需要额外部署步骤。
 
 **接下来（没做的部分）**：
 - **Facebook 应用图标还没传**——需要用户自己把 `/tmp/fb-icon/app-icon-1024.png` 拖进 Facebook 后台的应用图标框（这台机器上的临时文件，可能已经不在了，需要的话可以重新生成）。
 - **Facebook App Review 正式提交还没做**——图标传完之后才能提交，且提交本身可能还需要写权限用途说明、录屏等材料。
+- **Facebook Business Portfolio（公司验证）状态未知**——用户点开的验证页面要求先有一个 Meta Business Portfolio，用户不确定公司是否已经注册过，需要自己去 business.facebook.com 查一下，我不该替用户猜/填这种企业身份信息。
 - Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google/Facebook/邮箱登录会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。
-- 导航栏目前**没有**加"已登录/账号"入口——只有在结账流程里才会看到登录状态。因为"我的订单"页面、订单跟账号关联的数据库改动都还没做，先不加一个没有实际去处的导航按钮。
-- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使注册/登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是账号系统本身能用了。**这是下一步的核心工作**。
-- 还没建"我的订单"这个客户可见的页面。
+- 邮箱注册验证码的**实际位数还没最终确认**——用 `admin.generateLink` 测试时观察到返回的是 8 位数字，但 UI 输入框目前限制的是 6 位（`maxlength="6"`）。真实 Resend 邮件里发的验证码之前只测过"输错会被拒绝"，没有专门数过位数。如果真实发信也是 8 位，现在的输入框会截断用户输入导致永远验证失败——**这个需要找时间用真实邮箱注册走一遍，数清楚验证码实际有几位**。
 - 老板反馈1（"上产品的后台和订单的后台能结合"）—— 用户选的是"两边互相加个跳转入口"这个轻量方案，还没做。
 
 ## 重要的操作纪律（继续遵守）
@@ -331,14 +342,15 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-1. **订单关联账号 + "我的订单"页面**——`orders` 表加 `user_id`、建客户可见的订单历史页，是老板反馈2真正落地的核心，账号系统（Google/Facebook/邮箱注册+验证码）都已经做完了，只差这一步没打通
+1. **订单关联账号 + "我的订单"页面 + 导航栏登录状态——已完成**（`orders.user_id`、`get-my-orders.ts`、`orders.html`、`#navAccount`，已用真实端到端测试验证过），老板反馈2的核心诉求已经打通
 2. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
-3. 问用户：这次新加的代码（Netlify 分支预览、Facebook 资料、Resend SMTP、`customer_profiles`、注册/登录/验证码 UI）要不要 commit
+3. 数清楚邮箱注册验证码到底是 6 位还是 8 位（见上面"接下来"那条），确认后视情况调整 `maxlength`
+4. 问用户：这次新加的代码（Netlify 分支预览、Facebook 资料、Resend SMTP、`customer_profiles`、注册/登录/验证码 UI、订单关联账号 + 我的订单页面）要不要 commit
 
 **要等用户这边的**：
-4. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
-5. 问用户：Facebook App Review 要不要现在就正式提交申请（图标传完之后的下一步，可能需要写权限说明/录屏材料）
-6. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-7. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
-8. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
-9. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）
+5. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
+6. 问用户：查完 Meta Business Portfolio 状态后，Facebook App Review 要不要现在就正式提交申请
+7. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
+8. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
+9. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+10. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）

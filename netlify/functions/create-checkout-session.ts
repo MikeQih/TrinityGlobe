@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, releaseOrderReservations } from "./_lib/supabase";
+import { getSupabaseAdmin, getUserIdFromRequest, releaseOrderReservations } from "./_lib/supabase";
 import { getStripe } from "./_lib/stripe";
 import { requireEnv } from "./_lib/env";
 import { jsonResponse, errorResponse } from "./_lib/responses";
@@ -55,6 +55,13 @@ export default async (req: Request): Promise<Response> => {
     return errorResponse(400, "Invalid request", "validation_error");
   }
   const { items, deliveryMethod, recipient, ageConfirmed } = parsed.data;
+
+  // Optional — guest checkout still works with no Authorization header at
+  // all (getUserIdFromRequest just returns null), same as before this was
+  // added. When present, this is verified against Supabase Auth itself, not
+  // trusted from the request body, so a signed-in customer can't end up
+  // with an order attached to the wrong account.
+  const userId = await getUserIdFromRequest(req);
 
   const supabase = getSupabaseAdmin();
 
@@ -144,6 +151,7 @@ export default async (req: Request): Promise<Response> => {
       p_total_cents: totalCents,
       p_age_confirmed: ageConfirmed,
       p_reservation_ttl_minutes: RESERVATION_TTL_MINUTES,
+      p_user_id: userId,
     })
     .single<{ id: string }>();
 
