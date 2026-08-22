@@ -210,7 +210,7 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ---
 
-## 2026-08-22：Google 登录接入（老板反馈2的第一步）
+## 2026-08-22：Google + Facebook 登录接入（老板反馈2的第一步）
 
 背景：老板反馈"未登录选完订单之后需要先登录才能进入付款页面，用 Google 登录"。跟用户反复确认后（参考了 paneco.com.sg 实际的结账页——它是 guest checkout 和 create account 并列的选项，不是强制登录），最终方案定为：**保留访客结账，加一个可选的"用 Google 登录"入口**，不强制登录。用户说"现在就开始（先从 Google 登录接入入手）"。
 
@@ -237,12 +237,34 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 - Guest 流程：加购 → Checkout → 看到选择页 → 点 "Continue as Guest" → 正常进入原有收货表单，运费/小计计算不受影响
 - Google 流程：点 "Sign in with Google" → **真实跳转到了 Google 的账号选择页**，URL 参数确认了 `client_id`/`redirect_uri`（指向 Supabase 回调）/`redirect_to`（指向 `localhost:8888/`）全部正确匹配——说明 storefront → Supabase → Google 这条链路完全打通了。**没有替用户完成实际登录**（浏览器自动化工具本身也不允许在 Google 登录页操作，这是符合"不替用户输入账号密码"这条纪律的），真正点哪个 Google 账号登录、授权，需要用户自己在浏览器里走一遍。
 
-**这次改动还没 commit**——按惯例等用户确认后再提交。
+**修复：登录成功后跳错地方**。用户实测点了 "Sign in with Google" 选好账号后，发现跳去了 `https://trinity-globe-admin.netlify.app/orders`（员工后台的订单页），而不是回到 storefront 的结账页。**根本原因**：Supabase 项目的 Auth `Redirect URLs` 白名单里，当时只有 admin-app 用到的两个地址（`https://trinity-globe-admin.netlify.app/**`、`http://localhost:5173/**`），没有 storefront 本地开发用的 `http://localhost:8888`。Supabase 的规则是：如果登录时传的 `redirectTo` 不在这个白名单里，会被**静默忽略**，退回用 `Site URL`（当时设的正是 admin-app 的地址）——所以才跳错了地方。**已修复**：在 Supabase 后台（`Authentication → URL Configuration → Redirect URLs`）加了 `http://localhost:8888/**` 和 `https://trinityglobe.sg/**`（后者是提前为将来正式上线占位）。修复后用之前登录过的账号重新测试，"已登录"状态条正确显示在 storefront 结账表单顶部，不再跳去 admin-app。**这是一个值得记住的坑**：这个 Supabase 项目同时给 storefront 和 admin-app 两个前端用，Redirect URLs 白名单必须把两边所有会用到的地址都加全，漏一个就会退回 Site URL、跳到"另一个"应用去。
+
+**顺带发现并解释：Google 登录页显示的是 `zmnkzopqwfawkctrbgfd.supabase.co` 而不是 Trinity Globe 相关域名**。去 Google Cloud Console 核实过，OAuth 同意屏幕的"应用名称"确实已经填的是 "Trinity Globe"，不是配置错误。这是 **Supabase 默认 Auth 架构的固有限制**：真正接收 Google 授权码、完成登录的服务器是 Supabase 的回调地址（`zmnkzopqwfawkctrbgfd.supabase.co`），不是 trinityglobe.sg；Google 出于防钓鱼考虑，登录页显示的是这个"真正会拿到用户 Google 数据"的域名，不是开发者自报的应用名称。**要改成显示自己的域名（如 `auth.trinityglobe.sg`），需要开通 Supabase 的付费 Custom Domain 功能**（Pro 套餐 + 额外费用）——问过用户，**决定先不处理，后续再看要不要配**。
+
+### Facebook 登录接入
+
+用户在 Google 跑通之后追加需求："目前只有google登录，再加一个facebook登录吧"。做法和 Google 完全对称：
+
+**Meta 开发者应用已创建**：`https://developers.facebook.com/apps/1424101232919631/`，应用名 "Trinity Globe"，用例选的是"用 Facebook 登录来验证用户身份并请求访问其数据"（Facebook Login），业务资产组合选择了"暂时不绑定"（不需要 Meta 企业验证就能先跑通开发模式测试）。Facebook Login 设置里的"有效 OAuth 跳转 URI"已经填了 Supabase 的回调地址 `https://zmnkzopqwfawkctrbgfd.supabase.co/auth/v1/callback`，和 Google 那边用的是同一个回调（同一个 Supabase 项目）。App ID（`1424101232919631`）和 App Secret 已经存进本地 `.env`（App Secret 用剪贴板方式写入，没有在对话里回显），并在 Supabase 后台启用了 Facebook provider、填入这两个值、保存成功。
+
+**创建应用的过程中有两次 Facebook 自己弹出"请重新输入密码"的二次确认**（创建应用前、查看 App Secret 前各一次）——这两次都是用户自己在浏览器里输入密码完成的，我没有接触密码本身。
+
+**storefront 代码改动**（跟 Google 的实现完全对称，复用同一套账号选择页/状态管理）：
+- `src/auth.ts`：把原来专门针对 Google 的内部逻辑抽成通用的 `signInWithOAuth(provider, redirectPath)`，`signInWithGoogle`/`signInWithFacebook` 都是它的薄包装
+- `src/cart.ts`：账号选择页（`accountChoiceHtml`）新增了 "Sign in with Facebook" 按钮，跟 Google 按钮并排；新增 `signin-facebook` 的 action 分支，逻辑跟 `signin-google` 一致（记 `tg_reopen_checkout` 标记后跳转）
+- `script.js`/`style.css`：新增中英文案 `checkout-signin-facebook`，Facebook 按钮复用跟 Google 按钮同一套 `.checkout-google-btn`/`.checkout-facebook-btn` 样式（没有用 Facebook 品牌蓝色，保持跟网站金色/暗色调一致，两个登录按钮视觉统一，只靠文字区分）
+
+**已过 typecheck + build + 浏览器实测**：账号选择页正确显示"Sign in with Google"和"Sign in with Facebook"两个按钮；点击 Facebook 按钮后**真实跳转到了 `facebook.com/dialog/oauth`**，URL 参数确认 `client_id`/`redirect_uri`（Supabase 回调）/`redirect_to`（`localhost:8888/`）全部正确——storefront → Supabase → Facebook 这条链路也打通了。同样没有替用户完成实际登录。
+
+**⚠️ 重要限制：这个 Facebook 应用目前是"开发模式"**。Meta 开发者面板明确提示"Currently ineligible for submission"，缺应用图标(1024×1024)、隐私政策网址、用户数据删除说明、类别这几项——这些是**将来要让所有客户都能用 Facebook 登录（而不只是开发者自己）时**必须补齐、然后提交 App Review 审核的东西，比 Google 那边的流程更重的（Google 只要基础信息就能给非测试用户用，Facebook 要求先过审核）。**现在只有这个应用的开发者/管理员/测试员账号能实际登录成功**，其他访客点了会失败或看不到登录页。这是下一步要跟用户确认的事项：是否要现在就补齐这些资料去申请 App Review，还是先只保留 Google 登录给真实客户用、Facebook 按钮等审核过了再说。
+
+**这次改动（Google 的 redirect 白名单修复 + Facebook 登录）还没 commit**——按惯例等用户确认后再提交。
 
 **接下来（没做的部分，按之前的范围讨论，这次先只做"登录接入"这一步）**：
-- Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google 登录按钮会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。等要正式部署这块功能时记得把这两个变量也导进去。
+- Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google/Facebook 登录按钮会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。等要正式部署这块功能时记得把这两个变量也导进去。
+- **Facebook App Review 还没申请**——目前只是开发模式，只有开发者自己能测试登录成功，真实客户还用不了。需要补齐应用图标/隐私政策网址/数据删除说明/类别，然后提交审核，可能还需要企业验证，具体看 Meta 到时候的要求。
 - 导航栏目前**没有**加"已登录/账号"入口——只有在结账流程里才会看到登录状态。因为"我的订单"页面、订单跟账号关联的数据库改动都还没做，先不加一个没有实际去处的导航按钮。
-- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使用 Google 登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是登录本身能用了。这是下一步的核心工作。
+- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使用 Google/Facebook 登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是登录本身能用了。这是下一步的核心工作。
 - 还没建"我的订单"这个客户可见的页面。
 - 老板反馈1（"上产品的后台和订单的后台能结合"）—— 用户选的是"两边互相加个跳转入口"这个轻量方案，还没做。
 
@@ -259,9 +281,10 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-1. Google 登录接入的后续步骤（见上面 2026-08-22 那节"接下来"）——订单关联账号的数据库改动 + "我的订单"页面，是老板反馈2真正落地的核心，登录本身只是第一步
+1. Google/Facebook 登录接入的后续步骤（见上面 2026-08-22 那节"接下来"）——订单关联账号的数据库改动 + "我的订单"页面，是老板反馈2真正落地的核心，登录本身只是第一步
 2. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
-3. 问用户：这次新加的 Google 登录代码要不要 commit
+3. 问用户：这次新加的 Google/Facebook 登录代码要不要 commit
+4. 问用户：Facebook 登录要不要现在就补资料申请 App Review（不然只有开发者自己能测试登录成功）
 
 **要等用户这边的**：
 4. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续

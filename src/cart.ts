@@ -2,7 +2,7 @@ import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
-import { getSession, initAuth, isAuthAvailable, onAuthChange, signInWithGoogle, signOut } from "./auth";
+import { getSession, initAuth, isAuthAvailable, onAuthChange, signInWithFacebook, signInWithGoogle, signOut } from "./auth";
 import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod } from "./types";
 
 type PriceTier = "bottle" | "case" | "fiveCase";
@@ -359,6 +359,9 @@ function accountChoiceHtml(): string {
         <button type="button" class="btn-dark checkout-google-btn" data-action="signin-google">${t(
           "checkout-signin-google"
         )}</button>
+        <button type="button" class="btn-dark checkout-facebook-btn" data-action="signin-facebook">${t(
+          "checkout-signin-facebook"
+        )}</button>
         <button type="button" class="btn-gold" data-action="continue-guest">${t("checkout-continue-guest")}</button>
       </div>
     </div>
@@ -529,6 +532,10 @@ function wireDrawerEvents(): void {
         case "signin-google":
           window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, "1");
           void signInWithGoogle();
+          break;
+        case "signin-facebook":
+          window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, "1");
+          void signInWithFacebook();
           break;
         case "sign-out":
           void signOut();

@@ -41,16 +41,24 @@ export function initAuth(): Promise<void> {
   return initPromise;
 }
 
-// `redirectPath` lands back on this same origin after Google's consent
-// screen — the cart drawer reopens itself from there (see cart.ts's
+// `redirectPath` lands back on this same origin after the provider's
+// consent screen — the cart drawer reopens itself from there (see cart.ts's
 // REOPEN_CHECKOUT_STORAGE_KEY flag), since the OAuth round trip is a full
 // page navigation and any in-memory drawer state is otherwise lost.
-export async function signInWithGoogle(redirectPath = "/"): Promise<void> {
+async function signInWithOAuth(provider: "google" | "facebook", redirectPath = "/"): Promise<void> {
   if (!supabase) return;
   await supabase.auth.signInWithOAuth({
-    provider: "google",
+    provider,
     options: { redirectTo: `${window.location.origin}${redirectPath}` },
   });
+}
+
+export function signInWithGoogle(redirectPath = "/"): Promise<void> {
+  return signInWithOAuth("google", redirectPath);
+}
+
+export function signInWithFacebook(redirectPath = "/"): Promise<void> {
+  return signInWithOAuth("facebook", redirectPath);
 }
 
 export async function signOut(): Promise<void> {

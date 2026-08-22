@@ -1443,13 +1443,15 @@ footer .container {
   font-family: 'Inter', sans-serif;
 }
 
-.checkout-google-btn {
+.checkout-google-btn,
+.checkout-facebook-btn {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   border: 1px solid var(--border) !important;
 }
 
-.checkout-google-btn:hover {
+.checkout-google-btn:hover,
+.checkout-facebook-btn:hover {
   border-color: var(--gold) !important;
   color: var(--gold);
 }
