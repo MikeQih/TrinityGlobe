@@ -1,7 +1,7 @@
 # Trinity Globe 商城项目 — 当前状态清单
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
-> 最后更新：2026-08-20
+> 最后更新：2026-08-22
 
 ## 项目背景
 
@@ -143,6 +143,11 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 - 状态：审核中有 2 个逾期任务，**需要 Wang Lei 本人**（占股30%、实际操作人，非 Bizfile 登记董事）通过 Singpass 或人工上传证件完成身份核验 + 补充授权文件
 - 已在 `.env` 配了 test mode 的 `STRIPE_SECRET_KEY`（sk_test_），代码已验证可用
 - **下一步**：确认 Wang Lei 是否已通过已打开的 Singpash tab 完成验证 → 去 `https://dashboard.stripe.com/acct_1U66mYBAev1issbv/account/status` 确认"支付"状态从"即将暂停"变回"活跃"
+- **2026-08-22 品牌装饰**：用户看到结账页默认是通用骰子图标，问能不能装饰。传了网站自己的金色 TG 圆形logo（`images/logo-transparent.png`，压缩到512KB以内），品牌色/强调色都改成了网站的金色 `#c9a84c`（跟 `style.css` 里的 `--gold` 一致）。
+
+  **踩坑记录**：第一次改的是 `acct_1U66mYBAev1issbv`（live/正式账号）的品牌设置，改完用户反馈"没有变化"——排查发现 Stripe 新出了「沙盒」（Sandbox）功能，是**完全独立的账号**（`acct_1U66mfB3ybi6Kwed`，注意是 `mf` 不是 `mY`），有自己独立的一套品牌/设置，跟正式账号不共享。日常测试用的 `create-checkout-session.ts`（配的是 `sk_test_`）走的就是这个沙盒环境。**已经在沙盒账号里重新设置了一遍**，图标/Logo/品牌色/强调色都配好并保存了，这次预览里能看到金色横幅+金色支付按钮生效。
+
+  **以后要记住**：这个项目的 Stripe 有两套完全独立的品牌/部分设置——`acct_1U66mYBAev1issbv`（正式账号，Wang Lei身份验证走的是这个）和 `acct_1U66mfB3ybi6Kwed`（沙盒，日常本地测试走的是这个）。以后任何"结账页长什么样"相关的设置改动，只要是给测试环境看的，都要在沙盒账号那边改，不是正式账号。
 
 ### Supabase —— 已完成
 - 项目已建，`SUPABASE_URL=https://zmnkzopqwfawkctrbgfd.supabase.co`
@@ -205,6 +210,42 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ---
 
+## 2026-08-22：Google 登录接入（老板反馈2的第一步）
+
+背景：老板反馈"未登录选完订单之后需要先登录才能进入付款页面，用 Google 登录"。跟用户反复确认后（参考了 paneco.com.sg 实际的结账页——它是 guest checkout 和 create account 并列的选项，不是强制登录），最终方案定为：**保留访客结账，加一个可选的"用 Google 登录"入口**，不强制登录。用户说"现在就开始（先从 Google 登录接入入手）"。
+
+**Google Cloud + Supabase 基础设施已搭好**：
+- 新建了一个独立的 Google Cloud 项目 `trinity-globe`（跟这个项目其他账号一样，不复用用户别的项目的凭证）
+- 配置了 OAuth 同意屏幕（External 受众，因为是面向公众的零售网站，不是内部 Workspace 应用）
+- 建了一个 Web application 类型的 OAuth 2.0 Client ID（名字 "Trinity Globe Storefront"），Authorized JavaScript origins 填了 `https://trinityglobe.sg` 和 `http://localhost:8888`，Authorized redirect URI 填了 Supabase 的回调地址 `https://zmnkzopqwfawkctrbgfd.supabase.co/auth/v1/callback`
+- Client ID / Client Secret 已经存进本地 `.env`（剪贴板方式写入，没有在对话里回显）
+- 在 Supabase 后台（`Authentication → Sign In / Providers → Google`）启用了 Google provider，填入了上面的 Client ID/Secret，保存成功
+
+**storefront 前端代码已实现并浏览器实测通过**：
+- 新增 `src/lib/supabase.ts`：浏览器端 Supabase client，读 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`。**关键设计**：跟 `admin-app` 那份不一样，这份**不会**在缺少环境变量时直接抛错——因为这个 client 是跟购物车逻辑打包在同一个 `assets/storefront.js` 里的，抛错会把整个购物车带崩掉。缺环境变量时 `supabase` 导出为 `null`，Google 登录功能静默关闭，访客结账完全不受影响。
+- 新增 `src/auth.ts`：封装 `getSession()`/`onAuthChange()`/`signInWithGoogle()`/`signOut()`/`initAuth()`。
+- `src/cart.ts` 改造了结账流程，加了一个新的 `checkoutStage`（`"account"` / `"form"`）：
+  - 未登录、且 Google 登录已配置、且这次打开还没选过的情况下，点"Checkout"先看到一个选择页（仿 paneco）：**"Sign in with Google"** 和 **"Continue as Guest"** 两个按钮
+  - 选 Guest 或已登录，直接跳过这一页进原来的收货表单
+  - 已登录时，表单顶部会显示一条"已登录：xxx@gmail.com · 退出登录"的提示条，并自动把邮箱预填进表单
+  - **Google 登录走的是完整页面跳转**（`supabase.auth.signInWithOAuth`），跳去 Google 再跳回来会丢失购物车抽屉当时的状态——用 `localStorage`（key `tg_reopen_checkout`）记了个"跳回来要重新打开结账"的标记，`initCart()` 启动时检测到这个标记就自动重新打开抽屉、回到结账页
+- 新增 `src/vite-env.d.ts`（跟 `admin-app` 那份一样的写法），给 `import.meta.env.VITE_SUPABASE_*` 提供类型
+- `.env`/`.env.example` 补充了 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`（Vite 只会把 `VITE_` 前缀的变量打进浏览器包，跟 `SUPABASE_URL`/`SUPABASE_ANON_KEY` 那两个纯后端用的变量分开）。**顺便清理了 `.env` 文件里一段之前剪贴板误粘贴进去的垃圾文字**（"应用部署：Heroku..."几行，跟这个项目无关，应该是之前从别处复制东西时手滑粘进去的）。
+- `script.js`/`style.css` 加了对应的中英文案和样式（`.checkout-account-choice`/`.checkout-account-bar` 等）
+
+**已过 typecheck + build + 浏览器实测**：
+- Guest 流程：加购 → Checkout → 看到选择页 → 点 "Continue as Guest" → 正常进入原有收货表单，运费/小计计算不受影响
+- Google 流程：点 "Sign in with Google" → **真实跳转到了 Google 的账号选择页**，URL 参数确认了 `client_id`/`redirect_uri`（指向 Supabase 回调）/`redirect_to`（指向 `localhost:8888/`）全部正确匹配——说明 storefront → Supabase → Google 这条链路完全打通了。**没有替用户完成实际登录**（浏览器自动化工具本身也不允许在 Google 登录页操作，这是符合"不替用户输入账号密码"这条纪律的），真正点哪个 Google 账号登录、授权，需要用户自己在浏览器里走一遍。
+
+**这次改动还没 commit**——按惯例等用户确认后再提交。
+
+**接下来（没做的部分，按之前的范围讨论，这次先只做"登录接入"这一步）**：
+- Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google 登录按钮会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。等要正式部署这块功能时记得把这两个变量也导进去。
+- 导航栏目前**没有**加"已登录/账号"入口——只有在结账流程里才会看到登录状态。因为"我的订单"页面、订单跟账号关联的数据库改动都还没做，先不加一个没有实际去处的导航按钮。
+- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使用 Google 登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是登录本身能用了。这是下一步的核心工作。
+- 还没建"我的订单"这个客户可见的页面。
+- 老板反馈1（"上产品的后台和订单的后台能结合"）—— 用户选的是"两边互相加个跳转入口"这个轻量方案，还没做。
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -217,6 +258,13 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ## 下次打开新session，最该先做的事
 
-1. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-2. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
-3. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+**不依赖外部信息、现在就能继续做的**：
+1. Google 登录接入的后续步骤（见上面 2026-08-22 那节"接下来"）——订单关联账号的数据库改动 + "我的订单"页面，是老板反馈2真正落地的核心，登录本身只是第一步
+2. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
+3. 问用户：这次新加的 Google 登录代码要不要 commit
+
+**要等用户这边的**：
+4. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
+5. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
+6. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+7. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）

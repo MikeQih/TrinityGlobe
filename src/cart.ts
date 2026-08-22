@@ -2,6 +2,7 @@ import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
+import { getSession, initAuth, isAuthAvailable, onAuthChange, signInWithGoogle, signOut } from "./auth";
 import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod } from "./types";
 
 type PriceTier = "bottle" | "case" | "fiveCase";
@@ -15,8 +16,20 @@ const STANDARD_SHIPPING_FEE_CENTS = 1500;
 
 const store = new CartStore();
 
+// Reused across page loads to reopen the checkout drawer after the Google
+// OAuth round trip navigates away and back to this same origin — a full
+// page navigation loses all the in-memory state below (view, checkoutStage,
+// etc.), so localStorage is the only thing that survives it.
+const REOPEN_CHECKOUT_STORAGE_KEY = "tg_reopen_checkout";
+
 type View = "cart" | "checkout";
+// "account": paneco-style guest/Google choice shown before the checkout form
+// the first time a signed-out visitor reaches checkout this page load.
+// "form": the actual recipient/delivery form (was previously the only stage).
+type CheckoutStage = "account" | "form";
 let view: View = "cart";
+let checkoutStage: CheckoutStage = "account";
+let accountChoiceMade = false;
 let isOpen = false;
 let isSubmitting = false;
 // Translation *keys*, not translated text — translated at render time so an
@@ -82,6 +95,30 @@ export function initCart(): void {
 
   renderBadge();
   handleCheckoutRedirect();
+  void bootAuth();
+}
+
+async function bootAuth(): Promise<void> {
+  await initAuth();
+  onAuthChange(() => {
+    // A session change while the drawer happens to be open (e.g. the sign-out
+    // button, or a stray auth event) should be reflected immediately rather
+    // than on the next unrelated re-render.
+    if (isOpen && view === "checkout") renderDrawer();
+  });
+  maybeReopenCheckoutAfterAuth();
+}
+
+// After signInWithGoogle() redirects away and Google sends the browser back,
+// this picks the flow back up right where the user left it instead of
+// dropping them on a bare homepage with a full cart and no explanation.
+function maybeReopenCheckoutAfterAuth(): void {
+  const flag = window.localStorage.getItem(REOPEN_CHECKOUT_STORAGE_KEY);
+  if (!flag) return;
+  window.localStorage.removeItem(REOPEN_CHECKOUT_STORAGE_KEY);
+  if (store.getItems().length === 0) return;
+  openDrawer();
+  goToCheckout();
 }
 
 // Stripe redirects back to `${SITE_URL}/?checkout=success|cancelled&order_id=...`
@@ -214,6 +251,12 @@ function goToCheckout(): void {
   view = "checkout";
   submitErrorKey = null;
   fieldErrorKeys = {};
+  const session = getSession();
+  // No account system configured, already signed in, or already chose guest
+  // earlier this page load — any of those skip straight past the choice
+  // screen to the form, matching paneco's "ask once" behaviour.
+  checkoutStage = !isAuthAvailable() || session || accountChoiceMade ? "form" : "account";
+  if (session?.user.email && !recipient.email) recipient.email = session.user.email;
   renderDrawer();
 }
 
@@ -223,7 +266,8 @@ function backToCart(): void {
 }
 
 function renderDrawer(): void {
-  drawerEl.innerHTML = view === "cart" ? cartViewHtml() : checkoutViewHtml();
+  drawerEl.innerHTML =
+    view === "cart" ? cartViewHtml() : checkoutStage === "account" ? accountChoiceHtml() : checkoutViewHtml();
   wireDrawerEvents();
 }
 
@@ -297,12 +341,44 @@ function itemRowHtml(item: CartItem): string {
   `;
 }
 
+// ── Account choice (guest vs Google) ──
+
+// Shown once per page load, before the checkout form, only when a signed-out
+// visitor with Google sign-in configured reaches checkout — mirrors paneco's
+// "Continue as Guest" / "Create account" screen rather than forcing login.
+function accountChoiceHtml(): string {
+  return `
+    <div class="cart-drawer-header">
+      <button type="button" class="cart-drawer-back" data-action="back">${t("checkout-back-to-cart")}</button>
+      <h2>${t("checkout-title")}</h2>
+      <button type="button" class="cart-drawer-close" data-action="close" aria-label="${t("cart-close")}">&times;</button>
+    </div>
+    <div class="cart-drawer-body">
+      <div class="checkout-account-choice">
+        <p class="checkout-account-lead">${t("checkout-account-lead")}</p>
+        <button type="button" class="btn-dark checkout-google-btn" data-action="signin-google">${t(
+          "checkout-signin-google"
+        )}</button>
+        <button type="button" class="btn-gold" data-action="continue-guest">${t("checkout-continue-guest")}</button>
+      </div>
+    </div>
+  `;
+}
+
 // ── Checkout view ──
 
 function checkoutViewHtml(): string {
   const err = (key: keyof CheckoutRecipient) =>
     fieldErrorKeys[key] ? `<p class="checkout-field-error">${escapeHtml(t(fieldErrorKeys[key] as string))}</p>` : "";
   const cls = (key: keyof CheckoutRecipient) => (fieldErrorKeys[key] ? "checkout-field has-error" : "checkout-field");
+  const session = getSession();
+  const accountBar = session
+    ? `<div class="checkout-account-bar">${t("checkout-signed-in-as")} <strong>${escapeHtml(
+        session.user.email ?? ""
+      )}</strong> <button type="button" class="checkout-signout-btn" data-action="sign-out">${t(
+        "checkout-sign-out"
+      )}</button></div>`
+    : "";
 
   return `
     <div class="cart-drawer-header">
@@ -311,6 +387,7 @@ function checkoutViewHtml(): string {
       <button type="button" class="cart-drawer-close" data-action="close" aria-label="${t("cart-close")}">&times;</button>
     </div>
     <div class="cart-drawer-body">
+      ${accountBar}
       ${submitErrorKey ? `<div class="checkout-error">${escapeHtml(t(submitErrorKey))}</div>` : ""}
       <form id="checkoutForm" novalidate>
         <div class="${cls("name")}">
@@ -443,6 +520,22 @@ function wireDrawerEvents(): void {
         case "remove":
           if (sku) store.removeItem(sku);
           break;
+        case "continue-guest": {
+          accountChoiceMade = true;
+          checkoutStage = "form";
+          renderDrawer();
+          break;
+        }
+        case "signin-google":
+          window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, "1");
+          void signInWithGoogle();
+          break;
+        case "sign-out":
+          void signOut();
+          accountChoiceMade = false;
+          checkoutStage = "account";
+          renderDrawer();
+          break;
       }
     });
   });
@@ -464,7 +557,7 @@ function wireDrawerEvents(): void {
     });
   });
 
-  if (view === "checkout") wireCheckoutForm();
+  if (view === "checkout" && checkoutStage === "form") wireCheckoutForm();
 }
 
 function wireCheckoutForm(): void {
