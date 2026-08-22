@@ -52,6 +52,17 @@ export interface LiveProductInfo {
 
 export type DeliveryMethod = "standard" | "self_collection";
 
+export type Gender = "male" | "female" | "prefer_not_to_say";
+
+/** Fields collected on the email/password signup form, written to customer_profiles once the OTP is verified. */
+export interface SignupProfile {
+  firstName: string;
+  lastName: string;
+  gender: Gender;
+  dateOfBirth: string; // yyyy-mm-dd, matches <input type="date">
+  newsletterSubscribed: boolean;
+}
+
 export interface CheckoutRecipient {
   name: string;
   phone: string;

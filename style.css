@@ -1486,6 +1486,131 @@ footer .container {
 
 .checkout-signout-btn:hover { color: var(--gold-light); }
 
+/* Sign Up / Sign In tabs (emailAuthHtml in src/cart.ts) */
+
+.checkout-auth-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.2rem;
+}
+
+.checkout-auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.7rem 0;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.checkout-auth-tab.is-active {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.checkout-gender-options {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.checkout-gender-options .checkout-radio {
+  flex: 1 1 auto;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.7rem;
+}
+
+.checkout-field-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+}
+
+.checkout-newsletter-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 1rem 0 1.2rem;
+}
+
+.checkout-newsletter-confirm input { accent-color: var(--gold); margin-top: 0.2rem; flex-shrink: 0; }
+
+.checkout-auth-submit {
+  width: 100%;
+  justify-content: center;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  margin-bottom: 0.5rem;
+}
+
+.checkout-or-divider {
+  text-align: center;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 1.3rem 0 0.9rem;
+  position: relative;
+}
+
+.checkout-or-divider::before,
+.checkout-or-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 28%;
+  border-top: 1px solid var(--border);
+}
+
+.checkout-or-divider::before { left: 0; }
+.checkout-or-divider::after { right: 0; }
+
+.checkout-auth-tabs + form .checkout-field,
+.checkout-auth-tabs ~ .checkout-google-btn,
+.checkout-auth-tabs ~ .checkout-facebook-btn {
+  margin-bottom: 0.7rem;
+}
+
+/* OTP verification (otpHtml in src/cart.ts) */
+
+.checkout-otp-lead {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+#otp-code {
+  font-size: 1.3rem;
+  letter-spacing: 0.4rem;
+  text-align: center;
+}
+
+.checkout-otp-resend {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.4rem 0;
+}
+
+.checkout-otp-resend:hover { color: var(--gold-light); }
+
 @media (max-width: 480px) {
   .cart-drawer { width: 100vw; }
 }

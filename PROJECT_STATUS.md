@@ -258,13 +258,63 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 **⚠️ 重要限制：这个 Facebook 应用目前是"开发模式"**。Meta 开发者面板明确提示"Currently ineligible for submission"，缺应用图标(1024×1024)、隐私政策网址、用户数据删除说明、类别这几项——这些是**将来要让所有客户都能用 Facebook 登录（而不只是开发者自己）时**必须补齐、然后提交 App Review 审核的东西，比 Google 那边的流程更重的（Google 只要基础信息就能给非测试用户用，Facebook 要求先过审核）。**现在只有这个应用的开发者/管理员/测试员账号能实际登录成功**，其他访客点了会失败或看不到登录页。这是下一步要跟用户确认的事项：是否要现在就补齐这些资料去申请 App Review，还是先只保留 Google 登录给真实客户用、Facebook 按钮等审核过了再说。
 
-**这次改动（Google 的 redirect 白名单修复 + Facebook 登录）还没 commit**——按惯例等用户确认后再提交。
+**这次改动（Google 的 redirect 白名单修复 + Facebook 登录）已经 commit + push**（`24a0150`，`dev` 分支，用户确认过"提交并 push"）。
 
-**接下来（没做的部分，按之前的范围讨论，这次先只做"登录接入"这一步）**：
-- Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google/Facebook 登录按钮会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。等要正式部署这块功能时记得把这两个变量也导进去。
-- **Facebook App Review 还没申请**——目前只是开发模式，只有开发者自己能测试登录成功，真实客户还用不了。需要补齐应用图标/隐私政策网址/数据删除说明/类别，然后提交审核，可能还需要企业验证，具体看 Meta 到时候的要求。
+## 2026-08-22（第二轮）：普通邮箱注册（paneco 风格）+ Facebook App Review 准备
+
+用户看完 Google/Facebook 登录后，参考 paneco.com 的注册页面截图，提出还要有"普通账号注册"——姓名、性别、生日、邮箱、密码，注册时发验证码到邮箱（用户确认要"验证码"这种形式，不要邮件链接）。同时提出"我现在就要填写 Facebook 的资料申请 App Review"。这一轮把这两件事都做了，外加为了给 Facebook App Review 一个真实可访问的网址，顺带把 storefront 的 Netlify 分支预览也开通了。
+
+### Netlify 分支预览（`dev--trinity-globe.netlify.app`）
+
+Facebook App Review 需要真实的隐私政策/数据删除说明网址，但这些页面当时只在 `dev` 分支/本地，还没合并到 `main`（production 用的还是没有购物车/登录功能的旧版静态站）。跟用户确认后（在"现在合并 dev 到 main"和"单独给 dev 开一个预览网址"之间选了后者），在 Netlify 后台（`trinity-globe` 项目 → Project configuration → Build & deploy → Branches and deploy contexts）把 Branch deploys 从"None"改成"Let me add individual branches"，只加了 `dev` 这一个分支（没有开放给所有分支，控制影响范围）。推了一个空 commit 触发首次分支部署，得到了公开预览地址 `https://dev--trinity-globe.netlify.app`。
+
+**顺带修复了一个真实的部署问题**：分支部署第一次失败，报"Exposed secrets detected"，列出的"secret"其实是 `FREE_SHIPPING_THRESHOLD_CENTS`/`RESEND_FROM_EMAIL`/`SITE_URL`/`STANDARD_SHIPPING_FEE_CENTS`/`SUPABASE_URL`/`STAFF_NOTIFICATION_EMAILS` 这几个本来就该公开出现在构建产物里的普通配置值，不是真正的密钥（真正的密钥比如 `STRIPE_SECRET_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/两个 OAuth client secret 都不在这份名单里，说明没有真的泄漏）。这是 Netlify 密钥扫描器的已知误报行为（只要一个环境变量的值原样出现在构建产物里就报警，不区分是否真的是敏感信息）。修复：在 `netlify.toml` 的 `[build.environment]` 里加了 `SECRETS_SCAN_OMIT_KEYS`，只列出这几个确认无害的 key，真正的密钥故意没加进去，扫描器对它们仍然生效。
+
+### Facebook App Review 资料
+
+Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、服务条款网址、数据删除说明网址都指向了上面的 `dev--trinity-globe.netlify.app` 预览站对应页面；类别选了"商家和公共主页"；应用图标（1024×1024，网站自己的金色 TG 圆标放在品牌深色背景上，文件生成在 `/tmp/fb-icon/app-icon-1024.png`，本地临时文件不在仓库里）**这一步需要用户自己上传**——浏览器自动化工具本身禁止代为点击文件上传按钮（会弹出看不到、控制不了的系统级文件选择窗口），需要用户自己把这个文件拖进 Facebook 后台"应用图标"那个框。**这一步还没确认完成**，Meta 后台的"Currently ineligible for submission"提示里，图标应该是唯一还缺的一项（隐私政策/数据删除/类别这几项在浏览器实测确认已经不再出现在缺失列表里）。
+
+**App Review 正式提交（申请 email/public_profile 权限给所有客户用）这一步还没做**——图标传完之后，还需要走 Meta 的权限审核申请流程（大概率需要写"这个权限用来做什么"的说明，可能需要录屏演示登录流程），这个流程本身比较长，这次没有继续往下走。
+
+### 邮箱注册：Resend 自定义 SMTP + OTP 验证码模板
+
+**发现一个 Supabase 的限制**：Supabase 自带的邮件发送服务**不允许编辑任何邮件模板**（包括把默认的"点击链接确认"换成"输入验证码"），必须先接上自己的 SMTP 发信服务才能编辑模板。项目正好已经有验证过域名的 Resend 账号（`RESEND_API_KEY` 一直在用，之前发订单确认邮件用的就是它）。跟用户确认后（选了"接上 Resend 的 SMTP"），在 Supabase 后台（`Authentication → Emails → SMTP Settings`）打开了 Custom SMTP：
+
+- Host: `smtp.resend.com`，Port: `465`
+- Username: `resend`，Password: `RESEND_API_KEY` 的值（剪贴板方式填入，没有回显）
+- 发件人：`orders@trinityglobe.sg`（复用已验证域名），显示名 "Trinity Globe"
+
+接上之后，"Confirm sign up"这个邮件模板解锁可编辑，把正文从默认的"点击链接确认"改成了显示 `{{ .Token }}`（Supabase 内置的 6 位数字验证码占位符）的样式，标题也改成了"Your Trinity Globe verification code"。**已用真实邮箱实测**：用 `qihengchang1014+cart-test@gmail.com`（Gmail 的 + 别名，实际会投递到用户自己的收件箱，用来在不需要一次性邮箱的情况下做真实测试）走了一遍注册，Resend 后台确认邮件状态是"Delivered"，标题和内容都对——整条链路（Supabase Auth → 自定义 SMTP → Resend → 真实收件箱）真的跑通了，不是假设。测试用的账号已经从 Supabase Auth 里删除，不留在正式用户列表里。
+
+**顺带影响**：这次把 SMTP 从"Supabase 自带（有严格发信频率限制）"换成了"自己的 Resend"，之前 session 遇到过的"邀请邮件发太快触发 rate limit"这类问题，理论上以后也不会再遇到了（Resend 没有那个限制）。
+
+### 数据库：`customer_profiles` 表
+
+新增 `supabase/migrations/0004_customer_profiles.sql`：`customer_profiles` 表（`user_id` 关联 `auth.users`，`first_name`/`last_name`/`gender`/`date_of_birth`/`newsletter_subscribed`/`created_at`），RLS 策略是"只能读写自己那一行"（`user_id = auth.uid()`）。**`date_of_birth` 字段在数据库层面加了 18 岁以上的 check 约束**——这不只是抄 paneco 的表单字段，对卖酒的网站来说这个字段本身就该顺便当年龄校验用，前端也会在提交前拦一次，数据库这道是兜底。已经用真实 SQL Editor 跑到线上库，用 `information_schema.columns` 查询确认了全部 7 个字段都建对了。
+
+### storefront 前端：完整的 Sign Up / Sign In / 验证码界面
+
+`src/auth.ts` 新增：`signUpWithPassword`/`signInWithPassword`/`verifySignupOtp`/`resendSignupOtp`/`saveCustomerProfile`（最后这个在验证码通过、拿到真实登录态之后才会调用，因为 `customer_profiles` 的 RLS 要求必须是本人登录状态才能写自己那一行）。
+
+`src/cart.ts` 的结账流程又多了两个阶段（`checkoutStage` 现在是 `"account" | "email-auth" | "email-otp" | "form"`）：
+- 账号选择页新增了第三个按钮"Continue with Email"（在 Google/Facebook 按钮和"以访客继续"之间）
+- **`email-auth`**：仿 paneco 的 Sign Up / Sign In 两个标签页。Sign Up 表单字段：名/姓/性别（男/女/不愿透露，单选）/出生日期（配一行"生日会收到专属福利"提示文案，呼应 paneco 原文，同时前端也在这里做 18 岁校验）/邮箱/密码/确认密码/订阅通讯勾选框；Sign In 表单：邮箱/密码。两个表单下方都有"Or continue with" + Google/Facebook 按钮，跟 paneco 页面的布局一致。
+- **`email-otp`**：注册成功后跳转到这里，显示"验证码已发送到 xxx@xxx.com"，一个 6 位验证码输入框，"验证"和"重新发送验证码"两个操作。验证成功后才会真正建立登录态，并把之前填的姓名/性别/生日/订阅偏好写进 `customer_profiles`（这一步失败不会挡住用户结账，只会弹一条 toast 提示，因为账号本身已经可用了，档案信息只是锦上添花）。
+- "返回"按钮现在是分阶段返回的（`email-otp` 返回 `email-auth`，`email-auth` 返回 `account`），不再像之前那样一律直接回购物车。
+
+**已过 typecheck + build + 大量浏览器实测**（这次为了避开浏览器自动化工具本身的点击坐标不稳定问题，改用直接在页面里执行 JS 触发 `data-action` 点击/`form.requestSubmit()` 的方式测试，更可靠）：
+- 空表单提交 → 每个必填字段都正确报错，密码不足 8 位/两次密码不一致也分别报对应错误
+- 真实注册（见上面 Resend 那段）→ 正确进入验证码页 → 输错验证码正确报错 → 换 Sign In 标签用同一账号密码登录，因为邮箱还没验证通过，Supabase 正确拒绝并显示"邮箱或密码不正确"（不会泄露"账号存在但没验证"这种细节）
+- 分阶段返回按钮、"以访客继续"路径都验证过没有被这次改动影响到，行为和之前一致
+
+**这次改动（Netlify 分支预览、`netlify.toml` 密钥扫描修复、Facebook 资料、Resend SMTP + OTP 模板、`customer_profiles` 迁移、完整注册/登录/验证码 UI）还没 commit**——按惯例等用户确认后再提交。`supabase/migrations/0004_customer_profiles.sql`、Resend SMTP 配置、Supabase 邮件模板、Facebook 后台设置这几项是**线上配置改动，不在 git 里**，但已经在真实项目里生效了，不需要额外部署步骤。
+
+**接下来（没做的部分）**：
+- **Facebook 应用图标还没传**——需要用户自己把 `/tmp/fb-icon/app-icon-1024.png` 拖进 Facebook 后台的应用图标框（这台机器上的临时文件，可能已经不在了，需要的话可以重新生成）。
+- **Facebook App Review 正式提交还没做**——图标传完之后才能提交，且提交本身可能还需要写权限用途说明、录屏等材料。
+- Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google/Facebook/邮箱登录会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。
 - 导航栏目前**没有**加"已登录/账号"入口——只有在结账流程里才会看到登录状态。因为"我的订单"页面、订单跟账号关联的数据库改动都还没做，先不加一个没有实际去处的导航按钮。
-- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使用 Google/Facebook 登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是登录本身能用了。这是下一步的核心工作。
+- 数据库层面 `orders` 表**还没有**关联到 Supabase Auth 的 `user_id`——现在即使注册/登录了，下单时订单也不会自动跟这个账号绑定，老板反馈里"想回头能查看订单"这个核心诉求还没真正解决，只是账号系统本身能用了。**这是下一步的核心工作**。
 - 还没建"我的订单"这个客户可见的页面。
 - 老板反馈1（"上产品的后台和订单的后台能结合"）—— 用户选的是"两边互相加个跳转入口"这个轻量方案，还没做。
 
@@ -281,13 +331,14 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-1. Google/Facebook 登录接入的后续步骤（见上面 2026-08-22 那节"接下来"）——订单关联账号的数据库改动 + "我的订单"页面，是老板反馈2真正落地的核心，登录本身只是第一步
+1. **订单关联账号 + "我的订单"页面**——`orders` 表加 `user_id`、建客户可见的订单历史页，是老板反馈2真正落地的核心，账号系统（Google/Facebook/邮箱注册+验证码）都已经做完了，只差这一步没打通
 2. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
-3. 问用户：这次新加的 Google/Facebook 登录代码要不要 commit
-4. 问用户：Facebook 登录要不要现在就补资料申请 App Review（不然只有开发者自己能测试登录成功）
+3. 问用户：这次新加的代码（Netlify 分支预览、Facebook 资料、Resend SMTP、`customer_profiles`、注册/登录/验证码 UI）要不要 commit
 
 **要等用户这边的**：
-4. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-5. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
-6. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
-7. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）
+4. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
+5. 问用户：Facebook App Review 要不要现在就正式提交申请（图标传完之后的下一步，可能需要写权限说明/录屏材料）
+6. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
+7. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
+8. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+9. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）

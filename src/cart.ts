@@ -2,8 +2,21 @@ import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
-import { getSession, initAuth, isAuthAvailable, onAuthChange, signInWithFacebook, signInWithGoogle, signOut } from "./auth";
-import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod } from "./types";
+import {
+  getSession,
+  initAuth,
+  isAuthAvailable,
+  onAuthChange,
+  resendSignupOtp,
+  saveCustomerProfile,
+  signInWithFacebook,
+  signInWithGoogle,
+  signInWithPassword,
+  signOut,
+  signUpWithPassword,
+  verifySignupOtp,
+} from "./auth";
+import type { CartItem, CartItemPriceTiers, CheckoutRecipient, DeliveryMethod, Gender, SignupProfile } from "./types";
 
 type PriceTier = "bottle" | "case" | "fiveCase";
 
@@ -23,10 +36,16 @@ const store = new CartStore();
 const REOPEN_CHECKOUT_STORAGE_KEY = "tg_reopen_checkout";
 
 type View = "cart" | "checkout";
-// "account": paneco-style guest/Google choice shown before the checkout form
-// the first time a signed-out visitor reaches checkout this page load.
+// "account": paneco-style guest/Google/Facebook/email choice shown before the
+// checkout form the first time a signed-out visitor reaches checkout this
+// page load.
+// "email-auth": the paneco-style Sign Up / Sign In forms, reached via
+// "account"'s "Continue with Email" button.
+// "email-otp": 6-digit code entry after a successful signup — the signup
+// itself doesn't create a usable session until this succeeds (Confirm Email
+// is on for this project).
 // "form": the actual recipient/delivery form (was previously the only stage).
-type CheckoutStage = "account" | "form";
+type CheckoutStage = "account" | "email-auth" | "email-otp" | "form";
 let view: View = "cart";
 let checkoutStage: CheckoutStage = "account";
 let accountChoiceMade = false;
@@ -36,6 +55,48 @@ let isSubmitting = false;
 // error surfaced before a language toggle still reads correctly after it.
 let submitErrorKey: string | null = null;
 let fieldErrorKeys: Partial<Record<keyof CheckoutRecipient, string>> = {};
+
+// ── Email/password signup + sign-in (checkoutStage "email-auth"/"email-otp") ──
+
+interface SignupFormState {
+  firstName: string;
+  lastName: string;
+  gender: Gender | "";
+  dateOfBirth: string;
+  email: string;
+  password: string;
+  passwordConfirm: string;
+  newsletterSubscribed: boolean;
+}
+
+let emailAuthTab: "signup" | "signin" = "signup";
+let signupForm: SignupFormState = {
+  firstName: "",
+  lastName: "",
+  gender: "",
+  dateOfBirth: "",
+  email: "",
+  password: "",
+  passwordConfirm: "",
+  newsletterSubscribed: false,
+};
+let signupFieldErrorKeys: Partial<Record<keyof SignupFormState, string>> = {};
+let signupErrorKey: string | null = null;
+let signupSubmitting = false;
+
+let signinForm = { email: "", password: "" };
+let signinFieldErrorKeys: Partial<Record<"email" | "password", string>> = {};
+let signinErrorKey: string | null = null;
+let signinSubmitting = false;
+
+// Stashed between a successful signUpWithPassword() and a successful
+// verifySignupOtp() — customer_profiles can only be written once there's an
+// authenticated user to attach it to (see auth.ts#saveCustomerProfile).
+let pendingSignupProfile: SignupProfile | null = null;
+let otpEmail = "";
+let otpCode = "";
+let otpErrorKey: string | null = null;
+let otpSubmitting = false;
 
 let recipient: CheckoutRecipient = {
   name: "",
@@ -267,8 +328,32 @@ function backToCart(): void {
 
 function renderDrawer(): void {
   drawerEl.innerHTML =
-    view === "cart" ? cartViewHtml() : checkoutStage === "account" ? accountChoiceHtml() : checkoutViewHtml();
+    view === "cart"
+      ? cartViewHtml()
+      : checkoutStage === "account"
+      ? accountChoiceHtml()
+      : checkoutStage === "email-auth"
+      ? emailAuthHtml()
+      : checkoutStage === "email-otp"
+      ? otpHtml()
+      : checkoutViewHtml();
   wireDrawerEvents();
+}
+
+// "back" means something different depending on how deep into the account
+// flow the drawer is — cart.ts's other back-button usages (account stage,
+// checkout form) still mean "back to cart" and keep using
+// checkout-back-to-cart directly.
+function handleBack(): void {
+  if (checkoutStage === "email-auth") {
+    checkoutStage = "account";
+    renderDrawer();
+  } else if (checkoutStage === "email-otp") {
+    checkoutStage = "email-auth";
+    renderDrawer();
+  } else {
+    backToCart();
+  }
 }
 
 // ── Cart view ──
@@ -362,7 +447,172 @@ function accountChoiceHtml(): string {
         <button type="button" class="btn-dark checkout-facebook-btn" data-action="signin-facebook">${t(
           "checkout-signin-facebook"
         )}</button>
+        <button type="button" class="btn-dark checkout-email-btn" data-action="use-email">${t(
+          "checkout-use-email"
+        )}</button>
         <button type="button" class="btn-gold" data-action="continue-guest">${t("checkout-continue-guest")}</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Email/password sign up + sign in ──
+
+function emailAuthHtml(): string {
+  const tabs = `
+    <div class="checkout-auth-tabs">
+      <button type="button" class="checkout-auth-tab ${
+        emailAuthTab === "signup" ? "is-active" : ""
+      }" data-action="tab-signup">${t("checkout-tab-signup")}</button>
+      <button type="button" class="checkout-auth-tab ${
+        emailAuthTab === "signin" ? "is-active" : ""
+      }" data-action="tab-signin">${t("checkout-tab-signin")}</button>
+    </div>
+  `;
+
+  return `
+    <div class="cart-drawer-header">
+      <button type="button" class="cart-drawer-back" data-action="back">${t("checkout-back")}</button>
+      <h2>${t("checkout-title")}</h2>
+      <button type="button" class="cart-drawer-close" data-action="close" aria-label="${t("cart-close")}">&times;</button>
+    </div>
+    <div class="cart-drawer-body">
+      ${tabs}
+      ${emailAuthTab === "signup" ? signupFormHtml() : signinFormHtml()}
+      <p class="checkout-or-divider">${t("checkout-or-continue-with")}</p>
+      <button type="button" class="btn-dark checkout-google-btn" data-action="signin-google">${t(
+        "checkout-signin-google"
+      )}</button>
+      <button type="button" class="btn-dark checkout-facebook-btn" data-action="signin-facebook">${t(
+        "checkout-signin-facebook"
+      )}</button>
+    </div>
+  `;
+}
+
+function signupFormHtml(): string {
+  const err = (key: keyof SignupFormState) =>
+    signupFieldErrorKeys[key] ? `<p class="checkout-field-error">${escapeHtml(t(signupFieldErrorKeys[key] as string))}</p>` : "";
+  const cls = (key: keyof SignupFormState) => (signupFieldErrorKeys[key] ? "checkout-field has-error" : "checkout-field");
+
+  return `
+    ${signupErrorKey ? `<div class="checkout-error">${escapeHtml(t(signupErrorKey))}</div>` : ""}
+    <form id="signupForm" novalidate>
+      <div class="${cls("firstName")}">
+        <label for="su-first-name">${t("checkout-first-name")}</label>
+        <input id="su-first-name" name="firstName" type="text" value="${escapeAttr(signupForm.firstName)}" autocomplete="given-name" />
+        ${err("firstName")}
+      </div>
+      <div class="${cls("lastName")}">
+        <label for="su-last-name">${t("checkout-last-name")}</label>
+        <input id="su-last-name" name="lastName" type="text" value="${escapeAttr(signupForm.lastName)}" autocomplete="family-name" />
+        ${err("lastName")}
+      </div>
+      <div class="${cls("gender")}">
+        <label>${t("checkout-gender")}</label>
+        <div class="checkout-gender-options">
+          <label class="checkout-radio"><input type="radio" name="gender" value="male" ${
+            signupForm.gender === "male" ? "checked" : ""
+          } /> ${t("checkout-gender-male")}</label>
+          <label class="checkout-radio"><input type="radio" name="gender" value="female" ${
+            signupForm.gender === "female" ? "checked" : ""
+          } /> ${t("checkout-gender-female")}</label>
+          <label class="checkout-radio"><input type="radio" name="gender" value="prefer_not_to_say" ${
+            signupForm.gender === "prefer_not_to_say" ? "checked" : ""
+          } /> ${t("checkout-gender-prefer-not-say")}</label>
+        </div>
+        ${err("gender")}
+      </div>
+      <div class="${cls("dateOfBirth")}">
+        <label for="su-dob">${t("checkout-dob")}</label>
+        <input id="su-dob" name="dateOfBirth" type="date" value="${escapeAttr(signupForm.dateOfBirth)}" autocomplete="bday" />
+        <p class="checkout-field-hint">${t("checkout-dob-hint")}</p>
+        ${err("dateOfBirth")}
+      </div>
+      <div class="${cls("email")}">
+        <label for="su-email">${t("checkout-email")}</label>
+        <input id="su-email" name="email" type="email" value="${escapeAttr(signupForm.email)}" autocomplete="email" />
+        ${err("email")}
+      </div>
+      <div class="${cls("password")}">
+        <label for="su-password">${t("checkout-password")}</label>
+        <input id="su-password" name="password" type="password" value="${escapeAttr(signupForm.password)}" autocomplete="new-password" />
+        ${err("password")}
+      </div>
+      <div class="${cls("passwordConfirm")}">
+        <label for="su-password-confirm">${t("checkout-password-confirm")}</label>
+        <input id="su-password-confirm" name="passwordConfirm" type="password" value="${escapeAttr(
+          signupForm.passwordConfirm
+        )}" autocomplete="new-password" />
+        ${err("passwordConfirm")}
+      </div>
+      <label class="checkout-newsletter-confirm">
+        <input type="checkbox" name="newsletterSubscribed" ${signupForm.newsletterSubscribed ? "checked" : ""} />
+        <span>${t("checkout-newsletter")}</span>
+      </label>
+      <button type="submit" class="btn-gold checkout-auth-submit" ${signupSubmitting ? "disabled" : ""}>
+        ${signupSubmitting ? t("checkout-submitting") : t("checkout-create-account-btn")}
+      </button>
+    </form>
+  `;
+}
+
+function signinFormHtml(): string {
+  const err = (key: "email" | "password") =>
+    signinFieldErrorKeys[key] ? `<p class="checkout-field-error">${escapeHtml(t(signinFieldErrorKeys[key] as string))}</p>` : "";
+  const cls = (key: "email" | "password") => (signinFieldErrorKeys[key] ? "checkout-field has-error" : "checkout-field");
+
+  return `
+    ${signinErrorKey ? `<div class="checkout-error">${escapeHtml(t(signinErrorKey))}</div>` : ""}
+    <form id="signinForm" novalidate>
+      <div class="${cls("email")}">
+        <label for="si-email">${t("checkout-email")}</label>
+        <input id="si-email" name="email" type="email" value="${escapeAttr(signinForm.email)}" autocomplete="email" />
+        ${err("email")}
+      </div>
+      <div class="${cls("password")}">
+        <label for="si-password">${t("checkout-password")}</label>
+        <input id="si-password" name="password" type="password" value="${escapeAttr(signinForm.password)}" autocomplete="current-password" />
+        ${err("password")}
+      </div>
+      <button type="submit" class="btn-gold checkout-auth-submit" ${signinSubmitting ? "disabled" : ""}>
+        ${signinSubmitting ? t("checkout-submitting") : t("checkout-signin-btn")}
+      </button>
+    </form>
+  `;
+}
+
+// ── OTP verification (after a successful signup) ──
+
+function otpHtml(): string {
+  return `
+    <div class="cart-drawer-header">
+      <button type="button" class="cart-drawer-back" data-action="back">${t("checkout-back")}</button>
+      <h2>${t("checkout-title")}</h2>
+      <button type="button" class="cart-drawer-close" data-action="close" aria-label="${t("cart-close")}">&times;</button>
+    </div>
+    <div class="cart-drawer-body">
+      <div class="checkout-otp">
+        <p class="checkout-otp-lead">${t("checkout-otp-lead").replace("{email}", escapeHtml(otpEmail))}</p>
+        ${otpErrorKey ? `<div class="checkout-error">${escapeHtml(t(otpErrorKey))}</div>` : ""}
+        <form id="otpForm" novalidate>
+          <div class="checkout-field">
+            <label for="otp-code">${t("checkout-otp-label")}</label>
+            <input
+              id="otp-code"
+              name="otpCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              value="${escapeAttr(otpCode)}"
+            />
+          </div>
+          <button type="submit" class="btn-gold checkout-auth-submit" ${otpSubmitting ? "disabled" : ""}>
+            ${otpSubmitting ? t("checkout-submitting") : t("checkout-otp-verify-btn")}
+          </button>
+        </form>
+        <button type="button" class="checkout-otp-resend" data-action="resend-otp">${t("checkout-otp-resend")}</button>
       </div>
     </div>
   `;
@@ -508,7 +758,7 @@ function wireDrawerEvents(): void {
           goToCheckout();
           break;
         case "back":
-          backToCart();
+          handleBack();
           break;
         case "qty-inc": {
           const item = current();
@@ -543,6 +793,24 @@ function wireDrawerEvents(): void {
           checkoutStage = "account";
           renderDrawer();
           break;
+        case "use-email":
+          emailAuthTab = "signup";
+          checkoutStage = "email-auth";
+          renderDrawer();
+          break;
+        case "tab-signup":
+          emailAuthTab = "signup";
+          signupErrorKey = null;
+          renderDrawer();
+          break;
+        case "tab-signin":
+          emailAuthTab = "signin";
+          signinErrorKey = null;
+          renderDrawer();
+          break;
+        case "resend-otp":
+          void handleResendOtp();
+          break;
       }
     });
   });
@@ -564,7 +832,63 @@ function wireDrawerEvents(): void {
     });
   });
 
-  if (view === "checkout" && checkoutStage === "form") wireCheckoutForm();
+  if (view === "checkout") {
+    if (checkoutStage === "form") wireCheckoutForm();
+    else if (checkoutStage === "email-auth") wireEmailAuthForms();
+    else if (checkoutStage === "email-otp") wireOtpForm();
+  }
+}
+
+function wireEmailAuthForms(): void {
+  const signupFormEl = document.getElementById("signupForm") as HTMLFormElement | null;
+  if (signupFormEl) {
+    signupFormEl.addEventListener("input", (e) => {
+      const target = e.target as HTMLInputElement;
+      if (isSignupTextField(target.name)) signupForm[target.name] = target.value;
+    });
+    signupFormEl.addEventListener("change", (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.name === "gender") signupForm.gender = target.value as Gender;
+      else if (target.name === "newsletterSubscribed") signupForm.newsletterSubscribed = target.checked;
+    });
+    signupFormEl.addEventListener("submit", (e) => {
+      e.preventDefault();
+      void handleSignupSubmit();
+    });
+  }
+
+  const signinFormEl = document.getElementById("signinForm") as HTMLFormElement | null;
+  if (signinFormEl) {
+    signinFormEl.addEventListener("input", (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.name === "email" || target.name === "password") {
+        signinForm[target.name as "email" | "password"] = target.value;
+      }
+    });
+    signinFormEl.addEventListener("submit", (e) => {
+      e.preventDefault();
+      void handleSigninSubmit();
+    });
+  }
+}
+
+function wireOtpForm(): void {
+  const form = document.getElementById("otpForm") as HTMLFormElement | null;
+  if (!form) return;
+  form.addEventListener("input", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.name === "otpCode") otpCode = target.value;
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void handleOtpSubmit();
+  });
+}
+
+function isSignupTextField(
+  name: string
+): name is "firstName" | "lastName" | "dateOfBirth" | "email" | "password" | "passwordConfirm" {
+  return ["firstName", "lastName", "dateOfBirth", "email", "password", "passwordConfirm"].includes(name);
 }
 
 function wireCheckoutForm(): void {
@@ -635,6 +959,143 @@ async function handleCheckoutSubmit(): Promise<void> {
       error instanceof ApiError && error.code === "insufficient_stock" ? "checkout-error-stock" : "checkout-error-generic";
     renderDrawer();
   }
+}
+
+async function handleSignupSubmit(): Promise<void> {
+  signupFieldErrorKeys = validateSignup(signupForm);
+  if (Object.keys(signupFieldErrorKeys).length > 0) {
+    signupErrorKey = null;
+    renderDrawer();
+    return;
+  }
+
+  signupSubmitting = true;
+  signupErrorKey = null;
+  renderDrawer();
+
+  const { error } = await signUpWithPassword(signupForm.email, signupForm.password);
+  signupSubmitting = false;
+
+  if (error) {
+    signupErrorKey = "checkout-signup-error-generic";
+    renderDrawer();
+    return;
+  }
+
+  // Stashed, not written yet — customer_profiles' RLS policy needs an
+  // authenticated user, which only exists after the OTP below succeeds.
+  pendingSignupProfile = {
+    firstName: signupForm.firstName,
+    lastName: signupForm.lastName,
+    gender: signupForm.gender as Gender,
+    dateOfBirth: signupForm.dateOfBirth,
+    newsletterSubscribed: signupForm.newsletterSubscribed,
+  };
+  otpEmail = signupForm.email;
+  otpCode = "";
+  otpErrorKey = null;
+  checkoutStage = "email-otp";
+  renderDrawer();
+}
+
+function validateSignup(f: SignupFormState): Partial<Record<keyof SignupFormState, string>> {
+  const errors: Partial<Record<keyof SignupFormState, string>> = {};
+  const requiredKey = "checkout-field-required";
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!f.firstName.trim()) errors.firstName = requiredKey;
+  if (!f.lastName.trim()) errors.lastName = requiredKey;
+  if (!f.gender) errors.gender = requiredKey;
+  if (!f.dateOfBirth) errors.dateOfBirth = requiredKey;
+  else if (!isAtLeast18(f.dateOfBirth)) errors.dateOfBirth = "checkout-age-under-18";
+  if (!f.email.trim() || !emailPattern.test(f.email)) errors.email = requiredKey;
+  if (f.password.length < 8) errors.password = "checkout-password-too-short";
+  if (f.passwordConfirm !== f.password) errors.passwordConfirm = "checkout-password-mismatch";
+  return errors;
+}
+
+function isAtLeast18(dobStr: string): boolean {
+  const dob = new Date(dobStr);
+  if (Number.isNaN(dob.getTime())) return false;
+  const eighteenYearsAgo = new Date();
+  eighteenYearsAgo.setFullYear(eighteenYearsAgo.getFullYear() - 18);
+  return dob <= eighteenYearsAgo;
+}
+
+async function handleSigninSubmit(): Promise<void> {
+  const errors: Partial<Record<"email" | "password", string>> = {};
+  if (!signinForm.email.trim()) errors.email = "checkout-field-required";
+  if (!signinForm.password.trim()) errors.password = "checkout-field-required";
+  signinFieldErrorKeys = errors;
+  if (Object.keys(errors).length > 0) {
+    signinErrorKey = null;
+    renderDrawer();
+    return;
+  }
+
+  signinSubmitting = true;
+  signinErrorKey = null;
+  renderDrawer();
+
+  const { error } = await signInWithPassword(signinForm.email, signinForm.password);
+  signinSubmitting = false;
+
+  if (error) {
+    signinErrorKey = "checkout-signin-error-generic";
+    renderDrawer();
+    return;
+  }
+
+  enterCheckoutFormAfterAuth();
+}
+
+async function handleOtpSubmit(): Promise<void> {
+  if (!otpCode.trim()) {
+    otpErrorKey = "checkout-field-required";
+    renderDrawer();
+    return;
+  }
+
+  otpSubmitting = true;
+  otpErrorKey = null;
+  renderDrawer();
+
+  const { error } = await verifySignupOtp(otpEmail, otpCode.trim());
+  otpSubmitting = false;
+
+  if (error) {
+    otpErrorKey = "checkout-otp-error-generic";
+    renderDrawer();
+    return;
+  }
+
+  if (pendingSignupProfile) {
+    // Best-effort — a failure here shouldn't block someone who just verified
+    // a real account from checking out; the profile fields are a nice-to-have
+    // on top of a working account, not the account itself.
+    const { error: profileError } = await saveCustomerProfile(pendingSignupProfile);
+    if (profileError) showToast(t("checkout-profile-save-error"));
+    pendingSignupProfile = null;
+  }
+
+  enterCheckoutFormAfterAuth();
+}
+
+async function handleResendOtp(): Promise<void> {
+  if (!otpEmail) return;
+  const { error } = await resendSignupOtp(otpEmail);
+  otpErrorKey = error ? "checkout-otp-error-generic" : null;
+  if (!error) showToast(t("checkout-otp-resent"));
+  renderDrawer();
+}
+
+// Shared tail end of both the sign-in and OTP-verify success paths.
+function enterCheckoutFormAfterAuth(): void {
+  accountChoiceMade = true;
+  checkoutStage = "form";
+  const session = getSession();
+  if (session?.user.email && !recipient.email) recipient.email = session.user.email;
+  renderDrawer();
 }
 
 function validateRecipient(
