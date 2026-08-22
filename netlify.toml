@@ -2,6 +2,17 @@
   command = "npm run build"
   publish = "."
 
+  # Netlify's secret scanner fails the build if any env var *value* shows up
+  # anywhere in the build output, with no distinction between real secrets
+  # and plain config that's meant to be visible (a shipping fee in cents, a
+  # from-address, the Supabase project URL used client-side). These are the
+  # non-secret ones that legitimately appear in netlify/functions output —
+  # actual secrets (STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, the OAuth
+  # client secrets, RESEND_API_KEY) are deliberately left off this list so
+  # the scanner still catches those.
+  [build.environment]
+    SECRETS_SCAN_OMIT_KEYS = "FREE_SHIPPING_THRESHOLD_CENTS,STANDARD_SHIPPING_FEE_CENTS,RESEND_FROM_EMAIL,STAFF_NOTIFICATION_EMAILS,SITE_URL,SUPABASE_URL"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
