@@ -42,7 +42,7 @@ type View = "cart" | "checkout";
 // page load.
 // "email-auth": the paneco-style Sign Up / Sign In forms, reached via
 // "account"'s "Continue with Email" button.
-// "email-otp": 6-digit code entry after a successful signup — the signup
+// "email-otp": 8-digit code entry after a successful signup — the signup
 // itself doesn't create a usable session until this succeeds (Confirm Email
 // is on for this project).
 // "form": the actual recipient/delivery form (was previously the only stage).
@@ -672,7 +672,7 @@ function otpHtml(): string {
               type="text"
               inputmode="numeric"
               autocomplete="one-time-code"
-              maxlength="6"
+              maxlength="8"
               value="${escapeAttr(otpCode)}"
             />
           </div>
