@@ -8,12 +8,12 @@ const ADDRESSES_LANG_KEY = 'tg_lang';
 
 const addressesTranslations = {
   en: {
-    'page-title-addresses': 'My Address',
+    'page-title-addresses': 'My Addresses',
     'nav-sign-in': 'Sign In',
+    'nav-account': 'Account',
     'nav-my-orders': 'My Orders',
-    'nav-my-address': 'My Address',
+    'nav-my-address': 'My Addresses',
     'nav-sign-out': 'Sign Out',
-    'nav-account-menu': 'Account menu',
     'addresses-loading': 'Loading your addresses…',
     'addresses-signed-out': 'Sign in to manage your saved addresses.',
     'addresses-empty': "You haven't saved any addresses yet.",
@@ -38,10 +38,10 @@ const addressesTranslations = {
   zh: {
     'page-title-addresses': '我的地址',
     'nav-sign-in': '登录',
+    'nav-account': '账户',
     'nav-my-orders': '我的订单',
     'nav-my-address': '我的地址',
     'nav-sign-out': '退出登录',
-    'nav-account-menu': '账户菜单',
     'addresses-loading': '正在加载您的地址…',
     'addresses-signed-out': '登录后即可管理已保存的地址。',
     'addresses-empty': '您还没有保存任何地址。',

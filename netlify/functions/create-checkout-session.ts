@@ -4,6 +4,7 @@ import { requireEnv } from "./_lib/env";
 import { jsonResponse, errorResponse } from "./_lib/responses";
 import { createCheckoutSessionRequestSchema } from "./_lib/schemas";
 import { computeShippingFeeCents, computeInclusiveGstCents, effectiveUnitPriceCents } from "../../src/pricing";
+import { SELF_COLLECTION_ENABLED } from "../../src/feature-flags";
 
 // Kept identical to the reservation TTL passed into create_pending_order, and
 // used again below as the Stripe Checkout Session's own `expires_at`. Without
@@ -55,6 +56,14 @@ export default async (req: Request): Promise<Response> => {
     return errorResponse(400, "Invalid request", "validation_error");
   }
   const { items, deliveryMethod, recipient, ageConfirmed } = parsed.data;
+
+  // The storefront doesn't render the self-collection radio at all while
+  // SELF_COLLECTION_ENABLED is false (see src/feature-flags.ts) — this is
+  // the server-side half of that same switch, so a hand-crafted request
+  // can't route around the UI being hidden.
+  if (deliveryMethod === "self_collection" && !SELF_COLLECTION_ENABLED) {
+    return errorResponse(409, "Self collection is not currently available", "self_collection_unavailable");
+  }
 
   // Optional — guest checkout still works with no Authorization header at
   // all (getUserIdFromRequest just returns null), same as before this was

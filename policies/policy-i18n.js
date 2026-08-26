@@ -6,12 +6,15 @@
 // aren't null-guarded, so loading it here would throw. This file only
 // carries what a policy page actually needs.
 //
-// Scope: only page chrome (breadcrumb, heading, nav toggle) is translated
-// right now. The legal body text below it is still English-only — it isn't
-// wired to data-i18n, so toggling language can't show a missing/incorrect
-// translation for it. Once real Chinese copy for a page's body exists, add
-// data-i18n attributes there and a matching zh entry below; nothing else
-// needs to change.
+// Two translation layers, deliberately different mechanisms:
+// - Page chrome (breadcrumb, heading) uses `data-i18n` + the short-string
+//   dictionaries below, like the rest of the site.
+// - The legal body itself is two full blocks per page —
+//   `<div data-policy-body="en">`/`<div data-policy-body="zh">` — toggled by
+//   hiding whichever doesn't match the current language. Full prose doesn't
+//   fit the short-string-dictionary pattern well (a paragraph with a link
+//   inside it as a JS string is unreadable to maintain), and this way the
+//   two languages are never both visible stacked on the page at once.
 
 const POLICY_LANG_KEY = 'tg_lang';
 
@@ -28,7 +31,6 @@ const policyTranslations = {
     'h1-delivery': 'Delivery Policy',
     'h1-refund': 'Refund & Return Policy',
     'h1-age': 'Responsible Drinking & Age Restriction Notice',
-    'policy-lang-notice': 'The information on this page is currently available in English only. A Chinese translation is coming soon.',
   },
   zh: {
     'policy-eyebrow-legal': '法律',
@@ -42,7 +44,6 @@ const policyTranslations = {
     'h1-delivery': '配送政策',
     'h1-refund': '退款与退货政策',
     'h1-age': '理性饮酒与年龄限制须知',
-    'policy-lang-notice': '本页面内容目前仅提供英文版本，中文翻译稍后补充。',
   },
 };
 
@@ -57,11 +58,12 @@ function applyPolicyTranslations() {
     el.innerHTML = policyT(el.dataset.i18n);
   });
 
+  document.querySelectorAll('[data-policy-body]').forEach((el) => {
+    el.hidden = el.dataset.policyBody !== policyLang;
+  });
+
   const langToggle = document.getElementById('langToggle');
   if (langToggle) langToggle.textContent = policyLang === 'en' ? 'English' : '中文';
-
-  const notice = document.getElementById('policyLangNotice');
-  if (notice) notice.hidden = policyLang !== 'zh';
 
   document.documentElement.lang = policyLang === 'zh' ? 'zh-CN' : 'en';
 }

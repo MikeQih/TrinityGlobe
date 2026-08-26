@@ -1029,46 +1029,37 @@ footer .container {
 
 /* Account nav indicator — populated by src/cart.ts#initAccountNav() on
    index.html's #navAccount (inside #navbar) and orders.html's (inside
-   .policy-nav-right). Signed out renders a plain text link; signed in
-   renders a single icon + dropdown (relative anchor for the dropdown's
-   absolute position) so it takes up one nav-item's worth of rhythm instead
-   of two text links at a tighter, mismatched gap. */
+   .policy-nav-right). Signed out renders "SIGN IN"; signed in renders
+   "ACCOUNT" + dropdown (relative anchor for the dropdown's absolute
+   position) — plain text, no icon, to match the nav's minimal look and
+   take up one nav-item's worth of rhythm instead of two text links at a
+   tighter, mismatched gap. */
 .nav-account {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.nav-account-signin {
+.nav-account-signin,
+.nav-account-trigger {
   font-family: 'Inter', sans-serif;
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
+  font-size: 0.875rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: #c8beb0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
   white-space: nowrap;
   transition: color 0.2s;
 }
 
-.nav-account-signin:hover { color: var(--gold); }
-
-.nav-account-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
+.nav-account-signin:hover,
 .nav-account-trigger:hover,
 .nav-account-trigger[aria-expanded="true"] {
   color: var(--gold);
 }
-
-.nav-account-trigger svg { width: 19px; height: 19px; }
 
 .nav-account-dropdown {
   display: flex;
@@ -1987,23 +1978,15 @@ footer .container {
   margin-bottom: 2.5rem;
 }
 
-.policy-lang-notice {
+/* The "if the two languages disagree, English governs" note at the end of
+   each policy's Chinese content block — see policies/*.html. */
+.policy-disclaimer {
   font-size: 0.8rem;
   font-style: italic;
   color: var(--text-muted);
   border-left: 2px solid var(--border);
   padding-left: 0.8rem;
-  margin-bottom: 2.5rem;
-}
-
-.policy-draft-notice {
-  background: rgba(217, 122, 108, 0.1);
-  border: 1px solid rgba(217, 122, 108, 0.4);
-  color: #e8998c;
-  font-size: 0.82rem;
-  line-height: 1.6;
-  padding: 1rem 1.2rem;
-  margin-bottom: 2.5rem;
+  margin-top: 2rem;
 }
 
 .policy-main h2 {
@@ -2031,14 +2014,6 @@ footer .container {
 .policy-main a:hover { border-color: var(--gold); }
 
 .policy-main strong { color: var(--gold-light); }
-
-.policy-placeholder {
-  color: #e8c97a;
-  background: rgba(201, 168, 76, 0.12);
-  padding: 0.05em 0.4em;
-  border-radius: 2px;
-  font-size: 0.9em;
-}
 
 @media (max-width: 600px) {
   .policy-main { padding: 3rem 1.25rem 4rem; }

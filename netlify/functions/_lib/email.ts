@@ -46,21 +46,20 @@ function fromAddress(): string {
   return process.env.RESEND_FROM_EMAIL || "orders@trinityglobe.sg";
 }
 
-// The checkout page deliberately doesn't show this address up front (see
-// src/cart.ts's checkout-self-collection-info copy) — it promises the
-// details will follow by email/phone instead. This is where that promise
-// is kept. Keep in sync with policies/delivery.html section 3.
+// Self-collection is paused at checkout (see src/feature-flags.ts) — the
+// backend already refuses a self_collection order before this ever runs,
+// so this only exists for the "standard" case in practice today. No
+// address is hardcoded here even for self_collection: keep in sync with
+// policies/delivery.html section 3 once a real collection point exists.
 function deliveryDetailsHtml(deliveryMethod: string): string {
   if (deliveryMethod === "self_collection") {
-    return `
-      <p><strong>Self collection</strong></p>
-      <p>11-03, The Suites Central, 57A Devonshire Road, Singapore 239897<br />
-      Available 24 hours<br />
-      Contact on collection: WANGLEI, +65 9868 0555</p>
-      <p>We'll message you once your order is ready — please wait for that notice before coming down.</p>
-    `;
+    return `<p>We'll message you once your order is ready for collection — please wait for that notice.</p>`;
   }
   return `<p>We'll be in touch with delivery details shortly.</p>`;
+}
+
+function footerHtml(): string {
+  return `<p style="color:#999;font-size:12px;margin-top:24px;">Trinity Globe Trading Pte. Ltd. &middot; UEN 202509360N</p>`;
 }
 
 /** Failures are logged, never thrown — a flaky email provider must not fail order creation/confirmation. */
@@ -79,6 +78,7 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail, items: Or
         <p>Shipping: ${order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</p>
         <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
         ${deliveryDetailsHtml(order.delivery_method)}
+        ${footerHtml()}
       `,
     });
   } catch (err) {

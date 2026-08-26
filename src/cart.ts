@@ -2,6 +2,7 @@ import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, getCheckoutSessionStatus, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
+import { SELF_COLLECTION_ENABLED } from "./feature-flags";
 import { getStripeClient } from "./lib/stripe-elements";
 import type { StripeCheckoutElementsSdk } from "@stripe/stripe-js";
 import {
@@ -242,10 +243,6 @@ export function openAccountDrawer(): void {
 // ── Nav account indicator (index.html's #navAccount, orders.html's too) ──
 // Self-contained: initAuth() is idempotent, so this works whether or not
 // initCart() already called it on this page.
-// Person-icon glyph for the signed-in dropdown trigger — matches the
-// cart-toggle icon's stroke style (currentColor, 1.5 width) so it reads as
-// part of the same icon set.
-const ACCOUNT_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
 
 export function initAccountNav(): void {
   const container = document.getElementById("navAccount");
@@ -260,17 +257,18 @@ export function initAccountNav(): void {
     container.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
   };
 
-  // Signed-in state is a single icon + dropdown (My Orders, Sign Out) rather
-  // than two separate text links — keeps the nav's item-to-item rhythm
-  // uniform instead of a tightly-paired "My Orders · Sign Out" reading as a
-  // different spacing rule from the rest of the bar.
+  // Signed-in state is a single text trigger ("ACCOUNT") + dropdown (My
+  // Orders, My Addresses, Sign Out) — matches the nav's plain-text, no-icon
+  // minimalism better than a person glyph, and reads as a single nav item
+  // at the same rhythm as the rest of the bar. Signed-out uses "SIGN IN"
+  // (not "Account") since there's no account to open yet.
   const render = (): void => {
     menuOpen = false;
     const session = getSession();
     container.innerHTML = session
-      ? `<button type="button" class="nav-account-trigger" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false" aria-label="${escapeHtml(
-          t("nav-account-menu")
-        )}">${ACCOUNT_ICON_SVG}</button>
+      ? `<button type="button" class="nav-account-trigger" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
+          t("nav-account")
+        )}</button>
          <div class="nav-account-dropdown" hidden>
            <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
            <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
@@ -890,18 +888,24 @@ function checkoutViewHtml(): string {
           ${err("email")}
         </div>
 
-        <div class="checkout-delivery-options">
-          <label class="checkout-radio">
-            <input type="radio" name="deliveryMethod" value="standard" ${deliveryMethod === "standard" ? "checked" : ""} />
-            ${t("checkout-standard-delivery")}
-          </label>
-          <label class="checkout-radio">
-            <input type="radio" name="deliveryMethod" value="self_collection" ${
-              deliveryMethod === "self_collection" ? "checked" : ""
-            } />
-            ${t("checkout-self-collection")}
-          </label>
-        </div>
+        ${
+          SELF_COLLECTION_ENABLED
+            ? `<div class="checkout-delivery-options">
+                 <label class="checkout-radio">
+                   <input type="radio" name="deliveryMethod" value="standard" ${
+                     deliveryMethod === "standard" ? "checked" : ""
+                   } />
+                   ${t("checkout-standard-delivery")}
+                 </label>
+                 <label class="checkout-radio">
+                   <input type="radio" name="deliveryMethod" value="self_collection" ${
+                     deliveryMethod === "self_collection" ? "checked" : ""
+                   } />
+                   ${t("checkout-self-collection")}
+                 </label>
+               </div>`
+            : ""
+        }
         <p id="ck-delivery-info" class="checkout-delivery-info">${deliveryInfoHtml(deliveryMethod)}</p>
 
         <div id="ck-address-group" ${deliveryMethod === "self_collection" ? "hidden" : ""}>

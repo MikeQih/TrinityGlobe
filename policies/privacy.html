@@ -27,102 +27,192 @@
     </a>
     <div class="policy-eyebrow" data-i18n="policy-eyebrow-legal">Legal</div>
     <h1 data-i18n="h1-privacy">Privacy Policy</h1>
-    <p class="policy-updated">Internal draft — prepared for review, not yet published to customers.</p>
-    <p class="policy-lang-notice" id="policyLangNotice" data-i18n="policy-lang-notice" hidden></p>
+    <p class="policy-updated">Last updated: 26 August 2026</p>
 
-    <h2>1. What we collect</h2>
-    <p>When you place an order, we collect:</p>
-    <ul>
-      <li>Name, phone number, and email address</li>
-      <li>Delivery address and postal code (not collected if you choose self-collection)</li>
-      <li>Order details — items, quantities, amount paid</li>
-      <li>Any notes you add to your order</li>
-    </ul>
-    <p>If you create an account instead of checking out as a guest, we also collect:</p>
-    <ul>
-      <li>Your name and email address from Google or Facebook, if you sign in that way</li>
-      <li>Date of birth, gender, and newsletter preference, if you sign up with email and password (date of birth
-        doubles as an age check for an alcohol business, not just a profile field)</li>
-      <li>Any delivery addresses you choose to save to your account</li>
-    </ul>
-    <p>
-      We don't collect or store your payment card details — those go directly to our payment processor, Stripe
-      (see Section 3).
-    </p>
+    <div data-policy-body="en">
+      <h2>1. What we collect</h2>
+      <p>When you place an order, we collect:</p>
+      <ul>
+        <li>Name, phone number, and email address</li>
+        <li>Delivery address and postal code</li>
+        <li>Order details — items, quantities, amount paid</li>
+        <li>Any notes you add to your order</li>
+      </ul>
+      <p>If you create an account instead of checking out as a guest, we also collect:</p>
+      <ul>
+        <li>Your name and email address from Google or Facebook, if you sign in that way</li>
+        <li>Date of birth, gender, and newsletter preference, if you sign up with email and password (date of
+          birth doubles as an age check for an alcohol business, not just a profile field)</li>
+        <li>Any delivery addresses you choose to save to your account</li>
+      </ul>
+      <p>
+        We don't collect or store your payment card details — those go directly to our payment processor, Stripe
+        (see Section 3).
+      </p>
 
-    <h2>2. How we use it</h2>
-    <ul>
-      <li>To process and fulfil your order, including contacting you about delivery</li>
-      <li>To send an order confirmation and, if something goes wrong, to reach you about it</li>
-      <li>To verify you meet the legal age requirement for purchasing alcohol</li>
-      <li>To let you sign in and see your own order history and saved addresses</li>
-      <li>To meet our own record-keeping and tax obligations</li>
-    </ul>
-    <p>
-      We don't sell your information. We don't send marketing email unless you separately tick the newsletter
-      opt-in when creating an account.
-    </p>
+      <h2>2. How we use it</h2>
+      <ul>
+        <li>To process and fulfil your order, including contacting you about delivery</li>
+        <li>To send an order confirmation and, if something goes wrong, to reach you about it</li>
+        <li>To verify you meet the legal age requirement for purchasing alcohol</li>
+        <li>To let you sign in and see your own order history and saved addresses</li>
+        <li>To meet our own record-keeping and tax obligations</li>
+      </ul>
+      <p>
+        We don't sell your information. We don't send marketing email unless you separately tick the newsletter
+        opt-in when creating an account.
+      </p>
 
-    <h2>3. Payment information</h2>
-    <p>
-      Payment is handled by <strong>Stripe</strong>. When you pay, your card details go directly to Stripe over an
-      encrypted connection — they never pass through our own servers or database. Stripe is PCI-DSS compliant.
-      Their handling of your data is governed by
-      <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's own privacy policy</a>.
-    </p>
+      <h2>3. Payment information</h2>
+      <p>
+        Payment is handled by <strong>Stripe</strong>. When you pay, your card details go directly to Stripe over
+        an encrypted connection — they never pass through our own servers or database. Stripe is PCI-DSS
+        compliant. Their handling of your data is governed by
+        <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Stripe's own privacy policy</a>.
+      </p>
 
-    <h2>4. Where your data is stored</h2>
-    <p>
-      Order and account data is stored in a Postgres database hosted by <strong>Supabase</strong>, behind
-      access controls (Row Level Security) that restrict it to you and to staff whose role requires it. Order
-      confirmation and internal notification emails are sent through <strong>Resend</strong>. If you sign in with
-      Google or Facebook, that sign-in itself is handled by Supabase's authentication service — we receive your
-      name and email from them, not your Google/Facebook password.
-    </p>
+      <h2>4. Where your data is stored</h2>
+      <p>
+        Your order and account data is stored securely with our cloud hosting and account authentication service
+        providers, behind access controls that restrict it to you and to staff whose role requires it. If you
+        sign in with Google or Facebook, that sign-in itself is handled by our authentication provider — we
+        receive your name and email from them, not your Google or Facebook password.
+      </p>
 
-    <h2>5. Who we share it with</h2>
-    <p>We share the minimum necessary data with:</p>
-    <ul>
-      <li><strong>Stripe</strong> — to process your payment</li>
-      <li><strong>Supabase</strong> — to store your order and account data, and to handle Google/Facebook sign-in</li>
-      <li><strong>Resend</strong> — to send order emails</li>
-      <li><strong>Google / Facebook</strong> — only if you choose to sign in that way, to confirm your identity</li>
-      <li><strong>Our delivery courier</strong> — your name, phone number, and delivery address, so they can deliver your order</li>
-    </ul>
-    <p>We disclose personal data beyond this only if required by Singapore law.</p>
+      <h2>5. Who we share it with</h2>
+      <p>We may disclose personal data only where reasonably necessary to:</p>
+      <ul>
+        <li>payment processors, including Stripe;</li>
+        <li>cloud hosting, account authentication, and email service providers;</li>
+        <li>Google, Facebook, or another identity provider, only when you choose that sign-in method;</li>
+        <li>delivery and logistics providers;</li>
+        <li>professional advisers, regulators, or public authorities where required by law.</li>
+      </ul>
+      <p>We don't disclose personal data beyond this.</p>
 
-    <h2>6. How long we keep it</h2>
-    <p>
-      We keep order records for at least 5 years, in line with IRAS record-keeping requirements for tax purposes.
-      You can ask us to delete personal data we're not legally required to retain — see Section 7.
-    </p>
+      <h2>6. Cross-border data transfers</h2>
+      <p>
+        Some of our service providers may process personal data outside Singapore. Where this happens, we take
+        reasonable steps to ensure that the transferred data receives protection comparable to that required
+        under Singapore's Personal Data Protection Act (PDPA).
+      </p>
 
-    <h2>7. Your rights</h2>
-    <p>
-      Under Singapore's Personal Data Protection Act, you can ask us what personal data we hold about you, ask us
-      to correct it, or ask us to stop using or delete it (subject to our legal retention obligations). To do
-      any of this, contact us using the details in Section 9.
-    </p>
+      <h2>7. How long we keep it</h2>
+      <p>
+        We keep order records for at least 5 years, in line with IRAS record-keeping requirements for tax
+        purposes. You can ask us to delete personal data we're not legally required to retain — see Section 8.
+      </p>
 
-    <h2>8. Cookies</h2>
-    <p>
-      The site uses your browser's local storage to remember what's in your cart, and — if you're signed in — to
-      keep you signed in between visits. This stays on your device and isn't sent to us until you check out or
-      make a request that needs it. We don't currently use analytics or marketing cookies/trackers.
-    </p>
+      <h2>8. Your rights</h2>
+      <p>
+        Under the PDPA, you can ask us what personal data we hold about you, ask us to correct it, or ask us to
+        stop using or delete it (subject to our legal retention obligations). To do any of this, contact us using
+        the details in Section 10.
+      </p>
 
-    <h2>9. Contact</h2>
-    <p>
-      Questions about this policy, or to exercise your rights above: WhatsApp
-      <a href="https://wa.me/6598680555">+65 9868 0555</a> or email
-      <a href="mailto:orders@trinityglobe.sg">orders@trinityglobe.sg</a>.
-    </p>
+      <h2>9. Cookies and browser storage</h2>
+      <p>
+        We use cookies and browser storage that are necessary to maintain your shopping cart, keep you signed in,
+        prevent fraud, and process payments. We do not currently use advertising or behavioural tracking cookies.
+      </p>
+
+      <h2>10. Contact</h2>
+      <p>
+        Privacy enquiries and personal data requests: WhatsApp
+        <a href="https://wa.me/6598680555">+65 9868 0555</a>.
+      </p>
+    </div>
+
+    <div data-policy-body="zh" hidden>
+      <h2>1. 我们收集哪些信息</h2>
+      <p>当您下单时，我们会收集：</p>
+      <ul>
+        <li>姓名、电话号码和电子邮箱地址</li>
+        <li>收货地址及邮政编码</li>
+        <li>订单详情——商品、数量、支付金额</li>
+        <li>您为订单添加的任何备注</li>
+      </ul>
+      <p>如果您注册账号而非以访客身份结账，我们还会收集：</p>
+      <ul>
+        <li>如果您选择通过 Google 或 Facebook 登录，我们会获取您的姓名和电子邮箱地址</li>
+        <li>如果您使用邮箱和密码注册，我们会收集出生日期、性别及通讯订阅偏好（出生日期不仅用于完善资料，也是酒类销售业务用来核实年龄的必要信息）</li>
+        <li>您选择保存到账户中的任何收货地址</li>
+      </ul>
+      <p>
+        我们不会收集或存储您的银行卡信息——这些信息会直接提交给我们的支付处理机构 Stripe（详见第3条）。
+      </p>
+
+      <h2>2. 我们如何使用这些信息</h2>
+      <ul>
+        <li>处理并完成您的订单，包括就配送事宜与您联系</li>
+        <li>发送订单确认信息，如遇问题也会借此与您联系</li>
+        <li>核实您是否符合购买酒类的法定年龄要求</li>
+        <li>让您登录后查看自己的订单记录和已保存的地址</li>
+        <li>履行我们自身的记录保存及税务义务</li>
+      </ul>
+      <p>
+        我们不会出售您的个人信息。除非您在创建账户时另行勾选订阅我们的通讯，否则我们不会向您发送营销邮件。
+      </p>
+
+      <h2>3. 支付信息</h2>
+      <p>
+        支付由 <strong>Stripe</strong> 处理。您付款时，卡片信息会通过加密连接直接提交给 Stripe——不会经过我们自己的服务器或数据库。Stripe 符合 PCI-DSS 标准。Stripe 对您数据的处理受
+        <a href="https://stripe.com/zh-sg/privacy" target="_blank" rel="noopener">Stripe 隐私政策</a>约束。
+      </p>
+
+      <h2>4. 您的数据存储在哪里</h2>
+      <p>
+        您的订单和账户数据由我们的云端托管及账户身份验证服务提供商安全存储，并受访问权限控制，仅限您本人及因职责需要的员工访问。如果您通过 Google 或 Facebook 登录，该登录过程由我们的身份验证服务提供商处理——我们从中获取的是您的姓名和邮箱地址，而不是您的 Google 或 Facebook 密码。
+      </p>
+
+      <h2>5. 我们会与谁共享信息</h2>
+      <p>仅在合理必要的情况下，我们可能会向以下对象披露个人数据：</p>
+      <ul>
+        <li>支付处理机构，包括 Stripe；</li>
+        <li>云端托管、账户身份验证及邮件服务提供商；</li>
+        <li>Google、Facebook 或其他身份验证服务商——仅当您选择使用该方式登录时；</li>
+        <li>配送及物流服务商；</li>
+        <li>专业顾问、监管机构或依法要求披露的公共机关。</li>
+      </ul>
+      <p>除上述情形外，我们不会披露您的个人数据。</p>
+
+      <h2>6. 跨境数据传输</h2>
+      <p>
+        我们的部分服务提供商可能在新加坡境外处理个人数据。在此情况下，我们会采取合理措施，确保所传输的数据获得与新加坡《个人数据保护法》（PDPA）要求相当的保护。
+      </p>
+
+      <h2>7. 我们保留信息的期限</h2>
+      <p>
+        依据 IRAS 的记录保存要求，我们会将订单记录至少保留5年用于税务目的。对于我们没有法定保留义务的个人数据，您可以要求我们删除——详见第8条。
+      </p>
+
+      <h2>8. 您的权利</h2>
+      <p>
+        根据 PDPA，您可以要求我们告知所持有的您的个人数据、要求我们更正，或要求我们停止使用或删除（受限于我们的法定保留义务）。如需行使上述权利，请通过第10条中的联系方式与我们联系。
+      </p>
+
+      <h2>9. Cookie 与浏览器存储</h2>
+      <p>
+        我们使用维持购物车、保持登录状态、防止欺诈及处理支付所必需的 cookie 及浏览器存储技术。我们目前不使用广告类或行为追踪类 cookie。
+      </p>
+
+      <h2>10. 联系我们</h2>
+      <p>
+        如对本政策有疑问，或希望查询、更正或删除个人资料，请通过 WhatsApp 联系：
+        <a href="https://wa.me/6598680555">+65 9868 0555</a>。
+      </p>
+
+      <p class="policy-disclaimer">
+        如中文版本与英文版本存在不一致，以英文版本为准。<br />
+        In the event of any inconsistency, the English version shall prevail.
+      </p>
+    </div>
   </main>
 
   <footer>
     <div class="container">
       <span class="footer-logo">TRINITY GLOBE TRADING</span>
-      <span class="footer-copy">© 2026 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier</span>
+      <span class="footer-copy">© 2026 Trinity Globe Trading Pte. Ltd. · UEN 202509360N · Singapore · Premium Spirits Supplier</span>
       <nav class="footer-links" aria-label="Policies">
         <a href="terms.html">Terms &amp; Conditions</a>
         <a href="privacy.html">Privacy Policy</a>

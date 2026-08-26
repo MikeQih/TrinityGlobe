@@ -435,7 +435,34 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 - 用户之前定的三个要求都已经落实：不删旧的 hosted Checkout 代码（`uiMode !== "elements"` 分支原样保留）；return 页查状态只做展示不影响订单真实状态；Stripe SDK 版本已经检查并升级到支持 `ui_mode: "elements"` 的版本
 - 真正要上线用这个新流程之前，建议：（1）用户自己装好 Stripe CLI 补一次本地 webhook 全链路测试，或者直接在 `dev` 分支预览站上测（跟之前测 Google/Facebook 登录一样的路子）；（2）拿真实的拒绝卡测一下报错提示；（3）测一下 PayNow 这条支付方式（本地没测，因为 PayNow 本身需要跳转到银行/生成二维码，测试模式下的行为需要额外确认）
 
-这次改动（Payment Element 全套：新迁移文件之外的所有代码改动）**还没 commit**。
+这次改动（Payment Element 全套：新迁移文件之外的所有代码改动）**已经 commit**（`ca8f69d`，`dev` 分支，用户确认过"commit this"）。
+
+## 2026-08-26（第六轮）：导航栏改文字入口 + 5个政策页面全面重写（双语+去技术细节+暂停自提）+ 自提功能开关
+
+**导航栏 ACCOUNT/SIGN IN 改成纯文字**：用户建议把上一轮做的人形图标改成纯文字入口，更符合导航栏的极简黑金调性——未登录显示"SIGN IN"，登录后显示"ACCOUNT"（点开下拉菜单：MY ORDERS / MY ADDRESSES / SIGN OUT）。已实现：`src/cart.ts` 去掉了图标 SVG，`style.css` 按用户给的参数配色（`#C8BEB0` 默认、`#C6A34F`/`var(--gold)` hover、字号14px、字间距0.14em、无边框无图标），浏览器实测通过 computed style 确认颜色/字号/字间距完全匹配。"My Address"下拉项文案改成复数"My Addresses"（含 addresses.html 页面标题）。
+
+**新增全局开关：暂停自提（Self Collection）**——用户指出两个真实风险：1）之前展示的自提地址其实是老板自己家，公开完整门牌号会有陌生人上门骚扰的风险；2）新加坡警方对酒类线上销售的说明是"存放场所不代表可以在那里销售/交付酒类"，自提地点是否属于酒牌批准的场所还没确认，贸然继续用这个地址交付有牌照合规风险。已处理：
+- 新增 `src/feature-flags.ts`，`SELF_COLLECTION_ENABLED = false`，前端（`src/cart.ts` 结账表单不再渲染自提选项，配送方式固定为标准配送）和后端（`create-checkout-session.ts` 即使收到 `deliveryMethod: "self_collection"` 的请求也会拒绝）共用同一个开关，两边不会不同步
+- 清理了 `netlify/functions/_lib/email.ts` 里硬编码的真实地址、"24 hours"、老板姓名——即使现在这条代码路径已经走不到（后端会直接拒绝），这些敏感信息也不应该继续留在代码里
+- 浏览器实测确认结账表单里配送方式选择整个消失，只剩标准配送
+- 以后确认好新的自提点、且酒牌条件允许后，把 `SELF_COLLECTION_ENABLED` 改回 `true`，把真实地址填进 `policies/delivery.html` 就行，不需要改别的代码
+
+**5个政策页面全面重写**：用户指出现在的政策页面读起来像"内部技术草稿"，主要问题不是英文写得不好，而是掺了内部备注、未确认事项和过多技术栈名称。逐条处理：
+- **改成真正的双语，不是"外壳翻译+英文正文"**：重写了 `policies/policy-i18n.js` 的机制——每个页面正文现在是两个完整的 `data-policy-body="en"`/`data-policy-body="zh"` 内容块，语言切换按钮控制显示哪一个（`hidden` 属性），不是过去那种"只翻标题、正文一直是英文+一行'中文稍后补充'提示"的半成品状态。中文版结尾统一加了"如中文版本与英文版本存在不一致，以英文版本为准"的免责声明。
+- **删除了所有"Internal draft"提示、`[confirm: ...]`占位符方括号**：`.policy-draft-notice`/`.policy-placeholder`/`.policy-lang-notice` 这三个 CSS 类连同用途都已经不在了（前两轮已经先去掉了大黄条通知，这轮把剩下的"Internal draft"小字行和所有方括号占位符也清理干净）。`.policy-updated` 这个类复用成了"Last updated: 26 August 2026"。
+- **每页加了 Last updated 日期**，去掉了原来 h1 下面的草稿提示行。
+- **Terms**：正文只写公司名 "Trinity Globe Trading Pte. Ltd."，**UEN 不放正文**，改放到全站页脚（`index.html`/`orders.html`/`addresses.html`/5个政策页 + 订单确认邮件都加了"· UEN 202509360N"）——用户查过 ACRA 的要求后自己给出的结论：UEN 是公开信息、放页脚更稳妥，正文放着显得生硬。价格条款改成"prices... inclusive of GST where applicable"这个说法（对应公司GST注册后网站价格必须显示含税最终价）。
+- **Privacy**：不再点名 Supabase/Resend 这些具体技术栈，第4/5条改写成按服务类别描述（"cloud hosting and account authentication service providers"、"payment processors including Stripe"等），新增跨境数据传输条款，Cookie 条款改成更准确的表述（购物车/登录/防欺诈/支付必需，目前没有分析类cookie），Stripe隐私政策链接英文版链官方英文页、中文版链 `stripe.com/zh-sg/privacy`。
+- **联系邮箱**：`orders@trinityglobe.sg` 从所有政策页面里删掉了（这个地址只是 Resend 发件用的，没人在盯着看收件箱，写成"联系方式"会误导客户），统一改成只留 WhatsApp。**这个只是暂时方案**，PDPA 要求企业提供一个公众可以方便联系的负责人渠道，长期看最好还是建一个真的有人查看的 `privacy@`/`support@` 邮箱——这个是运营层面的待办，没有写进面向客户的政策文本里（写一个还是没人看的邮箱地址等于没解决问题）。
+- **Delivery**：自提整节改成"即将开放，新自提点启用后会公布详情"，删掉了地址、"24 hours"、老板姓名（配合上面的自提功能开关一起处理）。配送区域、派送失败流程这两条之前是方括号占位符，业务上还没真正拍板，这轮按"不能带占位符上线"的要求，改写成不承诺具体细节的正常语句（比如不确定配送区域就引导WhatsApp确认），没有编造一个没被确认过的具体规则。
+- **Refund**：48小时窗口改成"尽快联系，建议在48小时内"这种更宽松的措辞，避免绝对化损害客户法定权利，加了"本政策不影响您依据新加坡消费者保护法律享有的权利"。Stripe 5-10个工作日退款到账保留（这是 Stripe 官方给的正常区间，不是占位符）。
+- **Age restriction**：年龄条款简化成"You must be at least 18 years old to purchase or receive alcohol from us."，验证失败的处理方式改成指向配送政策（不再单独占一个方括号）。NAMS（国家成瘾管理服务）保留了一个官方链接 `nams.sg`（查证过是真实域名，会跳转到 IMH/NHG 官方页面），不放电话号码（怕以后过期没人更新）。
+
+浏览器实测确认：语言切换能正确显示对应整段正文（不是只翻标题）、footer UEN 正确显示、NAMS 链接文本正确、Terms 正文里确实没有 UEN。
+
+**仍然建议在正式上线前，找一个熟悉新加坡电商/PDPA/酒牌要求的人做最终审核**——这轮内容已经比之前完整很多，但终究不是律师做的正式审核。
+
+这次改动（导航文字改版、自提功能开关、5个政策页面全面重写、邮件模板清理、全站页脚UEN）**还没 commit**。
 
 ## 2026-08-26（第四轮）：My Address 功能上线 + Terms/Privacy 内容补完 + 政策页脚统一
 
