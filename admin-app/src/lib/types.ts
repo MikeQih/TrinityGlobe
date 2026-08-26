@@ -74,3 +74,23 @@ export interface OrderStatusHistoryEntry {
   changed_at: string;
 }
 
+export type EmailType = "customer_confirmation" | "staff_notification";
+
+// See supabase/migrations/0019_email_delivery_tracking.sql for the exact
+// status transitions this can go through. 'accepted' only means Resend's
+// API call succeeded — never treat it as "the customer got this email".
+export type EmailStatus = "pending" | "accepted" | "delivered" | "delayed" | "failed" | "bounced" | "suppressed";
+
+export interface EmailLog {
+  id: string;
+  order_id: string;
+  email_type: EmailType;
+  recipient: string;
+  status: EmailStatus;
+  resend_email_id: string | null;
+  failure_reason: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+

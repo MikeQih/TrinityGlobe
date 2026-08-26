@@ -3,7 +3,26 @@ import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
-import type { Order, OrderItem, OrderStatus, OrderStatusHistoryEntry } from "../lib/types";
+import type { EmailLog, EmailType, Order, OrderItem, OrderStatus, OrderStatusHistoryEntry } from "../lib/types";
+
+const EMAIL_TYPE_LABEL: Record<EmailType, string> = {
+  customer_confirmation: "Customer confirmation",
+  staff_notification: "Staff notification",
+};
+
+// 'accepted' only means Resend's API call succeeded, not that anyone
+// actually got the email — see 0019_email_delivery_tracking.sql. Framing
+// it as "Sending…" here rather than "Accepted" keeps that distinction
+// from reading as more final than it is.
+const EMAIL_STATUS_LABEL: Record<EmailLog["status"], string> = {
+  pending: "Sending…",
+  accepted: "Sent, awaiting delivery confirmation",
+  delivered: "Delivered",
+  delayed: "Delivery delayed",
+  failed: "Failed to send",
+  bounced: "Bounced",
+  suppressed: "Suppressed",
+};
 
 // Only the *fulfilment* forward-steps live here — refunded is deliberately
 // never a button in this list, it only ever happens through the Refund
@@ -57,19 +76,20 @@ export function OrderDetail() {
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [history, setHistory] = useState<OrderStatusHistoryEntry[]>([]);
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [refunding, setRefunding] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendingEmailType, setResendingEmailType] = useState<EmailType | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [orderRes, itemsRes, historyRes] = await Promise.all([
+    const [orderRes, itemsRes, historyRes, emailLogsRes] = await Promise.all([
       supabase.from("orders").select("*").eq("id", id).single<Order>(),
       supabase.from("order_items").select("*").eq("order_id", id).returns<OrderItem[]>(),
       supabase
@@ -78,6 +98,12 @@ export function OrderDetail() {
         .eq("order_id", id)
         .order("changed_at", { ascending: true })
         .returns<OrderStatusHistoryEntry[]>(),
+      supabase
+        .from("email_logs")
+        .select("*")
+        .eq("order_id", id)
+        .order("created_at", { ascending: false })
+        .returns<EmailLog[]>(),
     ]);
 
     if (orderRes.error) setError(orderRes.error.message);
@@ -87,8 +113,17 @@ export function OrderDetail() {
     }
     if (itemsRes.data) setItems(itemsRes.data);
     if (historyRes.data) setHistory(historyRes.data);
+    if (emailLogsRes.data) setEmailLogs(emailLogsRes.data);
     setLoading(false);
   }, [id]);
+
+  // email_logs can carry several rows per type (retries, resends) — only
+  // the latest attempt per type is what staff need to see as "the current
+  // status", ordered newest-first by the query above so the first match
+  // per type wins.
+  function latestEmailLog(emailType: EmailType): EmailLog | null {
+    return emailLogs.find((l) => l.email_type === emailType) ?? null;
+  }
 
   useEffect(() => {
     void load();
@@ -213,9 +248,9 @@ export function OrderDetail() {
     }
   }
 
-  async function handleResendConfirmationEmail(): Promise<void> {
+  async function handleResendEmail(emailType: EmailType): Promise<void> {
     if (!order || !session) return;
-    setResendingEmail(true);
+    setResendingEmailType(emailType);
     setResendMessage(null);
     setActionError(null);
     try {
@@ -225,15 +260,20 @@ export function OrderDetail() {
           "content-type": "application/json",
           authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ orderId: order.id }),
+        body: JSON.stringify({ orderId: order.id, emailType }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Failed to resend email");
-      setResendMessage("Confirmation email resent.");
+      setResendMessage(
+        body.outcome === "accepted"
+          ? `${EMAIL_TYPE_LABEL[emailType]} email resent.`
+          : `${EMAIL_TYPE_LABEL[emailType]} resend was accepted by the queue but hasn't confirmed sending yet — check back shortly.`
+      );
+      await load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to resend email");
     } finally {
-      setResendingEmail(false);
+      setResendingEmailType(null);
     }
   }
 
@@ -378,15 +418,46 @@ export function OrderDetail() {
         </section>
       )}
 
-      {canWrite && (
-        <section className="order-section">
-          <h2>Email</h2>
-          <button disabled={resendingEmail} onClick={() => void handleResendConfirmationEmail()}>
-            {resendingEmail ? "Sending…" : "Resend order confirmation email"}
-          </button>
-          {resendMessage && <p className="muted">{resendMessage}</p>}
-        </section>
-      )}
+      <section className="order-section">
+        <h2>Email</h2>
+        <div className="email-status-section">
+          {(["customer_confirmation", "staff_notification"] as EmailType[]).map((emailType) => {
+            const log = latestEmailLog(emailType);
+            // Delivered is the one status where a resend button is hidden
+            // by default — see PROJECT_STATUS.md's email tracking round:
+            // the point is avoiding an accidental duplicate send of
+            // something that already reached its destination, not making
+            // it impossible. finance_readonly never sees a resend button
+            // regardless of status, same as every other write action on
+            // this page.
+            const showResendButton = canWrite && log?.status !== "delivered";
+            return (
+              <div className="email-status-row" key={emailType}>
+                <span className="email-status-label">{EMAIL_TYPE_LABEL[emailType]}</span>
+                {log ? (
+                  <>
+                    <span className="email-status-badge" data-status={log.status}>
+                      {EMAIL_STATUS_LABEL[log.status]}
+                    </span>
+                    {log.failure_reason && <span className="email-status-reason">{log.failure_reason}</span>}
+                  </>
+                ) : (
+                  <span className="muted">No record — never sent for this order.</span>
+                )}
+                {showResendButton && (
+                  <button
+                    disabled={resendingEmailType === emailType}
+                    onClick={() => void handleResendEmail(emailType)}
+                  >
+                    {resendingEmailType === emailType ? "Sending…" : log ? "Resend" : "Send now"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {resendMessage && <p className="muted">{resendMessage}</p>}
+      </section>
 
       <section className="order-section">
         <h2>History</h2>

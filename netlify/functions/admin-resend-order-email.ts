@@ -2,24 +2,33 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "./_lib/supabase";
 import { jsonResponse, errorResponse } from "./_lib/responses";
 import { corsHeaders, corsPreflightResponse } from "./_lib/cors";
-import { sendOrderConfirmationEmail } from "./_lib/email";
+import { resendOrderConfirmationEmail, resendStaffNotificationEmail } from "./_lib/email";
 
-const requestSchema = z.object({ orderId: z.string().uuid() });
+const requestSchema = z.object({
+  orderId: z.string().uuid(),
+  emailType: z.enum(["customer_confirmation", "staff_notification"]),
+});
 
 /**
- * POST { orderId } -> { ok: true }
+ * POST { orderId, emailType } -> { ok: true, outcome: "accepted" | "failed" | "error" }
  *
- * Lets staff re-send the order confirmation email from admin-app — e.g. the
- * customer says it never arrived, or it bounced and they've since given a
- * corrected address on the phone. Same admin/ops role check as
- * admin-refund-order.ts, for the same reason: this uses the service_role
- * key and so bypasses RLS entirely, and re-sending mail to a customer is
- * exactly the kind of side effect that shouldn't be gate-able by whatever
- * admin-app's client code happens to show.
+ * Lets staff re-send either the customer confirmation or the internal
+ * staff notification from admin-app's Email section — e.g. the customer
+ * says it never arrived, or email_logs shows it bounced/was suppressed
+ * and they've since given a corrected address on the phone. Same
+ * admin/ops role check as admin-refund-order.ts, for the same reason:
+ * this uses the service_role key and so bypasses RLS entirely, and
+ * re-sending mail to a customer is exactly the kind of side effect that
+ * shouldn't be gate-able by whatever admin-app's client code happens to
+ * show. finance_readonly is deliberately excluded — see
+ * PROJECT_STATUS.md's RLS audit round for why read-only staff must not
+ * be able to trigger a send even though the button is hidden for them in
+ * admin-app's UI already.
  *
- * Deliberately just re-sends the existing confirmation template — it does
- * not change order state, and works regardless of current status (a staff
- * member re-sending proof of an old order is a legitimate ask even for a
+ * Always claims a brand new tracked attempt (see resendOrderConfirmation-
+ * Email/resendStaffNotificationEmail's forceNew) — it does not change
+ * order state, and works regardless of current status (a staff member
+ * re-sending proof of an old order is a legitimate ask even for a
  * completed or refunded one).
  */
 export default async (req: Request): Promise<Response> => {
@@ -67,7 +76,16 @@ export default async (req: Request): Promise<Response> => {
     .select("name_snapshot, qty, line_total_cents")
     .eq("order_id", order.id);
 
-  await sendOrderConfirmationEmail(order, items ?? []);
+  const result =
+    parsed.data.emailType === "customer_confirmation"
+      ? await resendOrderConfirmationEmail(order, items ?? [], userData.user.id)
+      : await resendStaffNotificationEmail(order, items ?? [], userData.user.id);
 
-  return jsonResponse(200, { ok: true }, corsHeaders());
+  if (!result) {
+    // staff_notification with no STAFF_NOTIFICATION_EMAILS configured —
+    // nothing to resend to, not a failure of the resend itself.
+    return errorResponse(409, "No staff notification address configured", "no_recipient", corsHeaders());
+  }
+
+  return jsonResponse(200, { ok: true, outcome: result.outcome }, corsHeaders());
 };

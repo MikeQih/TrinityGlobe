@@ -195,7 +195,7 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
   **2026-08-26 已核实（用户明确只要求先做这一步确认，还没要求切 live key）**：登录 Stripe 正式账号（`acct_1U66mYBAev1issbv`）→ 设置 → 商家 →"账户状态"，右侧"功能"栏确认 **支付（Charges）和 Payouts 都是"活跃"状态**（唯一"已暂停"的是 Cartes Bancaires，法国本地卡组织，跟新加坡业务无关，不影响）；"银行账户和货币"页确认已经关联了默认 SGD 收款账户（DBS Bank/POSB）。**结论：账户已经具备实际收款+提现能力，不是只过了身份验证。** 真正切 live key 时还有个真实风险要注意：现在 Netlify 的环境变量是"All scopes / 全部5个部署环境同一个值"，包括公开的 `dev--trinity-globe.netlify.app` 预览站——直接把 `STRIPE_SECRET_KEY` 全局换成 live 会让那个公开预览站也开始跑真实扣款。更安全的做法是用 Netlify"按部署环境设不同值"这个功能（不需要升级付费版），只给 Production 配 `sk_live_`，其余环境继续留 `sk_test_`。
 - [x] ~~前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点~~——**2026-08-26 已完成**：登录 Netlify 后台（`trinity-globe` 项目 → Project configuration → Environment variables），两个变量都已添加（All scopes，Same value in all deploy contexts，跟其他现有变量的配置方式一致），值取自本地 `.env`。这两个是客户端匿名key，本身就会被打进浏览器构建产物，不算敏感信息。
 - [ ] **GST 注册信息确认**——2026-08-26 已把数据库设计从一个手动 boolean 改成基于生效日期（详见下面"GST 生效日期设计"一节），代码已经按"未注册期间绝不显示/收取 GST"的规则实现并上线，**但目前 `store_settings.gst_registration_effective_at` 仍是 `null`（即当前网站对所有订单都不收 GST）**。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册）。需要向老板/会计确认的不是简单的"是否注册"，而是两个具体信息：**(1) 公司的 GST Registration Number；(2) IRAS 批准信上注明的 GST Registration Effective Date**。拿到这两项后，只需要在 `store_settings` 表里填入这两个字段，新订单会从生效日期当天起自动开始按 9/109 计算并显示 GST，不需要再改代码。
-- [ ] **邮件发送失败追踪账本**——目前订单确认邮件/员工通知邮件发送失败只会 `console.error`，没有持久化记录，后台看不到"哪些订单的确认邮件没发出去"。游客下单没有"我的订单"页面兜底，如果确认邮件没送达，游客除了打客服电话没有别的办法知道订单状态。计划做一个发送状态账本（记录每次发送尝试的成功/失败/失败原因）+ admin-app 里的提醒 UI + 一个不会重复触碰订单状态/库存的"重新发送"按钮（`admin-resend-order-email.ts` 已经有重发功能，但还没有失败可见性）。用户明确说这个不算小改动，但仍然是上线前必须完成的项，不是可选项。
+- [x] ~~邮件发送失败追踪账本~~——**2026-08-27 已完成**，详见下面"第十一轮"。**唯一还没做、也做不了的一步**：`.env` 里的 `RESEND_WEBHOOK_SECRET` 目前是本机自己生成的测试值，Resend 后台还没有注册真实的 webhook 地址（本地 `netlify dev` 没有公网 URL，Resend 的 webhook 送不到）——**必须等这个分支推到 Deploy Preview、有了公网地址之后**，去 Resend 后台的 Webhooks 页面注册真实 endpoint（`https://<deploy-preview-url>/.netlify/functions/resend-webhook`），拿到真实签名密钥后替换 `.env`/Netlify 环境变量里的这个值，再用官方测试地址真实收一次 Resend 主动推送的 webhook 确认端到端打通。这也是用户自己安排的顺序（先完成这轮邮件账本，下一步才是开发分支完整回归+push生成Deploy Preview），不是遗漏。
 - [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
 - [ ] **确认 `release-expired-reservations` 这个定时释放库存的 Function 真的在 Netlify 生产环境跑着**——2026-08-26 admin-app 回归测试时发现好几条库存预留早就过了 `expires_at` 但状态还停在 `pending`，说明这个任务大概率从来没在生产环境真正成功执行过。Netlify Scheduled Functions **只在正式 Published Deploy 上运行，Deploy Preview/branch deploy 不会自动跑**，所以本地 `netlify dev` 测试正常不代表生产环境真的在跑。上线前必须手动确认：(1) Netlify 后台 Functions 列表里能看到这个函数、cron 时间对；(2) 它需要的环境变量对 Functions 可用，且改动环境变量后已经重新部署过；(3) 手动点一次"Run now"；(4) 建一笔到期时间很短的测试预留，等它到期后确认订单状态/预留状态/库存三者都正确变化；(5) 再跑一次，确认不会对同一笔预留重复加库存。代码这边已经加了心跳记录（见下面 2026-08-26 admin-app 回归那一轮）：admin-app 订单列表页顶部会在这个任务超过15分钟没成功执行时显示醒目警告，可以直接用它来判断生产环境是否正常。
 
@@ -649,6 +649,46 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 **13/13全部通过，没有发现任何回归**。测试产生的订单、地址、Supabase测试账号全部清理，`inventory.website_stock`确认全程未受影响（回到基线50，因为唯一一笔真实预留在同一轮测试内被取消释放了）。收尾时`storefront`和`admin-app`的`typecheck`/`test`/`build`未再变动（上一轮已经跑过，本轮没有改动业务代码，只改了`PROJECT_STATUS.md`）。
 
 **这一步（Supabase RLS + admin-app权限审计）到此正式关闭。** 下一步按原计划开始邮件失败追踪账本（见"必须做"清单里的"邮件发送失败追踪账本"一条）。
+
+## 2026-08-27（第十一轮）：邮件发送追踪账本
+
+用户要求单独实施邮件发送追踪账本（客户确认邮件 + 员工通知邮件分别记录状态、幂等、接入 Resend Webhook、admin-app 展示、订单独立性），不 push、不 merge main。
+
+**数据库设计**（`supabase/migrations/0019_email_delivery_tracking.sql`）：新增 `email_logs` 表，每一行代表"一次发送尝试"，`id` 本身就是发给 Resend 的 `Idempotency-Key`（跟 `refund_requests` 用自己的 `id` 当 Stripe 幂等键是完全一样的思路）。状态机：`pending`（已认领，Resend 调用结果未知）→ `accepted`（Resend API 调用成功，**不代表已送达**）→ 后续由 webhook 事件推进到 `delivered`/`delayed`/`failed`/`bounced`/`suppressed`。三个 RPC：
+- `claim_email_send`——发起一次发送前先认领一条记录；如果同一笔订单同一种邮件类型已经有一条 `pending` 记录，直接复用（网络超时/结果不明时安全重试，不产生新幂等键），除非调用方明确要求 `p_force_new`（员工点"重新发送"时用，哪怕上一次已经 `delivered` 也必须开一条全新记录，绝不会复用旧的）。
+- `settle_email_send`——记录 Resend API 调用的即时结果：只有能确定"这个请求永远不会成功"的错误（如收件地址格式不合法）才会落成 `failed`；网络错误、限流、Resend 5xx 等一律保持 `pending`，交给下一次重试复用同一个幂等键，完全对应 Resend 官方文档说的"结果不明时用同一个 key 重试"。
+- `apply_email_webhook_event`——webhook 事件落库前先按状态"能量等级"（pending<accepted<delayed<delivered<failed<bounced<suppressed）判断新事件是否比当前状态更"确定"，只允许状态前进、不允许被一个迟到的旧事件（比如 `delivered` 之后又收到一条迟到的 `delayed`）打回去。
+
+三个函数都不给 `anon`/`authenticated` 开 EXECUTE（只有 `service_role`），另建了一张 `resend_webhook_events` 去重表（跟 `stripe_events` 一模一样的写法，同样没有任何角色的 RLS 策略，纯内部记账表）。
+
+**这一轮发现并当场修正的一个真问题**：`0018` 收尾时加的 `alter default privileges in schema public revoke execute on functions from public`，本意是让以后每个新建的函数自动就没有 `PUBLIC` 的 EXECUTE 权限，不用每次都手动收权——**这轮新建 3 个函数后直接查 `pg_proc.proacl` 验证，发现这三个函数依然带着 `=X`（PUBLIC）授权，跟 `0018` 之前的行为一模一样，说明那条"改默认权限"的语句根本没起作用**（大概率是 Supabase 项目自己的初始化脚本用另一个角色设置了这条默认权限规则，我们用 `postgres` 身份跑的 `alter default privileges` 覆盖不到）。已经在 `0019` 里对这三个函数补了明确的 `revoke execute ... from public`，当场重新验证 `proacl` 确认干净，并把这个发现写进了迁移文件的注释里：**以后每一个新建函数必须自己显式 `revoke`，不能再指望那条全局默认权限设置生效**。
+
+**代码改动**：
+- `netlify/functions/_lib/email.ts` 重写，新增内部 `sendTrackedEmail()` 封装了"认领→发送→结算"整个流程，`sendOrderConfirmationEmail`/`sendStaffNotificationEmail`（自动触发，webhook 里调用）和新增的 `resendOrderConfirmationEmail`/`resendStaffNotificationEmail`（员工手动重发，`forceNew=true`）都复用同一套逻辑。**所有分支都不会往外抛异常**——数据库调用失败、Resend 调用失败、网络错误全部 `console.error` 后原样返回，延续了这个文件一直以来的纪律（一次改动都没有破坏 `stripe-webhook.ts` 里 `Promise.allSettled` 的既有用法）。
+- `netlify/functions/resend-webhook.ts`（新）：用官方 `svix` 包验证签名（Resend 的 webhook 就是用 Svix 签的），验证失败直接 400，不会跑到任何业务逻辑；处理 `email.sent/delivered/delivery_delayed/failed/bounced/suppressed` 六种事件；成功处理后才把 `svix-id` 记入去重表（跟 `stripe-webhook.ts` 的"先处理成功再记录"是同一套纪律，处理失败时不落库，让 Resend 的自动重试有机会再来一次）。
+- `netlify/functions/admin-resend-order-email.ts` 重写：现在接受 `emailType` 参数，客户确认信/员工通知信都能重发；角色检查沿用 `admin-refund-order.ts` 的写法（只认 `admin_profiles.role`，只有 `admin`/`ops` 能调，`finance_readonly` 会被拒绝）。
+- admin-app：`OrderDetail.tsx` 的 Email 区块重写为分别显示两种邮件的状态徽章 + 失败原因文字 + 独立的重发按钮；**查看邮件状态对所有员工角色可见（含 `finance_readonly`），只有"重发"按钮受 `canWrite` 门槛限制**——这跟用户"财务只读账号能看不能发"的要求精确对应。已送达（`delivered`）状态默认不显示重发按钮（避免误点重复发送），其余状态都保留按钮。`OrdersList.tsx` 新增按订单聚合"最新一次尝试状态"的逻辑，任何订单只要有一种邮件类型的最新状态是 `failed`/`bounced`/`suppressed`，订单号旁边就会出现一个醒目的"⚠ Email"标记。
+
+**订单独立性**：整套改动没有一行代码写 `orders`/`inventory`/`inventory_reservations` 表，也没有任何邮件相关的调用出现在 `mark_order_paid_from_webhook`/`mark_order_failed_from_webhook`/`cancel_own_pending_order` 等状态流转 RPC 内部——`stripe-webhook.ts` 里发邮件仍然是 RPC 执行、`return jsonResponse(200,...)` 之后才触发的 `Promise.allSettled`，邮件那边无论成功失败都不会让这个 Function 的 HTTP 响应变成非 200，Stripe 端不会因为邮件问题重试整个 webhook。
+
+**真实测试（16/16 全部通过，不是 mock）**：
+- 真发信到 Resend 官方测试地址 `delivered@resend.dev`：`email_logs` 正确记录 `status=accepted` + 拿到真实的 `resend_email_id`。
+- 真发信到 `bounced@resend.dev`：同样先落 `accepted`（bounce 是异步事件，API 调用本身确实成功）。
+- 故意用一个格式非法的收件地址（`not-a-valid-email-address`）：Resend 同步返回 `validation_error`，正确落成 `failed` 并记录了 Resend 原话作为失败原因。
+- `finance_readonly` 测试账号真实调用 `admin-resend-order-email.ts`：返回 403，符合权限要求。
+- 幂等：模拟"网络超时未结算"（认领后不调用 `settle_email_send`），第二次认领确认复用同一个 `id`；员工强制重发（`force_new=true`）确认总是拿到一个全新 `id`，不会误用旧的。
+- Webhook：用 `svix` 包自己签发的合法测试事件（本机自签，见下方"仍需人工确认"）真实推给本地跑着的 `resend-webhook.ts`——`email.delivered` 正确把状态推进到 `delivered`；`email.bounced` 正确推进到 `bounced` 并提取出 `Permanent: Mailbox does not exist` 这样的失败原因；故意在 `delivered` 之后再推一条 `email.delivery_delayed`，确认状态没有被打回 `delayed`（"能量等级"逻辑生效）；篡改签名的请求被正确拒绝（400）；同一个 `svix-id` 重复投递第二次被正确去重（`deduped:true`），没有重复处理。
+- 全程用真实浏览器登录一个真实创建的 admin 测试账号，打开刚才那两笔测试订单，肉眼确认 `Delivered`/`Bounced` 状态、失败原因文字、按钮显隐（`delivered` 那笔没有重发按钮，`bounced` 那笔有）、`OrdersList` 页面的"⚠ Email"标记都跟数据库状态一致。
+- 最后确认测试期间 `orders.status`/`refunded_cents` 全程没有被这些邮件操作动过。
+
+测试产生的订单、`email_logs`、Supabase 测试账号（客户 1 个、admin 1 个、finance_readonly 1 个、单独做浏览器核对又建了 1 个）、`resend_webhook_events` 里的自测行全部清理干净，`inventory.website_stock` 确认全程未受影响（回到基线 50）。`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部通过。
+
+**仍需人工确认的事项**：
+1. **`RESEND_WEBHOOK_SECRET` 目前是本机生成的测试值，不是 Resend 真实签发的**——因为 Resend 后台注册 webhook 需要一个公网可达的 URL，本地 `netlify dev` 做不到，只能等这个分支 push 出 Deploy Preview 后，去 Resend 后台 Webhooks 页面注册真实 endpoint、拿到真实密钥后替换。这也是本轮所有 webhook 测试都用"自己签发测试事件直接 POST 给本地端点"而不是等 Resend 真的推送过来的原因——验证的是签名校验、去重、状态机这些**代码逻辑本身**，不是"Resend 真的会把事件送到我们这儿"这件事，后者要等 Deploy Preview 阶段才能真正验证。
+2. Resend webhook payload 里 bounce/failed/suppressed 各自的失败原因具体嵌在 `data.bounce.message`/`data.failed.reason`/`data.suppression.reason` 的判断，是按 Resend 公开文档的字段命名推断写的，本轮没有拿到一条 Resend 真实推送的原始 payload 核对过——建议在 Deploy Preview 阶段用真实 webhook 命中一次 `bounced@resend.dev` 之后，顺手确认一下 admin-app 里显示的失败原因文字是否真的有意义（如果字段路径猜错了，最坏情况只是失败原因显示为空，不影响状态本身的正确性，因为状态是从 `event.type` 直接映射来的，跟这几个可选字段无关）。
+3. 邮件追踪目前只覆盖"客户订单确认邮件"和"员工订单通知邮件"这两种——`sendPaymentReviewAlertEmail`（付款异常需要人工核实时发给员工的警报邮件）**刻意没有纳入这套账本**，因为它不是每笔订单都会触发的常规邮件，而且它对应的异常状态本身已经在 admin-app 里可见（订单会停在 `payment_review`），如果用户觉得这个警报邮件本身的送达情况也需要追踪，需要另外说一声。
+
+本轮改动（`supabase/migrations/0019_email_delivery_tracking.sql`、`netlify/functions/_lib/email.ts`、`netlify/functions/resend-webhook.ts`、`netlify/functions/admin-resend-order-email.ts`、`admin-app/src/lib/types.ts`、`admin-app/src/pages/OrderDetail.tsx`、`admin-app/src/pages/OrdersList.tsx`、`admin-app/src/admin.css`、`package.json`/`package-lock.json`新增 `svix` 依赖、`.env` 新增 `RESEND_WEBHOOK_SECRET`、本文件）已经commit到本地`dev`分支，没有push、没有merge main。
 
 ---
 

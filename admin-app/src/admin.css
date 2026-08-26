@@ -83,6 +83,35 @@ input, select, textarea {
 .payment-ids dt { color: var(--ink-soft); }
 .payment-ids dd { margin: 0; font-family: monospace; word-break: break-all; }
 
+/* OrdersList row flag for a failed/bounced/suppressed email — same
+   severity as .error-banner, just inline rather than a full block. */
+.email-issue-flag {
+  color: var(--bad);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.email-status-section { margin-top: 10px; }
+.email-status-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.email-status-row:last-child { border-bottom: none; }
+.email-status-label { min-width: 160px; color: var(--ink-soft); }
+.email-status-reason { color: var(--bad); font-size: 13px; }
+.email-status-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }
+.email-status-badge[data-status="pending"],
+.email-status-badge[data-status="accepted"] { background: var(--neutral-bg); color: var(--neutral); }
+.email-status-badge[data-status="delayed"] { background: var(--attention-bg); color: var(--attention); }
+.email-status-badge[data-status="delivered"] { background: var(--good-bg); color: var(--good); }
+.email-status-badge[data-status="failed"],
+.email-status-badge[data-status="bounced"],
+.email-status-badge[data-status="suppressed"] { background: var(--bad-bg); color: var(--bad); }
+
 /* Login */
 .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .login-card {

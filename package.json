@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.45.4",
     "resend": "^4.0.1",
     "stripe": "^22.5.0",
+    "svix": "^2.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
