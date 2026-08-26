@@ -576,6 +576,55 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-26（第十轮）：Supabase RLS + admin-app 权限完整审计
+
+用户要求专门做一轮"只做权限审计"（不碰邮件失败追踪、不push、不merge main、不动Stripe live配置），盘点所有表/RPC的RLS和EXECUTE授权，并用真实测试账号（不是猜测）验证。
+
+**方法**：没有走"读代码猜测"的路线，而是直接读线上Supabase的真实状态——`pg_policies`、`pg_proc.prosecdef/proconfig`、`information_schema.routine_privileges`、`pg_proc.proacl`——逐张表、逐个函数核对，再用两个全新创建的真实Supabase Auth测试账号（用户A/B，通过`service_role`的`auth.admin.createUser`创建，测试用密码，事后连账号一起删除）+ 一个匿名client + 真实登录session，跑了一套`.from()`/`.rpc()`权限测试脚本，前后共47项断言，而不是只看代码是否"看起来对"。
+
+**结论先说**：**没有发现可被利用的跨用户数据泄露或伪造**——22项"A能不能读/改B的订单、地址、库存、退款记录"的测试全部通过，RLS本身的策略设计是对的（`orders`/`inventory`/`inventory_reservations`/`refund_requests`这些表压根没有给普通用户任何INSERT/UPDATE策略，所以就算被利用也写不进去）。真正的问题是**权限分层不够**——只靠RLS一层挡，本该只让Netlify Function（`service_role`）调用的RPC，实际上任何登录用户甚至匿名用户都能直接从浏览器调用。
+
+**发现的真实问题（已修复，见`supabase/migrations/0018_lock_down_rpc_execute_grants.sql`）**：
+
+1. **几乎所有业务RPC对`anon`/`authenticated`都开着EXECUTE权限**——`cancel_own_pending_order`、`cancel_pending_order_as_staff`、`claim_refund_request`、`settle_refund_request`、`reserve_inventory`、`confirm_inventory_reservation`、`release_inventory_reservation`、`expire_stale_reservations`、`get_available_stock`、`mark_order_paid_from_webhook`、`mark_order_failed_from_webhook`、`create_pending_order`——这些函数从写下的第一天起就没有人手动收回过默认权限，而Supabase对新建函数的默认行为就是"谁都能调"。目前恰好被RLS挡住没出事，但这是运气，不是设计：`cancel_pending_order_as_staff`/`claim_refund_request`/`settle_refund_request`这三个函数内部完全没有自己的角色/所有权校验，注释里写得很清楚——"权限判断交给调用它的Netlify Function负责"，也就是说这三个函数唯一的防线本来就该是"只有service_role能调用它"，而不是碰巧生效的RLS。已通过迁移把EXECUTE收回到只剩`service_role`。
+   - **修复过程中一次真实的踩坑**：第一次尝试用`revoke execute ... from anon, authenticated`，测试脚本却显示完全没生效（直接调用这些RPC仍然"成功"跑到RLS那层才被挡下，而不是在权限检查这层就被拒绝）。查`pg_proc.proacl`才发现：Supabase对新函数的默认授权其实是`grant execute to PUBLIC`（不是分别对`anon`/`authenticated`各发一次），`information_schema.routine_privileges`会把PUBLIC的授权"解析展示"成好像每个角色都单独有一样，容易误判已经收回。改成`revoke ... from public`后重新测试，全部12个函数直接调用都变成了`42501 permission denied`，不再是绕到函数内部才报错。
+   - **修复中的另一次真实回退**：第一版把`current_admin_role()`对`anon`的EXECUTE也一并收回，心想"匿名用户没道理直接调这个"——结果立刻把所有匿名用户对`orders`/`inventory`等表的正常只读查询全部搞坏（从"干净的空结果"变成`permission denied for function current_admin_role`）。原因是Postgres对同一张表的多条permissive策略是逐条求值的，哪怕最终是另一条策略（"customers can view own orders"）在起作用，"staff can view orders"里调用的`current_admin_role()`也照样会被求值一次——`anon`必须保留这个函数的EXECUTE权限，只是对匿名用户它永远返回null，不构成风险。测试脚本立刻抓到了这个回归（`anon still cannot read any orders` 从PASS变FAIL），马上改了回来。这两次"以为收紧了、其实没收紧"和"收紧过头、搞坏了正常功能"，都是靠真实测试脚本抓出来的，不是靠读代码推理出来的。
+2. **`create_pending_order`遗留4个历史版本重载**——0002/0005/0007/0008每次改签名都是新增参数而不是完全对齐上一版的参数列表，Postgres的`create or replace function`只有签名完全一致才会真正替换，签名一变就变成了新增一个重载，旧版本从未被清理。结果是数据库里同时存在5个版本的`create_pending_order`，其中4个缺少后来才加上的GST计算、结账限流等校验逻辑，而且同样对外开放EXECUTE。已在0018里动态识别并`drop`掉所有不含GST字段的旧版本，只保留当前版本。
+3. **admin-app两处直接UPDATE存在"静默假成功"**——`OrderDetail.tsx`的`handleStatusChange`（改订单状态）和`handleSaveNotes`（存内部备注）都是裸的`supabase.from("orders").update(...)`，没有`.select()`。真实复现：给测试账号A临时挂上`finance_readonly`角色（一个真实存在、只读性质的员工角色），直接调用同一段代码——`error`是`null`，`data`也是`null`（因为没有.select()），前端代码原样判断"没报错→刷新页面"，用户会看到"点了按钮，页面刷新了，但状态其实根本没变"，却得不到任何提示。已修复：两处都加上`.select("id")`，返回数组为空时显式报错"Update was not applied — you may not have permission..."，修复后重新用同一个`finance_readonly`账号复现，确认现在能拿到明确的报错文案。
+
+**验证过、确认没问题、不需要改的**：
+- `current_admin_role`/`log_order_status_initial`/`log_order_status_change`——目前schema里*仅有*的3个`SECURITY DEFINER`函数，此前0013/0016已经加固过`search_path`（含`pg_temp`防临时表劫持），本轮确认加固范围完整、没有遗漏别的`SECURITY DEFINER`函数。其余业务RPC全部是`SECURITY INVOKER`（以调用者身份运行，不受同一类临时表劫持手法影响，不需要同样的`search_path`加固）。
+- admin-app（管理员前端）自身**没有任何直接的`.rpc()`调用**，也没有在打包产物里嵌入`service_role`密钥（只用`VITE_SUPABASE_ANON_KEY`）——所有需要绕过RLS的操作（取消订单、退款、重发邮件）都老老实实走各自的Netlify Function，Function内部逐一检查`admin_profiles.role`。唯一的直接表操作是订单状态更新和备注保存这两处，靠的是`orders`表"ops and admin can update orders"这条RLS策略本身把关，不是靠前端判断——即使有人拿开发者工具直接调用同样的Supabase请求，没有admin/ops角色的账号一样会被数据库拒绝（本轮加了`.select()`之后，这次拒绝会明确显示出来，而不是静默失败）。
+- `cancel_own_pending_order`/`set_default_customer_address`虽然靠传入的`p_user_id`参数做归属校验（不是从`auth.uid()`现取），单独看是脆弱设计，但结合RLS——攻击者哪怕在参数里冒充别人的`user_id`，函数内部第一步`select ... for update`本身就会被RLS按攻击者的真实`auth.uid()`过滤掉，压根走不到归属校验那一步。这个结论专门用真实跨用户请求验证过（A尝试对B的地址/订单直接调用两个函数，均在真正修改数据前就被拦下）。
+
+**最终权限矩阵**（`anon`=未登录访客，`authenticated`=普通登录客户，`staff`=在`admin_profiles`里有对应角色的员工，`service_role`=Netlify Functions专用）：
+
+| 资源 | anon | 普通登录客户 | staff: finance_readonly | staff: ops/admin | service_role |
+|---|---|---|---|---|---|
+| orders（读） | 无 | 仅自己的 | 全部只读 | 全部只读 | 全部 |
+| orders（改状态/备注） | 无 | 无 | 无（本轮验证会被拒绝，且现在有明确报错） | 可以（受状态流转trigger限制） | 全部 |
+| orders（建单/取消/退款/标记已付） | 无 | 无（走对应Netlify Function） | 无 | 无（走Netlify Function） | 全部（经对应RPC） |
+| order_items / order_status_history | 无 | 仅自己订单关联的 | 全部只读 | 全部只读 | 全部 |
+| customer_addresses / customer_profiles | 无 | 仅自己的（含"设为默认地址"这一直连RPC） | 无 | 无 | 全部 |
+| inventory / inventory_movements / inventory_reservations / product_variants / store_settings / scheduled_job_runs | 无 | 无 | 只读 | 只读 | 全部（写入均只能通过RPC） |
+| refund_requests | 无 | 无 | 只读 | 只读（写入仍必须走`admin-refund-order.ts`） | 全部 |
+| admin_profiles | 无 | 无 | 仅自己那一行 | admin角色可管理全部（含新增/改角色） | 全部 |
+| checkout_rate_limits / stripe_events | 无（无任何策略，纯内部记账表） | 无 | 无 | 无 | 全部 |
+| 全部业务RPC（除下两条） | 拒绝（42501） | 拒绝（42501） | 拒绝（42501，须走对应Netlify Function） | 拒绝（42501，须走对应Netlify Function） | 全部 |
+| `set_default_customer_address` | 拒绝 | 可调用（仅影响自己数据） | 同左 | 同左 | 全部 |
+| `current_admin_role` | 可调用（对匿名恒返回null，RLS策略内部要用） | 可调用 | 同左 | 同左 | 全部 |
+
+**测试与清理**：47项断言（22项跨用户RLS读写、13项EXECUTE收回后的直接RPC调用应被拒绝、5项收回权限前后的匿名/普通用户只读回归对比、7项其余）全部通过；测试用的两个Supabase Auth账号、订单、地址、临时`finance_readonly`角色，测试结束后全部清理，`inventory.website_stock`确认全程未被真实测试触碰（回到基线50）；storefront与admin-app的`typecheck`/`test`/`build`本轮结束前重新跑过一遍，全部通过。
+
+**仍需人工确认的事项**：
+1. `admin_profiles`表"admins manage admin profiles"这条策略允许`admin`角色通过前端直接对`admin_profiles`做增删改（含把别人设为/取消admin）——本轮判断这是员工权限管理的自举机制（总要有办法设置第一个/后续管理员），不是漏洞，但admin-app目前**没有一个"管理员管理"页面**，实际操作只能靠直接进Supabase Dashboard改表。要不要在admin-app里做一个真正的管理员管理界面，还是保持现状由技术人员手动维护，需要用户决定。
+2. `checkout_rate_limits`/`stripe_events`两张纯内部记账表现在对**任何角色**（含staff）都没有读权限——如果以后想在admin-app里查看限流命中记录或webhook去重日志用于排查问题，需要专门加一条staff SELECT策略；目前admin-app没有用到这两张表，所以暂时不影响任何现有功能。
+3. `finance_readonly`角色的员工登录admin-app后，界面上仍然会看到"改状态"、"保存备注"这些按钮（点了会被数据库拒绝，现在也有明确报错），只是入口没有对这个角色单独隐藏。这是纯体验问题、不是安全问题（真正的把关始终在数据库层），要不要花时间按角色隐藏这些按钮，看用户是否需要。
+
+本轮改动（`supabase/migrations/0018_lock_down_rpc_execute_grants.sql`、`admin-app/src/pages/OrderDetail.tsx`两处`.select()`修复、本文件）已经commit到本地`dev`分支，没有push、没有merge main、没有碰Stripe任何配置。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥

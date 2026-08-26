@@ -129,19 +129,42 @@ export function OrderDetail() {
     // regardless of what this button list offers — this is a second,
     // UI-level guard against showing an invalid option in the first place,
     // not the actual security boundary.
-    const { error: updateError } = await supabase.from("orders").update({ status: newStatus }).eq("id", order.id);
+    //
+    // .select() here isn't just for the return value: a plain .update()
+    // reports error=null whenever RLS's "ops and admin can update orders"
+    // policy filters the target row down to zero matches (e.g. a
+    // finance_readonly account, which is a real admin_profiles role with
+    // no UPDATE policy of its own) — Postgres doesn't error on a
+    // zero-row UPDATE, it just updates nothing. Without .select(), that
+    // reads as silent success: the button spins, nothing happens, and
+    // there's no indication why. Chaining .select() forces PostgREST to
+    // report back which rows actually changed, so a permission-denied
+    // outcome can be told apart from a real success and shown as such.
+    const { data: updated, error: updateError } = await supabase
+      .from("orders")
+      .update({ status: newStatus })
+      .eq("id", order.id)
+      .select("id");
     setUpdatingStatus(false);
     if (updateError) setActionError(updateError.message);
-    else void load();
+    else if (!updated || updated.length === 0) {
+      setActionError("Update was not applied — you may not have permission to change this order's status.");
+    } else void load();
   }
 
   async function handleSaveNotes(): Promise<void> {
     if (!order) return;
-    const { error: updateError } = await supabase
+    // Same reasoning as handleStatusChange above: .select() is required to
+    // tell a real save apart from a silently RLS-blocked one.
+    const { data: updated, error: updateError } = await supabase
       .from("orders")
       .update({ internal_notes: notes })
-      .eq("id", order.id);
+      .eq("id", order.id)
+      .select("id");
     if (updateError) setActionError(updateError.message);
+    else if (!updated || updated.length === 0) {
+      setActionError("Notes were not saved — you may not have permission to edit this order.");
+    }
   }
 
   async function handleRefund(full: boolean): Promise<void> {
