@@ -138,11 +138,11 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ## 三方账号进度
 
-### Stripe —— 阻塞中，等 Wang Lei 完成身份验证
+### Stripe —— 身份验证已完成（2026-08-26 确认）
 - 账户：`acct_1U66mYBAev1issbv`，商户类目已选"含酒精饮品"零售
-- 状态：审核中有 2 个逾期任务，**需要 Wang Lei 本人**（占股30%、实际操作人，非 Bizfile 登记董事）通过 Singpass 或人工上传证件完成身份核验 + 补充授权文件
+- **Wang Lei 的身份验证 + 账户代表信息/补充文件已全部审核通过**：Stripe 后台"账户状态→任务"的"已完成"标签下，"验证 Wang Lei 的身份"（2026-08-22）、两次"提供账户代表信息"（2026-08-22、2026-08-26）、"提供账户代表补充文件"（2026-08-26）都标注了完成日期；"已激活"（待处理）标签下已经没有任何任务，用户亲自截图确认过。之前"审核中有逾期任务、需要 Wang Lei 补充材料"这个阻塞状态已经解除。
 - 已在 `.env` 配了 test mode 的 `STRIPE_SECRET_KEY`（sk_test_），代码已验证可用
-- **下一步**：确认 Wang Lei 是否已通过已打开的 Singpash tab 完成验证 → 去 `https://dashboard.stripe.com/acct_1U66mYBAev1issbv/account/status` 确认"支付"状态从"即将暂停"变回"活跃"
+- 未逐项核对过的细节（不算阻塞，只是没专门去看）：账户详情页里"Charges enabled / Payouts enabled"这类整体收款状态没有单独截图确认，但"已激活"任务清空 + 身份验证任务标完成，基本可以认为账户已经正常可用
 - **2026-08-22 品牌装饰**：用户看到结账页默认是通用骰子图标，问能不能装饰。传了网站自己的金色 TG 圆形logo（`images/logo-transparent.png`，压缩到512KB以内），品牌色/强调色都改成了网站的金色 `#c9a84c`（跟 `style.css` 里的 `--gold` 一致）。
 
   **踩坑记录**：第一次改的是 `acct_1U66mYBAev1issbv`（live/正式账号）的品牌设置，改完用户反馈"没有变化"——排查发现 Stripe 新出了「沙盒」（Sandbox）功能，是**完全独立的账号**（`acct_1U66mfB3ybi6Kwed`，注意是 `mf` 不是 `mY`），有自己独立的一套品牌/设置，跟正式账号不共享。日常测试用的 `create-checkout-session.ts`（配的是 `sk_test_`）走的就是这个沙盒环境。**已经在沙盒账号里重新设置了一遍**，图标/Logo/品牌色/强调色都配好并保存了，这次预览里能看到金色横幅+金色支付按钮生效。
@@ -355,6 +355,8 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 4. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
 5. 问用户：查完 Meta Business Portfolio 状态后，Facebook App Review 要不要现在就正式提交申请
 6. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-7. 追问：Wang Lei 的 Stripe 身份验证走到哪了，能不能确认支付功能状态恢复"活跃"
-8. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
-9. 如果用户想正式上线购物车功能，需要用户明确决定"要不要把 dev 分支合并到 main"——这个不要自己主动做（合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）
+7. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+8. **用户已明确表示现在还没准备好，先不把 `dev` 合并到 `main`**——不要主动提起或推动这件事，等用户自己说要上线再做（到时候合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）
+
+**已解决，不用再问**：
+- ~~Wang Lei 的 Stripe 身份验证~~——2026-08-26 用户截图确认"已完成"任务里身份验证+账户代表信息/文件全部通过，"已激活"（待处理）已清空，阻塞解除
