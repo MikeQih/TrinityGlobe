@@ -7,7 +7,16 @@ export type OrderStatus =
   | "completed"
   | "cancelled"
   | "refunded"
-  | "payment_failed";
+  | "payment_failed"
+  // Added by supabase/migrations/0008_checkout_hardening.sql. payment_review
+  // is a deliberate dead-end: Stripe reported a successful payment but the
+  // order couldn't be auto-confirmed (amount mismatch, or the order was no
+  // longer pending_payment when the webhook arrived) — needs a human to
+  // check Stripe's dashboard before confirming or refunding. expired is
+  // distinct from cancelled: the customer never acted, the reservation TTL
+  // just lapsed (see release-expired-reservations.ts).
+  | "payment_review"
+  | "expired";
 
 export type AdminRole = "admin" | "ops" | "finance_readonly";
 

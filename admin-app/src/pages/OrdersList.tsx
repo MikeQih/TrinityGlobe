@@ -13,8 +13,10 @@ const STATUS_FILTERS: Array<OrderStatus | "all"> = [
   "out_for_delivery",
   "completed",
   "cancelled",
+  "expired",
   "refunded",
   "payment_failed",
+  "payment_review",
 ];
 
 function fmt(cents: number): string {

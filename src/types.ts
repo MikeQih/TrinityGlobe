@@ -104,15 +104,18 @@ export type OrderStatus =
   | "completed"
   | "cancelled"
   | "refunded"
-  | "payment_failed";
+  | "payment_failed"
+  | "payment_review"
+  | "expired";
 
 export interface MyOrderItem {
+  sku: string;
   name: string;
   qty: number;
   unitPriceCents: number;
 }
 
-/** A row from customer_addresses (see supabase/migrations/0006_customer_addresses.sql) — see addresses.html / src/addresses-page.ts. */
+/** A row from customer_addresses (see supabase/migrations/0006_customer_addresses.sql, 0009_address_unit_number.sql) — see addresses.html / src/addresses-page.ts. */
 export interface CustomerAddress {
   id: string;
   label: string | null;
@@ -120,6 +123,7 @@ export interface CustomerAddress {
   phone: string;
   address: string;
   postalCode: string;
+  unitNumber: string | null;
   isDefault: boolean;
 }
 
@@ -128,8 +132,23 @@ export interface MyOrder {
   id: string;
   status: OrderStatus;
   totalCents: number;
+  subtotalCents: number;
+  shippingFeeCents: number;
+  refundedCents: number;
   currency: string;
   deliveryMethod: DeliveryMethod;
   createdAt: string;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  recipient: CheckoutRecipient;
   items: MyOrderItem[];
+  /** Only set when status is 'pending_payment' — when the backing inventory reservation (and Stripe session) will lapse. Drives the "继续付款 before HH:MM" countdown; see src/orders-page.ts. */
+  reservationExpiresAt: string | null;
+  /** Whether this order has a Stripe Checkout Session attached yet — false only in the narrow "order row created, session id not yet saved" window, see create-checkout-session.ts's idempotency/resume handling. */
+  hasCheckoutSession: boolean;
 }
+
+/** Response from POST /.netlify/functions/resume-checkout-session — reuses the same discriminated union as creating a fresh session, since the storefront mounts either shape the same way. */
+export type ResumeCheckoutSessionResponse =
+  | { mode: "hosted"; checkoutUrl: string; orderId: string }
+  | { mode: "elements"; clientSecret: string; orderId: string };

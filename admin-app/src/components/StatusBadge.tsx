@@ -10,6 +10,8 @@ const LABELS: Record<OrderStatus, string> = {
   cancelled: "Cancelled",
   refunded: "Refunded",
   payment_failed: "Payment Failed",
+  payment_review: "Payment Review",
+  expired: "Payment Expired",
 };
 
 // Groups statuses into a severity so the list is scannable at a glance —
@@ -24,6 +26,11 @@ const SEVERITY: Record<OrderStatus, "neutral" | "good" | "attention" | "bad"> = 
   cancelled: "bad",
   refunded: "bad",
   payment_failed: "bad",
+  // Needs a staff member to check Stripe/inventory manually before this can
+  // resolve either way — flagged the same as an outright failure so it
+  // doesn't get lost among ordinary "attention" fulfilment states.
+  payment_review: "bad",
+  expired: "bad",
 };
 
 export function StatusBadge({ status }: { status: OrderStatus }) {

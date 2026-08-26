@@ -5,6 +5,7 @@ import type {
   CreateCheckoutSessionResponse,
   LiveProductInfo,
   MyOrder,
+  ResumeCheckoutSessionResponse,
 } from "./types";
 
 const FUNCTIONS_BASE = "/.netlify/functions";
@@ -99,4 +100,30 @@ export async function fetchMyOrders(): Promise<MyOrder[]> {
   });
   const body = (await parseJsonOrThrow(res)) as { orders: MyOrder[] };
   return body.orders;
+}
+
+/** Re-opens a still-pending order's existing Stripe Checkout Session — see resume-checkout-session.ts. Never creates a new order/session. */
+export async function resumeCheckoutSession(orderId: string): Promise<ResumeCheckoutSessionResponse> {
+  const session = getSession();
+  if (!session?.access_token) throw new ApiError("Not signed in", 401);
+
+  const res = await fetch(`${FUNCTIONS_BASE}/resume-checkout-session`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ orderId }),
+  });
+  return (await parseJsonOrThrow(res)) as ResumeCheckoutSessionResponse;
+}
+
+/** Cancels the caller's own still-pending order — see cancel-my-order.ts. */
+export async function cancelMyOrder(orderId: string): Promise<void> {
+  const session = getSession();
+  if (!session?.access_token) throw new ApiError("Not signed in", 401);
+
+  const res = await fetch(`${FUNCTIONS_BASE}/cancel-my-order`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ orderId }),
+  });
+  await parseJsonOrThrow(res);
 }

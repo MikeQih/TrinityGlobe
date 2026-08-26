@@ -217,6 +217,21 @@ async function bootAuth(): Promise<void> {
   });
   maybeReopenCheckoutAfterAuth();
   maybeOpenSignInFromQuery();
+  maybeOpenCartFromQuery();
+}
+
+// Companion to My Orders' "再次购买"/buy-again action (src/orders-page.ts),
+// which writes straight to the shared cart-store localStorage key from a
+// page that has no cart drawer of its own, then redirects here to actually
+// show it — same redirect-with-a-flag pattern as ?signin=1 above.
+function maybeOpenCartFromQuery(): void {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("openCart") !== "1") return;
+  params.delete("openCart");
+  const query = params.toString();
+  const newUrl = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
+  window.history.replaceState(null, "", newUrl);
+  openDrawer();
 }
 
 // Companion to the nav's "Sign In" entry on pages without a cart drawer of
@@ -427,7 +442,10 @@ async function handleElementsReturn(sessionId: string): Promise<void> {
   }
 }
 
-function showToast(message: string): void {
+// Exported so src/orders-page.ts (a separate page with no cart drawer) can
+// show the same "payment received" / "order cancelled" style confirmation
+// after its own actions, instead of a second toast implementation.
+export function showToast(message: string): void {
   const toast = document.createElement("div");
   toast.className = "cart-toast";
   toast.textContent = message;
@@ -1031,8 +1049,11 @@ function updatePaymentFooter(): void {
 
 // Stripe's own appearance tokens, mapped from this site's CSS variables
 // (style.css :root) so the embedded Payment Element reads as part of the
-// drawer rather than a generic Stripe form dropped into it.
-function paymentElementAppearance() {
+// drawer rather than a generic Stripe form dropped into it. Exported so
+// src/orders-page.ts's "继续付款" flow (a completely separate page, no cart
+// drawer) can mount a Payment Element that still looks like it belongs to
+// this site instead of generic Stripe chrome.
+export function paymentElementAppearance() {
   return {
     theme: "night" as const,
     variables: {

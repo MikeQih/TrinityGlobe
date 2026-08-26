@@ -1763,6 +1763,11 @@ footer .container {
   background: rgba(143, 206, 176, 0.12);
 }
 
+.order-status-badge[data-status='payment_review'] {
+  color: #e0b872;
+  background: rgba(224, 184, 114, 0.12);
+}
+
 .order-card-items {
   list-style: none;
   padding: 0;
@@ -1776,6 +1781,146 @@ footer .container {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--gold);
+}
+
+/* Clickable order card (src/orders-page.ts's list view) — a <button> reusing
+   .order-card's box but reset to look like the plain block it replaced. */
+.order-card-clickable {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.order-card-clickable:hover { border-color: var(--gold); }
+
+p.order-card-items {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.orders-filter-tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.orders-filter-tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 0 0.8rem;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.orders-filter-tab:hover { color: var(--text); }
+
+.orders-filter-tab.is-active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+/* Order detail view (src/orders-page.ts) */
+
+.orders-back-link {
+  display: inline-block;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  transition: color 0.2s;
+}
+.orders-back-link:hover { color: var(--gold); }
+
+.order-detail {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.5rem 1.75rem;
+}
+
+.order-detail .order-card-header { margin-bottom: 1.3rem; }
+
+.order-detail-notice {
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.3rem;
+}
+
+.order-detail-notice p {
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 0.9rem;
+}
+.order-detail-notice p:last-child { margin-bottom: 0; }
+
+.order-detail-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.order-detail-actions .btn-gold,
+.order-detail-actions .btn-dark { border: none; font-family: 'Inter', sans-serif; }
+
+.order-detail-notice > .btn-gold { border: none; font-family: 'Inter', sans-serif; }
+
+.order-detail-section {
+  padding: 1.2rem 0;
+  border-top: 1px solid var(--border);
+}
+
+ul.order-detail-items {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.9rem;
+}
+
+ul.order-detail-items li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.order-detail-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0.9rem 0 0.3rem;
+}
+.order-detail-label:first-child { margin-top: 0; }
+
+.order-detail-recipient p {
+  font-size: 0.85rem;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.orders-whatsapp-btn {
+  display: inline-flex;
+  margin-top: 1.3rem;
+  border: none;
+  font-family: 'Inter', sans-serif;
 }
 
 /* My Address (addresses.html / src/addresses-page.ts) — reuses .orders-list/
