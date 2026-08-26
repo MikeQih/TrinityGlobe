@@ -235,12 +235,15 @@ export function initAddressesPage(): void {
     render();
 
     const isDefault = fd.get("isDefault") != null;
-    if (isDefault) {
-      // Only one row can be the default — clear the previous one first so
-      // this save never leaves two rows both marked default.
-      await supabase.from("customer_addresses").update({ is_default: false }).eq("user_id", user.id);
-    }
-
+    // is_default is deliberately never set directly here — see
+    // set_default_customer_address (supabase/migrations/
+    // 0010_default_address_uniqueness.sql), which clears every other
+    // default and sets this one in a single atomic statement. Setting it
+    // as a plain field on this insert/update, with a separate "clear the
+    // old default first" call beforehand, was the previous approach and
+    // wasn't atomic — two concurrent saves could each pass the "clear"
+    // step before either ran its "set" step, leaving two rows marked
+    // default. A DB-level unique index now backs this up regardless.
     const row = {
       label: String(fd.get("label") ?? "").trim() || null,
       recipient_name: recipientName,
@@ -248,12 +251,30 @@ export function initAddressesPage(): void {
       address,
       postal_code: postalCode,
       unit_number: String(fd.get("unitNumber") ?? "").trim() || null,
-      is_default: isDefault,
     };
 
-    const { error } = editingId
-      ? await supabase.from("customer_addresses").update(row).eq("id", editingId)
-      : await supabase.from("customer_addresses").insert({ ...row, user_id: user.id });
+    const { data: savedId, error } = editingId
+      ? await supabase
+          .from("customer_addresses")
+          .update(row)
+          .eq("id", editingId)
+          .select("id")
+          .single()
+          .then((r) => ({ data: r.data?.id as string | undefined, error: r.error }))
+      : await supabase
+          .from("customer_addresses")
+          .insert({ ...row, user_id: user.id })
+          .select("id")
+          .single()
+          .then((r) => ({ data: r.data?.id as string | undefined, error: r.error }));
+
+    if (!error && isDefault && savedId) {
+      const { error: defaultError } = await supabase.rpc("set_default_customer_address", {
+        p_user_id: user.id,
+        p_address_id: savedId,
+      });
+      if (defaultError) console.error("addresses-page: set_default_customer_address failed", defaultError);
+    }
 
     submitting = false;
     if (error) {
@@ -279,8 +300,8 @@ export function initAddressesPage(): void {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("customer_addresses").update({ is_default: false }).eq("user_id", user.id);
-    await supabase.from("customer_addresses").update({ is_default: true }).eq("id", id);
+    const { error } = await supabase.rpc("set_default_customer_address", { p_user_id: user.id, p_address_id: id });
+    if (error) console.error("addresses-page: set_default_customer_address failed", error);
     await load();
   }
 

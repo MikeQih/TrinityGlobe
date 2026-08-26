@@ -447,6 +447,11 @@ export function initOrdersPage(): void {
         await load(); // refreshes status to expired/cancelled from the server
         return;
       }
+      if (err instanceof ApiError && err.code === "already_paid") {
+        showToast(t("orders-action-already-paid"));
+        await load(); // refreshes once the webhook has caught up
+        return;
+      }
       actionErrorKey = "orders-action-error";
       render();
     }
@@ -525,8 +530,17 @@ export function initOrdersPage(): void {
       actionBusy = false;
       showToast(t("orders-action-cancelled-toast"));
       await load();
-    } catch {
+    } catch (err) {
       actionBusy = false;
+      confirmingCancelId = null;
+      if (err instanceof ApiError && (err.code === "already_paid" || err.code === "order_not_pending")) {
+        // The order's real state moved out from under us (paid, or already
+        // resolved by the webhook) — reload from the server rather than
+        // leaving a cancel-confirmation UI sitting on top of stale data.
+        showToast(t("orders-action-already-paid"));
+        await load();
+        return;
+      }
       actionErrorKey = "orders-action-error";
       render();
     }

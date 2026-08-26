@@ -22,16 +22,13 @@ interface OrderRow {
  * both re-checked here rather than trusted from the client:
  *   - the order must belong to the signed-in user (not just "some order id")
  *   - the order must still be pending_payment
- *   - the Stripe session itself must still report status "open" — this is
- *     the authoritative "is it still within the window" check (Stripe
- *     expires the session at the same instant the reservation lapses, and
- *     release-expired-reservations.ts force-expires it either way), so
- *     there's no separate manual timestamp comparison to keep in sync.
- * If Stripe reports the session isn't open anymore but our own order row
- * hasn't caught up yet (the cron/webhook hasn't run this exact second),
- * this proactively calls the same mark_order_failed_from_webhook RPC the
- * webhook itself uses, so the customer sees "expired" immediately instead
- * of a stale "pending" on their next page load.
+ *   - the Stripe session itself must still report status "open" and
+ *     payment_status "unpaid"
+ *   - the session must not be past its own expires_at, even if Stripe's
+ *     status field hasn't flipped to "expired" yet
+ * A session reporting "complete"/"paid" is handled as its own case, not
+ * folded into "not open" — see the note below on why marking an order
+ * expired here would be actively dangerous if that's what happened.
  */
 export default async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
@@ -76,7 +73,19 @@ export default async (req: Request): Promise<Response> => {
     return errorResponse(502, "Failed to check payment session status");
   }
 
-  if (session.status !== "open") {
+  // Checked first, and never routed through mark_order_failed_from_webhook:
+  // if Stripe says this session already collected payment, the order is
+  // still sitting at pending_payment (we checked above) only because the
+  // real webhook hasn't landed yet — calling the "expired" RPC here would
+  // release inventory that's actually just been sold. Leave the order
+  // alone and let the webhook (already fired, or about to) be the only
+  // thing that ever writes a paid transition.
+  if (session.status === "complete" || session.payment_status === "paid") {
+    return errorResponse(409, "This order has already been paid", "already_paid");
+  }
+
+  const pastExpiry = session.expires_at != null && session.expires_at * 1000 <= Date.now();
+  if (session.status !== "open" || pastExpiry) {
     const { error: rpcError } = await supabase.rpc("mark_order_failed_from_webhook", {
       p_order_id: order.id,
       p_new_status: "expired",
@@ -85,6 +94,14 @@ export default async (req: Request): Promise<Response> => {
       console.error("resume-checkout-session: mark_order_failed_from_webhook failed", order.id, rpcError);
     }
     return errorResponse(409, "This payment session has expired", "session_expired");
+  }
+
+  // Belt-and-braces: for a genuinely open, unexpired session this should
+  // always already be "unpaid" — if it somehow isn't, don't guess, just
+  // refuse to resume rather than mounting a Payment Element against a
+  // session in a state this function doesn't understand.
+  if (session.payment_status !== "unpaid") {
+    return errorResponse(409, "This order can no longer be resumed", "not_resumable");
   }
 
   if (session.client_secret) {
