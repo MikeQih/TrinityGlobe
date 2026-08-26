@@ -18,7 +18,12 @@
     </a>
     <div class="policy-nav-right">
       <div class="nav-account" id="navAccount"></div>
-      <a class="nav-lang" id="langToggle" href="#" onclick="toggleOrdersLanguage(); return false;">English</a>
+      <!-- Wrapped so #langToggle itself is never a direct flex child of
+           .policy-nav-right — flex items are unconditionally blockified,
+           which sizes a single-line element from line-height instead of
+           font metrics and throws off its height/alignment next to
+           .nav-account's (also-shielded) trigger text. -->
+      <span><a class="nav-lang" id="langToggle" href="#" onclick="toggleOrdersLanguage(); return false;">English</a></span>
     </div>
   </nav>
 

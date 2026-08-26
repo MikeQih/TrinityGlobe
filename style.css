@@ -1036,8 +1036,15 @@ footer .container {
    tighter, mismatched gap. */
 .nav-account {
   position: relative;
-  display: flex;
-  align-items: center;
+  /* Deliberately not display:flex — that would make its child <a> a flex
+     item, and flex items are unconditionally blockified by the CSS Display
+     spec regardless of the display value the item itself specifies. A
+     blockified single-line element sizes its content from line-height,
+     while a true inline element (like .nav-lang and .nav-links a, both
+     nested one level deeper inside an <li> and so never direct flex
+     children themselves) sizes from font metrics instead — same font-size
+     and padding, different rendered height. Keeping this div a plain
+     block container lets its child stay genuinely inline and match. */
 }
 
 .nav-account-signin,
@@ -1046,7 +1053,7 @@ footer .container {
   font-size: 0.8rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #c8beb0;
+  color: var(--text-muted);
   background: none;
   border: none;
   border-bottom: 1px solid transparent;

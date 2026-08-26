@@ -290,9 +290,15 @@ export function initAccountNav(): void {
     menuOpen = false;
     const session = getSession();
     container.innerHTML = session
-      ? `<button type="button" class="nav-account-trigger" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
+      ? // An <a>, not a <button> — a <button>'s box height is computed from
+        // line-height rather than font metrics the way a plain inline
+        // element's is, which (even after resetting every other box-model
+        // property to match) left it a few pixels taller than .nav-links'
+        // <a> siblings and made it sit off their shared baseline. Matching
+        // the element type sidesteps that entirely instead of fighting it.
+        `<a href="#" class="nav-account-trigger" role="button" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
           t("nav-account")
-        )}</button>
+        )}</a>
          <div class="nav-account-dropdown" hidden>
            <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
            <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
