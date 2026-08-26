@@ -13,9 +13,10 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^9.14.0",
     "@supabase/supabase-js": "^2.45.4",
     "resend": "^4.0.1",
-    "stripe": "^17.3.1",
+    "stripe": "^22.5.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

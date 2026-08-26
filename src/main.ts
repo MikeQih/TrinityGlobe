@@ -3,11 +3,13 @@
 
 import { initCart, initAccountNav } from "./cart";
 import { initOrdersPage } from "./orders-page";
+import { initAddressesPage } from "./addresses-page";
 
 function boot(): void {
   initCart();
   initAccountNav();
   initOrdersPage();
+  initAddressesPage();
 }
 
 if (document.readyState === "loading") {

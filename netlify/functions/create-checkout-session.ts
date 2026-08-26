@@ -167,6 +167,14 @@ export default async (req: Request): Promise<Response> => {
   const siteUrl = requireEnv("SITE_URL").replace(/\/$/, "");
   const expiresAtSeconds = Math.floor(Date.now() / 1000) + RESERVATION_TTL_MINUTES * 60;
 
+  // Feature flag for the Payment Element rollout — see PROJECT_STATUS.md.
+  // Defaults to the already-battle-tested hosted flow; only an explicit
+  // "elements" opts into the new one, so an unset/mistyped value never
+  // silently changes production behavior. Both branches create the exact
+  // same order/reservation above — only the Stripe object and what this
+  // function returns to the client differ.
+  const uiMode = process.env.CHECKOUT_UI_MODE === "elements" ? "elements" : "hosted";
+
   try {
     const stripeLineItems = lineItems.map((li) => ({
       price_data: {
@@ -183,17 +191,33 @@ export default async (req: Request): Promise<Response> => {
       });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card", "paynow"],
-      line_items: stripeLineItems,
-      client_reference_id: order.id,
-      metadata: { order_id: order.id },
-      customer_email: recipient.email,
-      expires_at: expiresAtSeconds,
-      success_url: `${siteUrl}/?checkout=success&order_id=${order.id}`,
-      cancel_url: `${siteUrl}/?checkout=cancelled&order_id=${order.id}`,
-    });
+    const session = await stripe.checkout.sessions.create(
+      uiMode === "elements"
+        ? {
+            mode: "payment",
+            ui_mode: "elements",
+            payment_method_types: ["card", "paynow"],
+            line_items: stripeLineItems,
+            metadata: { order_id: order.id },
+            customer_email: recipient.email,
+            expires_at: expiresAtSeconds,
+            // {CHECKOUT_SESSION_ID} is a literal template Stripe substitutes
+            // itself — order_id is included too so the return page doesn't
+            // depend on that substitution to know which order this was.
+            return_url: `${siteUrl}/?checkout=return&order_id=${order.id}&session_id={CHECKOUT_SESSION_ID}`,
+          }
+        : {
+            mode: "payment",
+            payment_method_types: ["card", "paynow"],
+            line_items: stripeLineItems,
+            client_reference_id: order.id,
+            metadata: { order_id: order.id },
+            customer_email: recipient.email,
+            expires_at: expiresAtSeconds,
+            success_url: `${siteUrl}/?checkout=success&order_id=${order.id}`,
+            cancel_url: `${siteUrl}/?checkout=cancelled&order_id=${order.id}`,
+          }
+    );
 
     const { error: updateError } = await supabase
       .from("orders")
@@ -203,11 +227,17 @@ export default async (req: Request): Promise<Response> => {
       console.error("create-checkout-session: failed to save stripe session id", order.id, updateError);
     }
 
+    if (uiMode === "elements") {
+      if (!session.client_secret) {
+        throw new Error("Stripe session created without a client_secret");
+      }
+      return jsonResponse(200, { mode: "elements", clientSecret: session.client_secret, orderId: order.id });
+    }
+
     if (!session.url) {
       throw new Error("Stripe session created without a url");
     }
-
-    return jsonResponse(200, { checkoutUrl: session.url, orderId: order.id });
+    return jsonResponse(200, { mode: "hosted", checkoutUrl: session.url, orderId: order.id });
   } catch (err) {
     console.error("create-checkout-session: stripe session creation failed", order.id, err);
     // The order + reservations already exist — since there's no payment

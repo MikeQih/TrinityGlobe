@@ -1029,34 +1029,82 @@ footer .container {
 
 /* Account nav indicator — populated by src/cart.ts#initAccountNav() on
    index.html's #navAccount (inside #navbar) and orders.html's (inside
-   .policy-nav-right). A flex item itself (not display:contents) so its own
-   "My Orders · Sign Out" pairing gets a tighter gap than the surrounding
-   nav's, reading as one grouped control rather than two separate links. */
+   .policy-nav-right). Signed out renders a plain text link; signed in
+   renders a single icon + dropdown (relative anchor for the dropdown's
+   absolute position) so it takes up one nav-item's worth of rhythm instead
+   of two text links at a tighter, mismatched gap. */
 .nav-account {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.9rem;
 }
 
-.nav-account-signin,
-.nav-account-link,
-.nav-account-signout {
+.nav-account-signin {
   font-family: 'Inter', sans-serif;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.nav-account-signin:hover { color: var(--gold); }
+
+.nav-account-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.nav-account-trigger:hover,
+.nav-account-trigger[aria-expanded="true"] {
+  color: var(--gold);
+}
+
+.nav-account-trigger svg { width: 19px; height: 19px; }
+
+.nav-account-dropdown {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: calc(100% + 0.9rem);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  z-index: 150;
+}
+
+.nav-account-dropdown[hidden] { display: none; }
+
+.nav-account-dropdown-link {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
   color: var(--text-muted);
   background: none;
   border: none;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.2s;
+  padding: 0.75rem 1rem;
+  transition: color 0.2s, background 0.2s;
 }
 
-.nav-account-signin:hover,
-.nav-account-link:hover,
-.nav-account-signout:hover {
+.nav-account-dropdown-link + .nav-account-dropdown-link { border-top: 1px solid var(--border); }
+
+.nav-account-dropdown-link:hover {
   color: var(--gold);
+  background: rgba(201, 168, 76, 0.08);
 }
 
 .cart-count {
@@ -1451,6 +1499,13 @@ footer .container {
   margin-bottom: 1rem;
 }
 
+/* Payment Element mount point (checkoutStage "payment", src/cart.ts) — the
+   Stripe iframe skins itself via paymentElementAppearance()'s Appearance
+   API tokens, this just gives it drawer-consistent breathing room. */
+.checkout-payment-element {
+  margin-bottom: 1rem;
+}
+
 /* Guest-vs-Google choice screen (accountChoiceHtml in src/cart.ts) */
 
 .checkout-account-choice {
@@ -1553,15 +1608,9 @@ footer .container {
 }
 
 .checkout-gender-options .checkout-radio {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   padding: 0.5rem 0.6rem;
   font-size: 0.7rem;
-}
-
-.checkout-field-hint {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  margin-top: 0.3rem;
 }
 
 .checkout-newsletter-confirm {
@@ -1606,9 +1655,14 @@ footer .container {
 .checkout-or-divider::before { left: 0; }
 .checkout-or-divider::after { right: 0; }
 
-.checkout-auth-tabs + form .checkout-field,
+.checkout-auth-tabs + form .checkout-field {
+  margin-bottom: 0.7rem;
+}
+
 .checkout-auth-tabs ~ .checkout-google-btn,
 .checkout-auth-tabs ~ .checkout-facebook-btn {
+  width: 100%;
+  justify-content: center;
   margin-bottom: 0.7rem;
 }
 
@@ -1731,6 +1785,88 @@ footer .container {
   font-weight: 600;
   color: var(--gold);
 }
+
+/* My Address (addresses.html / src/addresses-page.ts) — reuses .orders-list/
+   .orders-status/.orders-signin-btn from the orders page for the shared
+   states (loading, signed out, empty), adds its own card + form styles. */
+.address-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.3rem 1.5rem;
+}
+
+.address-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.address-card-label {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.address-default-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-dim);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+}
+
+.address-card-body {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0 0 0.9rem;
+}
+
+.address-card-actions {
+  display: flex;
+  gap: 1.2rem;
+}
+
+.address-card-action {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.address-card-action:hover { color: var(--gold); }
+
+.addresses-add-btn {
+  align-self: flex-start;
+  border: none;
+  font-family: 'Inter', sans-serif;
+}
+
+.address-form {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 1.3rem 1.5rem;
+}
+
+.address-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.address-form-actions .btn-gold { border: none; font-family: 'Inter', sans-serif; }
 
 @media (max-width: 480px) {
   .cart-drawer { width: 100vw; }

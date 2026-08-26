@@ -1,5 +1,6 @@
 import { getSession } from "./auth";
 import type {
+  CheckoutSessionStatus,
   CreateCheckoutSessionRequest,
   CreateCheckoutSessionResponse,
   LiveProductInfo,
@@ -76,6 +77,16 @@ export async function createCheckoutSession(
     body: JSON.stringify(payload),
   });
   return (await parseJsonOrThrow(res)) as CreateCheckoutSessionResponse;
+}
+
+/**
+ * Display-only status check for the Payment Element return page (see
+ * src/cart.ts) — never trusted to mark an order paid or touch inventory,
+ * that's the webhook's job. See get-checkout-session-status.ts.
+ */
+export async function getCheckoutSessionStatus(sessionId: string): Promise<CheckoutSessionStatus> {
+  const res = await fetch(`${FUNCTIONS_BASE}/get-checkout-session-status?session_id=${encodeURIComponent(sessionId)}`);
+  return (await parseJsonOrThrow(res)) as CheckoutSessionStatus;
 }
 
 /** The signed-in customer's own past orders — see orders.html / src/orders-page.ts. */

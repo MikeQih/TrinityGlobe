@@ -1,7 +1,9 @@
 import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
-import { createCheckoutSession, ApiError } from "./api-client";
+import { createCheckoutSession, getCheckoutSessionStatus, ApiError } from "./api-client";
 import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
+import { getStripeClient } from "./lib/stripe-elements";
+import type { StripeCheckoutElementsSdk } from "@stripe/stripe-js";
 import {
   getSession,
   initAuth,
@@ -33,8 +35,22 @@ const store = new CartStore();
 // Reused across page loads to reopen the checkout drawer after the Google
 // OAuth round trip navigates away and back to this same origin — a full
 // page navigation loses all the in-memory state below (view, checkoutStage,
-// etc.), so localStorage is the only thing that survives it.
+// etc.), so localStorage is the only thing that survives it. The stored
+// value is a JSON ReopenCheckoutSnapshot (see below), not just a flag, so a
+// cancelled/failed OAuth attempt can restore the exact screen — and any
+// signup fields already typed — the visitor left, instead of dropping them
+// back at the account-choice screen and making them start over.
 const REOPEN_CHECKOUT_STORAGE_KEY = "tg_reopen_checkout";
+
+// Passwords are deliberately excluded — this snapshot sits in localStorage
+// across a full-page OAuth redirect, and a browser's own back/forward
+// navigation doesn't restore password fields either for the same reason.
+interface ReopenCheckoutSnapshot {
+  stage: "account" | "email-auth";
+  emailAuthTab: "signup" | "signin";
+  signup: Omit<SignupFormState, "password" | "passwordConfirm">;
+  signinEmail: string;
+}
 
 type View = "cart" | "checkout";
 // "account": paneco-style guest/Google/Facebook/email choice shown before the
@@ -46,7 +62,11 @@ type View = "cart" | "checkout";
 // itself doesn't create a usable session until this succeeds (Confirm Email
 // is on for this project).
 // "form": the actual recipient/delivery form (was previously the only stage).
-type CheckoutStage = "account" | "email-auth" | "email-otp" | "form";
+// "payment": Payment Element mounted in-page — only reachable when the
+// server opted into CHECKOUT_UI_MODE=elements (see create-checkout-session.ts);
+// with the default "hosted" mode, submitting the form redirects away instead
+// and this stage is never entered.
+type CheckoutStage = "account" | "email-auth" | "email-otp" | "form" | "payment";
 let view: View = "cart";
 let checkoutStage: CheckoutStage = "account";
 let accountChoiceMade = false;
@@ -110,6 +130,17 @@ let recipient: CheckoutRecipient = {
 let deliveryMethod: DeliveryMethod = "standard";
 let ageConfirmed = false;
 
+// ── Payment Element (checkoutStage "payment", CHECKOUT_UI_MODE=elements only) ──
+// checkoutSdk/paymentElement are mount handles, not render state — they're
+// set once by mountPaymentElement() and read by the "confirm-payment" click
+// handler. They deliberately live outside renderDrawer()'s reach (see the
+// onLangChange/onAuthChange guards above) since replacing drawerEl's
+// innerHTML while these point at a live Stripe iframe would orphan it.
+let checkoutSdk: StripeCheckoutElementsSdk | null = null;
+let paymentOrderId: string | null = null;
+let paymentErrorMessage: string | null = null;
+let paymentConfirming = false;
+
 let overlayEl: HTMLDivElement;
 let drawerEl: HTMLDivElement;
 
@@ -152,7 +183,11 @@ export function initCart(): void {
 
   onLangChange(() => {
     renderBadge();
-    if (isOpen) renderDrawer();
+    // Skips the payment stage deliberately — renderDrawer() replaces
+    // drawerEl's innerHTML, which would unmount the live Stripe Payment
+    // Element mid-checkout. A language toggle mid-payment just won't
+    // re-translate that one screen; not re-rendering it is the safe choice.
+    if (isOpen && checkoutStage !== "payment") renderDrawer();
   });
 
   renderBadge();
@@ -165,8 +200,10 @@ async function bootAuth(): Promise<void> {
   onAuthChange(() => {
     // A session change while the drawer happens to be open (e.g. the sign-out
     // button, or a stray auth event) should be reflected immediately rather
-    // than on the next unrelated re-render.
-    if (isOpen && view === "checkout") renderDrawer();
+    // than on the next unrelated re-render. Same payment-stage exception as
+    // the onLangChange handler above — never blow away a mounted Payment
+    // Element out from under an in-progress payment.
+    if (isOpen && view === "checkout" && checkoutStage !== "payment") renderDrawer();
   });
   maybeReopenCheckoutAfterAuth();
   maybeOpenSignInFromQuery();
@@ -205,18 +242,42 @@ export function openAccountDrawer(): void {
 // ── Nav account indicator (index.html's #navAccount, orders.html's too) ──
 // Self-contained: initAuth() is idempotent, so this works whether or not
 // initCart() already called it on this page.
+// Person-icon glyph for the signed-in dropdown trigger — matches the
+// cart-toggle icon's stroke style (currentColor, 1.5 width) so it reads as
+// part of the same icon set.
+const ACCOUNT_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
+
 export function initAccountNav(): void {
   const container = document.getElementById("navAccount");
   if (!container) return;
   const hasDrawer = document.getElementById("cartRoot") != null;
+  let menuOpen = false;
 
+  const closeMenu = (): void => {
+    if (!menuOpen) return;
+    menuOpen = false;
+    container.querySelector<HTMLElement>(".nav-account-dropdown")?.setAttribute("hidden", "");
+    container.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
+  };
+
+  // Signed-in state is a single icon + dropdown (My Orders, Sign Out) rather
+  // than two separate text links — keeps the nav's item-to-item rhythm
+  // uniform instead of a tightly-paired "My Orders · Sign Out" reading as a
+  // different spacing rule from the rest of the bar.
   const render = (): void => {
+    menuOpen = false;
     const session = getSession();
     container.innerHTML = session
-      ? `<a href="/orders.html" class="nav-account-link">${escapeHtml(t("nav-my-orders"))}</a>
-         <button type="button" class="nav-account-signout" data-nav-account-action="signout">${escapeHtml(
-           t("nav-sign-out")
-         )}</button>`
+      ? `<button type="button" class="nav-account-trigger" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false" aria-label="${escapeHtml(
+          t("nav-account-menu")
+        )}">${ACCOUNT_ICON_SVG}</button>
+         <div class="nav-account-dropdown" hidden>
+           <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
+           <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
+           <button type="button" class="nav-account-dropdown-link" data-nav-account-action="signout">${escapeHtml(
+             t("nav-sign-out")
+           )}</button>
+         </div>`
       : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
 
     container.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
@@ -228,26 +289,79 @@ export function initAccountNav(): void {
           else window.location.href = "/?signin=1";
         } else if (action === "signout") {
           void signOut();
+        } else if (action === "toggle-menu") {
+          menuOpen = !menuOpen;
+          container.querySelector(".nav-account-dropdown")?.toggleAttribute("hidden", !menuOpen);
+          el.setAttribute("aria-expanded", String(menuOpen));
         }
       });
     });
   };
+
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target as Node)) closeMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
 
   void initAuth().then(render);
   onAuthChange(render);
   onLangChange(render);
 }
 
-// After signInWithGoogle() redirects away and Google sends the browser back,
-// this picks the flow back up right where the user left it instead of
-// dropping them on a bare homepage with a full cart and no explanation.
+// Captures where the visitor was (account-choice vs. mid-signup, plus
+// whatever they'd already typed) right before a Google/Facebook redirect —
+// see maybeReopenCheckoutAfterAuth() for why this needs to survive a full
+// page navigation.
+function saveReopenCheckoutSnapshot(): void {
+  const { password: _password, passwordConfirm: _passwordConfirm, ...signupRest } = signupForm;
+  const snapshot: ReopenCheckoutSnapshot = {
+    stage: checkoutStage === "email-auth" ? "email-auth" : "account",
+    emailAuthTab,
+    signup: signupRest,
+    signinEmail: signinForm.email,
+  };
+  window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, JSON.stringify(snapshot));
+}
+
+// After signInWithGoogle()/signInWithFacebook() redirects away and the
+// provider sends the browser back, this picks the flow back up instead of
+// dropping the visitor on a bare homepage with a full cart and no
+// explanation. A successful login goes straight to the checkout form (no
+// reason to show signup fields to someone who's now authenticated); a
+// cancelled or failed attempt restores the exact screen — and any signup
+// fields already typed — they left, rather than making them start over.
 function maybeReopenCheckoutAfterAuth(): void {
-  const flag = window.localStorage.getItem(REOPEN_CHECKOUT_STORAGE_KEY);
-  if (!flag) return;
+  const raw = window.localStorage.getItem(REOPEN_CHECKOUT_STORAGE_KEY);
+  if (!raw) return;
   window.localStorage.removeItem(REOPEN_CHECKOUT_STORAGE_KEY);
   if (store.getItems().length === 0) return;
+
+  if (getSession()) {
+    openDrawer();
+    goToCheckout();
+    return;
+  }
+
+  let snapshot: ReopenCheckoutSnapshot | null = null;
+  try {
+    snapshot = JSON.parse(raw) as ReopenCheckoutSnapshot;
+  } catch {
+    snapshot = null;
+  }
+  if (!snapshot) {
+    openDrawer();
+    goToCheckout();
+    return;
+  }
+
+  view = "checkout";
+  checkoutStage = snapshot.stage;
+  emailAuthTab = snapshot.emailAuthTab;
+  signupForm = { ...signupForm, ...snapshot.signup };
+  signinForm = { ...signinForm, email: snapshot.signinEmail };
   openDrawer();
-  goToCheckout();
 }
 
 // Stripe redirects back to `${SITE_URL}/?checkout=success|cancelled&order_id=...`
@@ -260,20 +374,50 @@ function maybeReopenCheckoutAfterAuth(): void {
 function handleCheckoutRedirect(): void {
   const params = new URLSearchParams(window.location.search);
   const status = params.get("checkout");
-  if (status !== "success" && status !== "cancelled") return;
+  if (status !== "success" && status !== "cancelled" && status !== "return") return;
 
-  if (status === "success") {
-    store.clear();
-    showToast(t("cart-order-success"));
-  } else {
-    showToast(t("cart-order-cancelled"));
-  }
+  // The Payment Element flow's session_id is only needed to look the status
+  // up below — read it before the params are wiped.
+  const sessionId = params.get("session_id");
 
   params.delete("checkout");
   params.delete("order_id");
+  params.delete("session_id");
   const query = params.toString();
   const newUrl = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
   window.history.replaceState(null, "", newUrl);
+
+  if (status === "success") {
+    applyCheckoutSuccess();
+  } else if (status === "cancelled") {
+    showToast(t("cart-order-cancelled"));
+  } else if (sessionId) {
+    void handleElementsReturn(sessionId);
+  }
+}
+
+function applyCheckoutSuccess(): void {
+  store.clear();
+  showToast(t("cart-order-success"));
+}
+
+// return_url lands here for the Payment Element flow (CHECKOUT_UI_MODE=elements)
+// after a redirect-requiring method (3DS, PayNow) completes — this is
+// display-only, same as get-checkout-session-status.ts itself: it decides
+// what toast to show, nothing more. Whether the order is actually paid,
+// stock confirmed, and emails sent stays entirely the webhook's call, so a
+// failed/slow status lookup here just shows nothing rather than guessing.
+async function handleElementsReturn(sessionId: string): Promise<void> {
+  try {
+    const result = await getCheckoutSessionStatus(sessionId);
+    if (result.status === "complete" && result.paymentStatus === "paid") {
+      applyCheckoutSuccess();
+    } else {
+      showToast(t("cart-order-cancelled"));
+    }
+  } catch (err) {
+    console.error("handleElementsReturn: failed to check session status", sessionId, err);
+  }
 }
 
 function showToast(message: string): void {
@@ -365,7 +509,11 @@ function openDrawer(): void {
   overlayEl.classList.add("open");
   drawerEl.classList.add("open");
   reconcilePriceTiers();
-  renderDrawer();
+  // closeDrawer() only toggles classes — a mounted Payment Element is still
+  // sitting in the DOM underneath, so closing and reopening while mid-payment
+  // must not re-render (see the onLangChange/onAuthChange guards above for
+  // why re-rendering this stage is unsafe).
+  if (checkoutStage !== "payment") renderDrawer();
 }
 
 function closeDrawer(): void {
@@ -404,6 +552,8 @@ function renderDrawer(): void {
       ? emailAuthHtml()
       : checkoutStage === "email-otp"
       ? otpHtml()
+      : checkoutStage === "payment"
+      ? paymentViewHtml()
       : checkoutViewHtml();
   wireDrawerEvents();
 }
@@ -419,9 +569,23 @@ function handleBack(): void {
   } else if (checkoutStage === "email-otp") {
     checkoutStage = "email-auth";
     renderDrawer();
+  } else if (checkoutStage === "payment") {
+    // Doesn't cancel the order/reservation already created server-side —
+    // same as hosted Checkout's own back button, which doesn't either. It
+    // just expires on its own via the reservation TTL if never paid.
+    resetPaymentState();
+    checkoutStage = "form";
+    renderDrawer();
   } else {
     backToCart();
   }
+}
+
+function resetPaymentState(): void {
+  checkoutSdk = null;
+  paymentOrderId = null;
+  paymentErrorMessage = null;
+  paymentConfirming = false;
 }
 
 // ── Cart view ──
@@ -594,7 +758,6 @@ function signupFormHtml(): string {
       <div class="${cls("dateOfBirth")}">
         <label for="su-dob">${t("checkout-dob")}</label>
         <input id="su-dob" name="dateOfBirth" type="date" value="${escapeAttr(signupForm.dateOfBirth)}" autocomplete="bday" />
-        <p class="checkout-field-hint">${t("checkout-dob-hint")}</p>
         ${err("dateOfBirth")}
       </div>
       <div class="${cls("email")}">
@@ -777,7 +940,10 @@ function deliveryInfoHtml(method: DeliveryMethod): string {
   return method === "self_collection" ? t("checkout-self-collection-info") : t("checkout-standard-delivery-info");
 }
 
-function checkoutFooterHtml(): string {
+// Shared by checkoutFooterHtml() (the shipping form) and paymentFooterHtml()
+// (the Payment Element stage) so the two totals can never drift apart —
+// same subtotal/shipping-fee inputs, same markup either way.
+function checkoutSummaryHtml(): string {
   const subtotal = store.getSubtotalCents();
   const shippingFee = computeShippingFeeCents({
     subtotalCents: subtotal,
@@ -788,14 +954,20 @@ function checkoutFooterHtml(): string {
   const total = subtotal + shippingFee;
 
   return `
-    <div class="cart-drawer-footer">
-      <div class="checkout-summary">
-        <div class="cart-summary-row"><span>${t("cart-subtotal")}</span><span>${formatCents(subtotal)}</span></div>
-        <div class="cart-summary-row"><span>${t("checkout-shipping-fee")}</span><span>${
+    <div class="checkout-summary">
+      <div class="cart-summary-row"><span>${t("cart-subtotal")}</span><span>${formatCents(subtotal)}</span></div>
+      <div class="cart-summary-row"><span>${t("checkout-shipping-fee")}</span><span>${
     shippingFee === 0 ? t("checkout-free") : formatCents(shippingFee)
   }</span></div>
-        <div class="cart-summary-row cart-total-row"><span>${t("checkout-total")}</span><span>${formatCents(total)}</span></div>
-      </div>
+      <div class="cart-summary-row cart-total-row"><span>${t("checkout-total")}</span><span>${formatCents(total)}</span></div>
+    </div>
+  `;
+}
+
+function checkoutFooterHtml(): string {
+  return `
+    <div class="cart-drawer-footer">
+      ${checkoutSummaryHtml()}
       <button type="submit" form="checkoutForm" class="btn-gold" ${isSubmitting ? "disabled" : ""}>
         ${isSubmitting ? t("checkout-submitting") : t("checkout-submit")}
       </button>
@@ -806,6 +978,137 @@ function checkoutFooterHtml(): string {
 function updateCheckoutFooter(): void {
   const footer = drawerEl.querySelector(".cart-drawer-footer");
   if (footer) footer.outerHTML = checkoutFooterHtml();
+}
+
+// ── Payment Element stage (checkoutStage "payment") ──
+// Only reached when create-checkout-session.ts returns mode:"elements" (i.e.
+// the server has CHECKOUT_UI_MODE=elements set) — see handleCheckoutSubmit().
+
+function paymentViewHtml(): string {
+  return `
+    <div class="cart-drawer-header">
+      <button type="button" class="cart-drawer-back" data-action="back">${t("checkout-back-to-cart")}</button>
+      <h2>${t("checkout-title")}</h2>
+      <button type="button" class="cart-drawer-close" data-action="close" aria-label="${t("cart-close")}">&times;</button>
+    </div>
+    <div class="cart-drawer-body">
+      ${paymentErrorMessage ? `<div class="checkout-error">${escapeHtml(paymentErrorMessage)}</div>` : ""}
+      <div id="ck-payment-element" class="checkout-payment-element"></div>
+    </div>
+    ${paymentFooterHtml()}
+  `;
+}
+
+function paymentFooterHtml(): string {
+  return `
+    <div class="cart-drawer-footer">
+      ${checkoutSummaryHtml()}
+      <button type="button" class="btn-gold" data-action="confirm-payment" ${paymentConfirming ? "disabled" : ""}>
+        ${paymentConfirming ? t("checkout-submitting") : t("checkout-pay-now")}
+      </button>
+    </div>
+  `;
+}
+
+function updatePaymentFooter(): void {
+  const footer = drawerEl.querySelector(".cart-drawer-footer");
+  if (footer) footer.outerHTML = paymentFooterHtml();
+}
+
+// Stripe's own appearance tokens, mapped from this site's CSS variables
+// (style.css :root) so the embedded Payment Element reads as part of the
+// drawer rather than a generic Stripe form dropped into it.
+function paymentElementAppearance() {
+  return {
+    theme: "night" as const,
+    variables: {
+      colorPrimary: "#c9a84c",
+      colorBackground: "#141210",
+      colorText: "#f5f1e8",
+      colorTextSecondary: "#9a9080",
+      colorDanger: "#e8998c",
+      fontFamily: "Inter, sans-serif",
+      borderRadius: "2px",
+      spacingUnit: "4px",
+    },
+    rules: {
+      ".Input": { border: "1px solid rgba(255,255,255,0.16)" },
+      ".Tab": { border: "1px solid rgba(255,255,255,0.16)" },
+    },
+  };
+}
+
+// Creates the order + Checkout Session, then mounts the Payment Element
+// in-place — a Stripe iframe attached to #ck-payment-element, so from here
+// on renderDrawer() must not run again until the payment resolves (see the
+// onLangChange/onAuthChange guards near initCart()).
+async function mountPaymentElement(clientSecret: string): Promise<void> {
+  const stripe = await getStripeClient();
+  if (!stripe) {
+    paymentErrorMessage = t("checkout-error-generic");
+    renderDrawer();
+    return;
+  }
+
+  checkoutSdk = stripe.initCheckoutElementsSdk({
+    clientSecret,
+    elementsOptions: { appearance: paymentElementAppearance() },
+  });
+  const paymentElement = checkoutSdk.createPaymentElement({
+    layout: { type: "accordion", radios: "always" },
+  });
+  // Guards the (rare) case where "back" was clicked while Stripe was still
+  // loading — the container this would mount into is already gone.
+  if (document.getElementById("ck-payment-element")) paymentElement.mount("#ck-payment-element");
+}
+
+async function handleConfirmPayment(): Promise<void> {
+  if (!checkoutSdk || paymentConfirming) return;
+
+  paymentConfirming = true;
+  paymentErrorMessage = null;
+  updatePaymentFooter();
+  const errorEl = drawerEl.querySelector(".checkout-error");
+  errorEl?.remove();
+
+  const loadResult = await checkoutSdk.loadActions();
+  if (loadResult.type === "error") {
+    paymentConfirming = false;
+    paymentErrorMessage = loadResult.error.message;
+    renderPaymentError();
+    return;
+  }
+
+  const result = await loadResult.actions.confirm({ redirect: "if_required" });
+  paymentConfirming = false;
+
+  if (result.type === "success") {
+    // Genuinely paid without needing to leave the page (e.g. a card with no
+    // 3DS challenge) — the webhook will confirm inventory/send emails on its
+    // own schedule, same as it always has; this is just the customer-facing
+    // "you're done" moment, mirroring the ?checkout=success redirect path.
+    closeDrawer();
+    applyCheckoutSuccess();
+    return;
+  }
+
+  paymentErrorMessage = result.error.message;
+  renderPaymentError();
+}
+
+function renderPaymentError(): void {
+  updatePaymentFooter();
+  const body = drawerEl.querySelector(".cart-drawer-body");
+  if (!body) return;
+  const existing = body.querySelector(".checkout-error");
+  if (existing) {
+    existing.textContent = paymentErrorMessage;
+  } else if (paymentErrorMessage) {
+    const div = document.createElement("div");
+    div.className = "checkout-error";
+    div.textContent = paymentErrorMessage;
+    body.prepend(div);
+  }
 }
 
 // ── Event wiring (re-attached after every drawerEl.innerHTML replace) ──
@@ -856,11 +1159,11 @@ function wireDrawerEvents(): void {
           break;
         }
         case "signin-google":
-          window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, "1");
+          saveReopenCheckoutSnapshot();
           void signInWithGoogle();
           break;
         case "signin-facebook":
-          window.localStorage.setItem(REOPEN_CHECKOUT_STORAGE_KEY, "1");
+          saveReopenCheckoutSnapshot();
           void signInWithFacebook();
           break;
         case "sign-out":
@@ -886,6 +1189,9 @@ function wireDrawerEvents(): void {
           break;
         case "resend-otp":
           void handleResendOtp();
+          break;
+        case "confirm-payment":
+          void handleConfirmPayment();
           break;
       }
     });
@@ -1022,13 +1328,24 @@ async function handleCheckoutSubmit(): Promise<void> {
   renderDrawer();
 
   try {
-    const { checkoutUrl } = await createCheckoutSession({
+    const result = await createCheckoutSession({
       items: store.getItems().map((i) => ({ sku: i.sku, qty: i.qty })),
       deliveryMethod,
       recipient,
       ageConfirmed,
     });
-    window.location.href = checkoutUrl;
+    if (result.mode === "hosted") {
+      window.location.href = result.checkoutUrl;
+      return;
+    }
+    // mode === "elements" (CHECKOUT_UI_MODE=elements) — stay on this page
+    // and mount the Payment Element instead of redirecting.
+    isSubmitting = false;
+    resetPaymentState();
+    paymentOrderId = result.orderId;
+    checkoutStage = "payment";
+    renderDrawer();
+    void mountPaymentElement(result.clientSecret);
   } catch (error) {
     isSubmitting = false;
     submitErrorKey =

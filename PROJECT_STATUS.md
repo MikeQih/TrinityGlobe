@@ -190,9 +190,10 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ### 必须做（不做会直接出问题）
 
-- [ ] **库存还是占位数**——目前所有 72 个 SKU 都是占位库存 20（用户明确说过"先放着，后续再调整"），上线前必须换成真实库存数量
-- [ ] **Stripe 还在 test mode**——`.env`/Netlify 后台配的是 `STRIPE_SECRET_KEY=sk_test_`，上线收真钱前要换成 live key（`sk_live_`）；换 key 的同时要把 Stripe webhook 指向生产环境公网 URL，重新拿一次 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配（目前是空的）
-- [ ] **前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点**——已配的是后端用的 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`，前端专用的这两个变量名不一样、还没加，不加的话正式站点上 Google/Facebook/邮箱登录会静默不可用（访客结账不受影响）
+- [x] ~~库存还是占位数~~——**2026-08-26 已完成**：用户说先统一设成 50，已用临时 `.mjs` 脚本 + service role key 把 Supabase `inventory.website_stock` 全部 72 行更新为 50（跑完即删，脚本没留在仓库里），更新前后各查询一次确认 72 行全部生效。**这仍然是占位值，不是每款酒的真实库存**——上线前如果用户有更准确的数字，需要再覆盖一次。
+- [ ] **Stripe 还在 test mode**——`.env`/Netlify 后台配的是 `STRIPE_SECRET_KEY=sk_test_`，上线收真钱前要换成 live key（`sk_live_`）；换 key 的同时要把 Stripe webhook 指向生产环境公网 URL，重新拿一次 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配（目前是空的）。
+  **2026-08-26 已核实（用户明确只要求先做这一步确认，还没要求切 live key）**：登录 Stripe 正式账号（`acct_1U66mYBAev1issbv`）→ 设置 → 商家 →"账户状态"，右侧"功能"栏确认 **支付（Charges）和 Payouts 都是"活跃"状态**（唯一"已暂停"的是 Cartes Bancaires，法国本地卡组织，跟新加坡业务无关，不影响）；"银行账户和货币"页确认已经关联了默认 SGD 收款账户（DBS Bank/POSB）。**结论：账户已经具备实际收款+提现能力，不是只过了身份验证。** 真正切 live key 时还有个真实风险要注意：现在 Netlify 的环境变量是"All scopes / 全部5个部署环境同一个值"，包括公开的 `dev--trinity-globe.netlify.app` 预览站——直接把 `STRIPE_SECRET_KEY` 全局换成 live 会让那个公开预览站也开始跑真实扣款。更安全的做法是用 Netlify"按部署环境设不同值"这个功能（不需要升级付费版），只给 Production 配 `sk_live_`，其余环境继续留 `sk_test_`。
+- [x] ~~前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点~~——**2026-08-26 已完成**：登录 Netlify 后台（`trinity-globe` 项目 → Project configuration → Environment variables），两个变量都已添加（All scopes，Same value in all deploy contexts，跟其他现有变量的配置方式一致），值取自本地 `.env`。这两个是客户端匿名key，本身就会被打进浏览器构建产物，不算敏感信息。
 - [ ] **GST 合规确认**——数据库 `store_settings.gst_registered` 目前是 false（占位）。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册），需要尽快跟老板/会计确认公司是否已经注册，直接影响网站价格要不要显示含税、以及现在是否已存在合规风险
 - [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
 
@@ -353,6 +354,118 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 - Netlify 后台（`trinity-globe` 生产站点）的环境变量列表里**还没加** `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`——本地能跑，但如果现在把 `dev` 合并上线，正式站点上 Google/Facebook/邮箱登录会因为读不到这两个变量而静默不可用（访客结账不受影响，只是登录选项会消失）。
 - 老板反馈1（"上产品的后台和订单的后台能结合"）—— 用户选的是"两边互相加个跳转入口"这个轻量方案，还没做。
 
+## 2026-08-26（第二轮）：上线前检查清单前三项 + 几个小修复
+
+**库存、前端 env 变量、Stripe Charges/Payouts 核实——见上面"上线前检查清单"对应条目，已标记完成。**
+
+**导航栏字体大小不一致（真 bug，已修复）**：用户发现右上角 "SIGN IN" 比左边 "ENGLISH" 字体明显小。查到 `style.css` 里 `.nav-account-signin/.nav-account-link/.nav-account-signout` 用的是 `0.68rem`，跟 `.nav-lang`/`.nav-links a` 的 `0.8rem` 不一致（历史遗留，不是故意设计）。已统一改成 `0.8rem` + 相同字间距，起本地静态服务器截图确认 SIGN IN 和 ENGLISH 现在一样大。
+
+**Sign Up 页去掉"生日福利"文案**：用户要求把出生日期字段下面的 "We'll send you perks for your birthday!"（中文版"生日当天会为您发送专属福利！"）去掉。已删除 `src/cart.ts` 里的对应 `<p>` 及 `script.js` 两语言的 `checkout-dob-hint` 词条，顺带删掉了因此变成未使用的 `.checkout-field-hint` CSS 规则。
+
+**Sign Up 页的 Google/Facebook 按钮居中**：之前 "Create Account" 表单下面 "Or continue with" 后的 "Sign in with Google"/"Sign in with Facebook" 两个按钮是 `inline-flex` 默认宽度，靠左显示，跟上面全宽的 "Create Account" 按钮不一致。已给 `.checkout-auth-tabs ~ .checkout-google-btn/.checkout-facebook-btn` 加上 `width: 100%; justify-content: center`，跟账号选择页（`accountChoiceHtml`）的按钮风格保持一致。已过 typecheck，浏览器实测截图确认两个按钮现在跟 Create Account 一样全宽居中。
+
+**age-restriction.html 去掉一段内部草稿备注**：用户引用了页面里"这是初稿……请根据《2015年酒类管制（供应和消费）法案》核实"这段免责声明文字，要求去掉。已删除该 `.policy-draft-notice` 区块。**注意：Terms 和 Privacy 页面各自的"内部草稿"提示块没有动**——用户当时没有明确点名要求删这两页的，考虑到这两页接下来要发给老板找律师，保留这个提示反而能提示律师具体要核对哪些点，所以先留着；如果用户后续确认也要去掉，再单独处理。
+
+**真 bug 修复：OAuth 登录中途取消/失败会丢失已经填写的注册信息**。排查 `src/cart.ts` 的 `maybeReopenCheckoutAfterAuth()` 发现：点击 "Sign in with Google/Facebook" 时只在 localStorage 存了个 `"1"` 标记，OAuth 是整页跳转，会清空内存里的所有状态（`checkoutStage`、已经填的 `signupForm` 字段）；跳回来之后，如果登录成功（拿到 session）会跳到收货表单——这个没问题；但**如果用户在 Google 那边取消了、或者登录失败**，代码会无条件退回最外层的 "account"（Guest/Google/Facebook/Continue with Email）选择页，此前在 Sign Up 表单里填的名字/性别/生日/邮箱等全部丢失，要重填一遍。
+
+已修复：把 localStorage 存的内容从纯 `"1"` 标记改成一个 JSON 快照（`ReopenCheckoutSnapshot`：当前 stage、`emailAuthTab`、signup 表单字段、sign-in 邮箱），点 Google/Facebook 按钮时保存快照；跳回来后如果没有 session（说明登录被取消或失败），就把 stage 和表单字段从快照里恢复回去，而不是无条件退回 account 选择页。**密码字段特意没有存进快照**——这段状态要在 localStorage 里过一次 OAuth 跳转，跟浏览器自己前进/后退时不恢复密码框是同样的道理，用户只需要重新输一次密码，不用重填整个表单。已过 typecheck + 全部 50 个单测。
+
+这次改动（导航字体、生日文案、OAuth 按钮居中、age-restriction 草稿备注、OAuth 取消后状态保留）**还没 commit**，跟之前的规矩一样，等用户说"commit一下"再做。
+
+## 2026-08-26（第三轮）：Sign Up 性别选项等宽、配送时效文案、导航栏账户改成图标下拉菜单
+
+**Sign Up 表单 Gender 三个选项间距不均**：用户发现 "Prefer Not To Say" 比 "Male"/"Female" 占的空间明显更大。原因是 `.checkout-gender-options .checkout-radio` 写的是 `flex: 1 1 auto`——`auto` 基准会先按文字内容分配宽度，三个选项文字长度不同，分到的空间自然不同。改成 `flex: 1 1 0`（基准强制为0，可用空间严格三等分，不看内容长度）后三个选项等宽。
+
+**Standard Delivery 补充大致配送时效**：参考 paneco 会显示具体到货日期（"Expected delivery: Thursday, Aug 27"），用户说暂时不想做到那么精确，先写"1–2 business days"这种粗略区间。已加进结账页 `checkout-standard-delivery-info` 文案（中英文），同时把 `delivery.html` 里对应的占位符（`[e.g. "2–3 business days" — confirm actual fulfilment capacity]`）也换成确定的"1–2 business days"，顶部的草稿提示相应更新（配送时效从"待确认"移到"已确认"那一类）。
+
+（旁注：用户截图指出 paneco 自己的配送方式选择页有个真实的逻辑漏洞——"Express Delivery"多收 S$8，但显示的到货日期跟免费的"Free Delivery"是同一天，等于白花钱。这个我们目前用不上，因为我们只有"标准配送/自提"两档，没有 paneco 那种多档付费提速选项，如果以后要加类似的"加急配送"功能，要注意别犯同样的错——加急档必须真的比免费档更快，不然这个 UI 设计本身就是坑用户。）
+
+**导航栏"MY ORDERS / SIGN OUT"改成图标+下拉菜单**：用户反馈登录后导航栏里 "MY ORDERS" 和 "SIGN OUT" 跟前面 HOME/ABOUT/COLLECTION/CONTACT/ENGLISH 的间距对不上。实测发现：`.nav-account` 之前特意给 "My Orders"/"Sign Out" 这一对设了更紧的 `gap: 0.9rem`（历史设计意图是让这两个读起来像"一组"，跟其他 2rem 间距的导航项区分开），但视觉上这种"紧邻的一对"跟其余等距排列的导航项放在一起反而显得节奏不对。
+
+已经参考用户给的 paneco 截图，把登录后的状态从两个文字链接改成**一个人形图标 + 点击展开的下拉菜单**（未登录状态的 "Sign In" 文字链接没有变）：
+- `src/cart.ts` 的 `initAccountNav()`：登录态渲染一个 `.nav-account-trigger` 图标按钮 + 一个默认隐藏的 `.nav-account-dropdown` 面板（含 My Orders、Sign Out 两项），点图标切换展开/收起，点面板外或按 Esc 会收起
+- `style.css` 新增对应样式，图标风格跟购物车图标（同样是 `currentColor` 描边）保持一致，下拉面板用深色背景 + 金色 hover，跟站点整体视觉统一
+- 图标本身跟其他导航项之间现在是统一的 2rem 间距（不再有那个特别紧的 0.9rem 分组间距），下拉菜单内部 My Orders/Sign Out 两项之间才有各自的分隔线
+- 已过 typecheck + 全部 50 个单测 + 浏览器实测（图标显示、点击展开下拉、菜单项正确显示）
+
+**待用户决定的范围问题**：用户还提到想加 "My Address" 和 "Payment Methods" 到这个下拉菜单里（参考 paneco）。**这两个目前网站完全没有对应功能**——不是加两行菜单文字那么简单：
+- My Address 需要新建一张"客户地址簿"表（Supabase migration + RLS）+ 一个管理多个收货地址的页面/表单 + 结账时能选择已存地址
+- Payment Methods 需要接入 Stripe 的 Customer + 已存卡片管理（SetupIntent/PaymentMethod API），涉及要不要把 Supabase 用户和 Stripe Customer 关联起来这个新的架构决策
+
+这两项还没有开始做，需要先跟用户对一下要不要现在就投入（等同于开两个新功能），还是这次先只做 My Orders + Sign Out 这个下拉菜单外壳，Address/Payment Methods 放到以后再排期。
+
+这次改动（gender等宽、配送时效文案、导航账户下拉菜单）**还没 commit**。
+
+## 2026-08-26（第五轮）：Stripe 结账页 Payment Element 落地（保留 Checkout Session + webhook）
+
+**背景**：用户想让结账页的支付界面能自定义黑金视觉（现在是 Stripe 托管页，只能改背景色/按钮色/字体这几个参数，卡号输入区域样式完全不可控）。讨论过两种方案：
+1. 换成 `PaymentIntent` + 自己搭一套支付状态机——**否决**，因为会丢掉现成的 Session 过期机制（cron 只释放库存不取消 PaymentIntent，会导致库存放了但客户还能拿旧 clientSecret 继续付款）、`payment_intent.payment_failed` 不代表订单真的失败（换卡重试场景），且 webhook 全部要重写。
+2. **采用（已实施）**：`ui_mode: "elements"` 让 Checkout Session 直接支持 Payment Element 前端组件，Session 的过期时间、`checkout.session.*` 系列 webhook 事件、库存预留时机全部原样保留，只有前端从"整页跳转去 Stripe"改成"页面内挂载 Payment Element"。这是 Stripe 官方现在推荐的默认组合（查证过 `docs.stripe.com/payments/payment-element` 原文："Stripe recommends using the Checkout Sessions API with the Payment Element over Payment Intents for most integrations"）。
+
+**功能开关**：新的环境变量 `CHECKOUT_UI_MODE`（`hosted` 或 `elements`，不设/设错都按 `hosted` 处理，即现在这套已经验证过无数次的默认行为不变）。`create-checkout-session.ts` 根据这个开关决定创建 Stripe Session 时用哪种模式，返回给前端的形状也不同：
+```
+{ mode: "hosted", checkoutUrl, orderId }   // 旧流程，前端整页跳转
+{ mode: "elements", clientSecret, orderId } // 新流程，前端挂载 Payment Element
+```
+两种模式共用同一套 `create_pending_order` 下单+库存预留逻辑，`stripe-webhook.ts` **完全没有改动**（还是监听 `checkout.session.completed`/`checkout.session.expired`等，Session 底层机制不变，只是 UI 呈现方式不同）。`admin-refund-order.ts` 也不用改（本来就只认 `stripe_payment_intent_id`）。
+
+**改动的文件**：
+- `netlify/functions/create-checkout-session.ts`：加了 `uiMode` 分支逻辑
+- 新增 `netlify/functions/get-checkout-session-status.ts`：只读接口，给 Payment Element 支付完成跳回来的 return 页查询"这笔到底成没成功"用于展示，**明确不碰 `orders`/`inventory_reservations` 表**——订单真正的成功状态、库存扣减、邮件发送权威来源永远是 webhook，这个接口哪怕没被调用到（比如用户直接关掉标签页）也不会影响订单真实状态
+- `src/types.ts`：`CreateCheckoutSessionResponse` 改成按 `mode` 区分的联合类型，新增 `CheckoutSessionStatus`
+- `src/api-client.ts`：新增 `getCheckoutSessionStatus()`
+- 新增 `src/lib/stripe-elements.ts`：`@stripe/stripe-js` 的 `loadStripe()` 封装，跟 `lib/supabase.ts` 一样的"缺配置就静默禁用、不报错炸整个购物车"套路
+- `src/cart.ts`：新增 `checkoutStage: "payment"`，挂载 Payment Element（accordion 布局 + `radios: "always"`，跟用户要求一致），"PAY NOW"按钮走 `checkoutSdk.loadActions()` → `actions.confirm({redirect:"if_required"})`，成功/失败/需要跳转（3DS、PayNow）三种结果分别处理；`handleCheckoutRedirect()` 扩展出 `?checkout=return` 分支处理 Payment Element 跳回来的情况；**关键的一处坑**：`renderDrawer()` 会整个替换 `drawerEl.innerHTML`，如果在 Payment Element 挂载后还跑一次，会把已经挂进 DOM 的 Stripe iframe 连根拔掉——所以专门给 `onLangChange`/`onAuthChange`/`openDrawer()` 三处加了"当前在 payment 阶段就跳过重渲染"的保护，语言切换/关闭再打开抽屉都不会打断已经在填的支付表单
+- 品牌视觉：`paymentElementAppearance()` 把网站的 CSS 变量（金色 `#c9a84c`、深色背景等）映射成 Stripe Appearance API 的 `variables`，浏览器实测确认卡号输入框、PayNow 二维码区、"PAY NOW"按钮都是黑金配色，不再是默认的 Stripe 紫/蓝
+- 新增 `.env`/`.env.example` 的 `VITE_STRIPE_PUBLISHABLE_KEY`（公钥，可以放心暴露给浏览器）和 `CHECKOUT_UI_MODE`
+- `package.json`：`stripe` 从 17.7.0 升到 22.5.0（**必须升级**——17.7.0 的 TypeScript 类型定义里 `ui_mode` 只有 `'embedded'|'hosted'`两个值，没有 `'elements'`，编译会直接报错），新增前端依赖 `@stripe/stripe-js`
+
+**真实测试情况（用沙盒账号 Stripe test mode + 本地 `netlify dev`，不是纸上谈兵）**：
+- 本机之前有个跑了6天忘记关的 `netlify dev` 残留进程占着端口，跟用户确认后重启了它（不是正在被谁盯着看的窗口）
+- `create-checkout-session.ts` 在 `CHECKOUT_UI_MODE=elements` 下真实调用 Stripe 创建了 Session 并拿到 `clientSecret`；`get-checkout-session-status.ts` 真实查询确认了状态
+- 浏览器里真实走通：加购 → 结账表单 → 挂载出 Payment Element（accordion，PayNow 和银行卡纵向排列，点开银行卡展开卡号/有效期/CVC，黑金配色）→ 输入 Stripe 测试卡 `4242 4242 4242 4242` → 点 PAY NOW → **真实向 Stripe test mode 确认成功**（用 `get-checkout-session-status` 查询到 `status:"complete", paymentStatus:"paid"`）→ 页面内直接显示成功、购物车清空、抽屉关闭，全程没有跳转离开网站
+- 手动模拟了 `?checkout=return` 跳转（已付款的 session 和未付款的 session 各测一次），确认 return 页能正确区分"成功→清购物车"和"未成功→保留购物车"
+- 验证了关闭购物车抽屉再重新打开、语言切换，正在挂载的 Payment Element 不会被打断（这是专门写的保护逻辑，实测有效）
+- **唯一没有在本地测到的一环**：这台机器没装 Stripe CLI（`brew install stripe/stripe-cli/stripe` 因为 Xcode Command Line Tools 版本太旧装不上，需要系统更新，没有替用户动系统级设置），所以 Stripe 没法把 webhook 发到 localhost，本地测试里 Supabase 的 `orders.status` 没有真的从 `pending_payment` 变成 `paid`（Stripe 那边已经真实显示 paid，只是我们自己数据库不知道）。**这个不算新风险**——`stripe-webhook.ts` 这份代码本身完全没有改动，是之前 session 已经用真实部署环境（`dev--trinity-globe.netlify.app`）验证过的同一套逻辑，只是这次没条件在本地重新走一遍。真要在本地测完整链路，需要用户自己在这台机器上更新 Xcode Command Line Tools 后装 Stripe CLI，跑 `stripe listen --forward-to localhost:8888/.netlify/functions/stripe-webhook`。
+- 测试过程中创建的几个测试订单，已经用临时脚本把库存预留释放、订单状态改成 `cancelled`，脚本本身用完即删
+
+**上线前还要做的**：
+- **卡片报错（比如被拒绝）的内联提示没有用真实卡在浏览器里测到**——代码逻辑跟已经验证过的成功路径是同一段 `confirm()` 调用，只是走 `result.type === "error"` 分支，逻辑简单且过了 typecheck，但没有拿 Stripe 测试用的拒绝卡（`4000000000000002`）实际点一遍
+- **本地 `.env` 现在是 `CHECKOUT_UI_MODE=elements`**（为了方便继续本地测试），**Netlify 生产环境变量完全没有改动**，线上现在仍然是默认的 hosted 模式，不会有任何影响
+- 用户之前定的三个要求都已经落实：不删旧的 hosted Checkout 代码（`uiMode !== "elements"` 分支原样保留）；return 页查状态只做展示不影响订单真实状态；Stripe SDK 版本已经检查并升级到支持 `ui_mode: "elements"` 的版本
+- 真正要上线用这个新流程之前，建议：（1）用户自己装好 Stripe CLI 补一次本地 webhook 全链路测试，或者直接在 `dev` 分支预览站上测（跟之前测 Google/Facebook 登录一样的路子）；（2）拿真实的拒绝卡测一下报错提示；（3）测一下 PayNow 这条支付方式（本地没测，因为 PayNow 本身需要跳转到银行/生成二维码，测试模式下的行为需要额外确认）
+
+这次改动（Payment Element 全套：新迁移文件之外的所有代码改动）**还没 commit**。
+
+## 2026-08-26（第四轮）：My Address 功能上线 + Terms/Privacy 内容补完 + 政策页脚统一
+
+**决定：Payment Methods 先不做，My Address 现在就做**。用户确认账户下的"已保存地址"是需要的功能，"已保存支付方式"暂时不做。
+
+**新建 `customer_addresses` 表并已跑到线上 Supabase**：`supabase/migrations/0006_customer_addresses.sql`——`id`（主键，一个用户可以有多条地址，不像 `customer_profiles` 一对一）、`user_id`、`label`（可选，如"家"/"公司"）、`recipient_name`、`phone`、`address`、`postal_code`、`is_default`。RLS 单条"customers manage own addresses"策略（`user_id = auth.uid()`覆盖增删改查）。跟之前一样走 SQL Editor + 剪贴板粘贴执行，跑完用临时 `.mjs` 脚本确认字段可查询，脚本已删除。
+
+**新增 `addresses.html` 页面（"My Address"）**，结构照抄 `orders.html`/`orders-page.ts` 的先例：
+- `src/addresses-page.ts` 直接用 `supabase-js` 读写 `customer_addresses`（跟 `auth.ts#saveCustomerProfile` 一个套路，不走 Netlify Function，安全性由 RLS 兜底），支持：列表展示（默认地址置顶+徽章）、新增地址表单、删除、设为默认（设默认时会先把其他行的 `is_default` 清掉，保证同一时间只有一条默认地址）
+- 新增 `addresses-i18n.js`（跟 `orders-i18n.js` 同款独立中英文桥接，不共用 `script.js`）
+- `main.ts` 的 `boot()` 里加了 `initAddressesPage()`
+- 导航栏账户下拉菜单（上一轮刚做的图标+下拉）里，"My Orders"和"Sign Out"中间加了"My Address"一项，链接到 `/addresses.html`
+- **顺带修复一个遗漏**：上一轮把 `nav-account-menu`（下拉图标的 aria-label 文案）这个 key 只加进了 `script.js`，没同步加进 `orders-i18n.js`——导致 `orders.html` 上这个 aria-label 会显示成裸的 key 名而不是真正的文案。这次一起把 `nav-account-menu` 和新加的 `nav-my-address` 补全到 `script.js`/`orders-i18n.js`/`addresses-i18n.js` 三处。
+- 已过 typecheck + 全部 50 单测 + 浏览器实测（未登录态正确显示"Sign In"提示、页面标题/面包屑中英文正确、页脚 5 个政策链接可点击）。**登录态下的增删改地址流程没有用真实账号走一遍**（需要真实登录态，这次没有另外建测试账号），逻辑本身经过 typecheck，模式跟已经端到端验证过的 `customer_profiles` 写入完全一致。
+
+**Terms & Conditions / Privacy Policy 内容补完**：用户提出"内容可以先参考 paneco 的来，因为大致的酒类隐私内容是一致的"。**核对 paneco 实际线上页面后发现一个问题**：paneco 的隐私政策其实是没怎么改过的通用电商模板，里面还留着"加拿大""US Patriot Act"这类跟新加坡公司完全不沾边的措辞，条款页也完全没有酒类牌照相关条文——照抄不可取。所以采取的做法是：**保留我们自己已经写好的框架和结构，把里面明确标记"待确认"的占位符，用这个项目里已经确认过的真实事实去填上**，而不是照搬 paneco 的文字：
+- Terms 第1条：UEN 填成 `202509360N`（Airwallex 那边早就核实过的真实UEN），去掉占位符标记
+- Terms/Privacy 的联系邮箱 `orders@trinityglobe.sg`：这个邮箱通过 Resend 发送真实订单邮件已经验证过是活的，去掉"待确认是否活跃"的标记
+- Privacy 第2条"是否有营销邮件计划"：代码里 signup 表单本来就有"订阅 Trinity Globe 通讯"这个勾选框、`customer_profiles.newsletter_subscribed` 字段也真实存在——直接按现状写清楚，不用再问
+- Privacy 第6条留存期限：按 IRAS 对报税记录"至少保留5年"的通用要求确认下来
+- Privacy 第8条 cookie 声明：查了代码库确认目前没有接入任何 Google Analytics/Facebook Pixel 之类的第三方追踪，如实写"目前不使用分析或营销类cookie"
+- Privacy 第5条"配送快递公司名称待确认"：这个是真不知道的业务事实（用的是哪家快递还没定），没法编，改成不点名的"our delivery courier"这种泛化表述，去掉一个明显的"TODO"占位符，但没有编造一个假名字
+- **顺带把 Privacy 正文补全了这次新加的功能**：第1/2/4/5条都加了"如果注册账号"对应会收集 Google/Facebook 登录信息、生日性别（用于年龄校验）、已保存地址这几项，跟实际代码收集的数据保持同步
+
+**Terms/Privacy/Delivery/Refund 四个页面的"内部草稿"大黄条通知都去掉了**（`age-restriction.html` 上一轮已经去掉），跟用户要求一致。**注意**：只去掉了显眼的黄条大通知，页面标题下方那行小字"Internal draft — prepared for review, not yet published to customers."还留着——这份文件毕竟还没真的过律师，这行小字提醒仍然属实，没有跟着一起删。Delivery/Refund 两页正文里剩下的占位符（配送范围、派送失败流程、退款窗口天数）**没有动**——这些是纯业务决策，不是"参考paneco"能解决的（paneka自己都没做全，比如它压根没有派送失败流程说明），需要用户自己定。
+
+**5个政策页面（Terms/Privacy/Delivery/Refund/Age Restriction）页脚统一加上了政策链接导航**：用户截图指出打开 Privacy 页面后，页脚只有"TRINITY GLOBE TRADING"和版权文字，没有 Terms & Conditions/Privacy Policy/Delivery Policy/Refund & Returns/Responsible Drinking 这五个链接——而首页 `index.html` 的页脚是有的（`.footer-links`）。已经给这5个政策页面的页脚都补上了跟首页一模一样的这组链接（用相对路径互相指向，因为都在 `policies/` 目录下），5个页面现在页脚完全一致。浏览器截图确认 Privacy 页面页脚 5 个链接正确显示。
+
+这次改动（`customer_addresses` 迁移已跑到线上、`addresses.html`/`addresses-i18n.js`/`src/addresses-page.ts`、导航下拉菜单加 My Address、Terms/Privacy 内容补完、四个政策页去掉草稿大通知、五个政策页页脚统一）**还没 commit**。
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -366,16 +479,18 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-1. **订单关联账号 + "我的订单"页面 + 导航栏登录状态——已完成**（`orders.user_id`、`get-my-orders.ts`、`orders.html`、`#navAccount`，已用真实端到端测试验证过），老板反馈2的核心诉求已经打通
-2. **邮箱验证码 6 位 vs 8 位的疑问——已排查清楚并修复**：真实 Resend 发信实测是 8 位，`maxlength` 已从 6 改成 8，改完又用真实邮箱重新走了一遍注册全流程确认能用
-3. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
+1. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
+2. **政策页面法律分工已经和用户对齐**（2026-08-26）：Terms & Conditions、Privacy Policy 这两份要发给老板找律师看（合同责任限制条款 + PDPA 都是真实法律/监管风险）；Delivery Policy、Refund Policy 剩下的占位符是业务事实（配送时效/范围/派送失败流程、退款窗口天数），用户自己填数字就行，不需要律师；Age Restriction 页建议搭 Terms 的顺风车让律师扫一眼年龄核实流程是否符合《酒类管制法》，不用单独立项。**这几份文件本身目前还没人去发给老板/律师**，只是分好了类。
 
 **要等用户这边的**：
-4. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
-5. 问用户：查完 Meta Business Portfolio 状态后，Facebook App Review 要不要现在就正式提交申请
-6. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-7. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
-8. **用户已明确表示现在还没准备好，先不把 `dev` 合并到 `main`**——不要主动提起或推动这件事，等用户自己说要上线再做（到时候合并前记得把 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 也加进 Netlify 生产环境变量）
+3. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
+4. 问用户：查完 Meta Business Portfolio 状态后，Facebook App Review 要不要现在就正式提交申请
+5. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
+6. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+7. 问用户：Terms/Privacy 页面各自的"内部草稿，还没过律师"提示块要不要也去掉（age-restriction 那条已经按要求删了，这两份目前还留着，见上面第二轮记录）
+8. **用户已明确表示现在还没准备好，先不把 `dev` 合并到 `main`**——不要主动提起或推动这件事，等用户自己说要上线再做（合并前记得：a. 把 `dev` 分支上还没 commit 的这批改动先 commit；b. 决定 Stripe live key 要怎么切——见上面"Stripe 还在 test mode"条目里"按部署环境设不同值"的方案）
 
 **已解决，不用再问**：
 - ~~Wang Lei 的 Stripe 身份验证~~——2026-08-26 用户截图确认"已完成"任务里身份验证+账户代表信息/文件全部通过，"已激活"（待处理）已清空，阻塞解除
+- ~~订单关联账号 + "我的订单"页面 + 导航栏登录状态~~——已完成并端到端测试验证过，老板反馈2的核心诉求已经打通
+- ~~邮箱验证码 6 位 vs 8 位的疑问~~——已排查清楚并修复，真实 Resend 发信实测是 8 位

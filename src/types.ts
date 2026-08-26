@@ -79,9 +79,18 @@ export interface CreateCheckoutSessionRequest {
   ageConfirmed: boolean;
 }
 
-export interface CreateCheckoutSessionResponse {
-  checkoutUrl: string;
-  orderId: string;
+// The `mode` a given create-checkout-session call returns is decided
+// server-side by CHECKOUT_UI_MODE (see that function) — the client just
+// branches on whichever shape comes back, it never chooses this itself.
+export type CreateCheckoutSessionResponse =
+  | { mode: "hosted"; checkoutUrl: string; orderId: string }
+  | { mode: "elements"; clientSecret: string; orderId: string };
+
+/** Shape returned by GET /.netlify/functions/get-checkout-session-status — display-only (see src/cart.ts's return-page handling); order status/inventory/emails are still driven entirely by the Stripe webhook, never by this. */
+export interface CheckoutSessionStatus {
+  status: "open" | "complete" | "expired";
+  paymentStatus: "paid" | "unpaid" | "no_payment_required";
+  orderId: string | null;
 }
 
 export type OrderStatus =
@@ -99,6 +108,17 @@ export interface MyOrderItem {
   name: string;
   qty: number;
   unitPriceCents: number;
+}
+
+/** A row from customer_addresses (see supabase/migrations/0006_customer_addresses.sql) — see addresses.html / src/addresses-page.ts. */
+export interface CustomerAddress {
+  id: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  address: string;
+  postalCode: string;
+  isDefault: boolean;
 }
 
 /** Shape returned by GET /.netlify/functions/get-my-orders — see orders.html / src/orders-page.ts. */
