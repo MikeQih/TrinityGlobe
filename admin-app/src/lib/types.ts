@@ -69,10 +69,3 @@ export interface OrderStatusHistoryEntry {
   changed_at: string;
 }
 
-export const FULFILLABLE_STATUSES: OrderStatus[] = [
-  "paid",
-  "preparing",
-  "ready_for_collection",
-  "out_for_delivery",
-  "completed",
-];

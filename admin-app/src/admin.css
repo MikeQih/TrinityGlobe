@@ -59,6 +59,30 @@ input, select, textarea {
   margin-bottom: 14px;
 }
 
+/* payment_review banner (OrderDetail) — deliberately the "attention" amber
+   rather than "bad" red: it isn't an error to dismiss, it's a required
+   manual step before this order can be touched further. */
+.warning-banner {
+  background: var(--attention-bg);
+  color: var(--attention);
+  border: 1px solid var(--attention);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.warning-banner strong { display: block; margin-bottom: 6px; }
+.warning-banner p { margin: 0; line-height: 1.5; }
+
+.payment-ids {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+.payment-ids dt { color: var(--ink-soft); }
+.payment-ids dd { margin: 0; font-family: monospace; word-break: break-all; }
+
 /* Login */
 .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .login-card {

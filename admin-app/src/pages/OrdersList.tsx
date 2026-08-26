@@ -23,12 +23,20 @@ function fmt(cents: number): string {
   return "S$" + (cents / 100).toFixed(2);
 }
 
+// How often the list re-fetches on its own so a new order (or a status
+// change from another tab/device) shows up without a manual page reload.
+// There's no Supabase Realtime subscription wired up for this table, so
+// polling is the simplest thing that actually satisfies "new orders show
+// up promptly" for a back-office tool that's usually just left open.
+const AUTO_REFRESH_MS = 30_000;
+
 export function OrdersList() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,7 +55,12 @@ export function OrdersList() {
     return () => {
       cancelled = true;
     };
-  }, [statusFilter]);
+  }, [statusFilter, refreshTick]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setRefreshTick((t) => t + 1), AUTO_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -79,6 +92,9 @@ export function OrdersList() {
             </option>
           ))}
         </select>
+        <button type="button" onClick={() => setRefreshTick((t) => t + 1)} disabled={loading}>
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
       {error && <p className="error-banner">{error}</p>}

@@ -5,17 +5,48 @@ import { useAuth } from "../auth/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
 import type { Order, OrderItem, OrderStatus, OrderStatusHistoryEntry } from "../lib/types";
 
-const NEXT_STATUS_OPTIONS: OrderStatus[] = [
-  "paid",
-  "preparing",
-  "ready_for_collection",
-  "out_for_delivery",
-  "completed",
-  "cancelled",
-];
+// Only the *fulfilment* forward-steps live here — refunded is deliberately
+// never a button in this list, it only ever happens through the Refund
+// section below. Once an order has been paid, "the customer doesn't get
+// it" is a refund (money moves back), not a cancellation (no money moved);
+// cancelled is only reachable from pending_payment. completed/cancelled/
+// expired/payment_failed/refunded/payment_review all have no entry here —
+// each is a dead end for this button row (payment_review especially:
+// see the warning banner below for why). Mirrors the transition graph
+// enforced server-side by supabase/migrations/0011_order_status_transition_guard.sql —
+// this map only needs to be a subset of what the DB allows, never wider.
+const NEXT_STATUS_OPTIONS: Partial<Record<OrderStatus, { status: OrderStatus; label: string }[]>> = {
+  pending_payment: [{ status: "cancelled", label: "Cancel order" }],
+  paid: [{ status: "preparing", label: "Mark as Preparing" }],
+  preparing: [
+    { status: "ready_for_collection", label: "Mark as Ready for Collection" },
+    { status: "out_for_delivery", label: "Mark as Out for Delivery" },
+  ],
+  ready_for_collection: [{ status: "completed", label: "Mark as Completed" }],
+  out_for_delivery: [{ status: "completed", label: "Mark as Completed" }],
+};
 
 function fmt(cents: number): string {
   return "S$" + (cents / 100).toFixed(2);
+}
+
+function paymentStatusLabel(order: Order): string {
+  switch (order.status) {
+    case "pending_payment":
+      return "Not paid — awaiting customer";
+    case "payment_failed":
+      return "Payment failed";
+    case "expired":
+      return "Payment window expired, unpaid";
+    case "cancelled":
+      return "Cancelled, unpaid";
+    case "payment_review":
+      return "Stripe reports paid — needs manual verification";
+    case "refunded":
+      return order.refunded_cents >= order.total_cents ? "Paid, fully refunded" : "Paid, partially refunded";
+    default:
+      return order.refunded_cents > 0 ? "Paid, partially refunded" : "Paid";
+  }
 }
 
 export function OrderDetail() {
@@ -32,6 +63,8 @@ export function OrderDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [refunding, setRefunding] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -65,6 +98,37 @@ export function OrderDetail() {
     if (!order) return;
     setUpdatingStatus(true);
     setActionError(null);
+
+    // Cancelling a still-pending order needs to close its Stripe session
+    // and release the held stock, neither of which a plain status column
+    // update does — routed through admin-cancel-order.ts instead, the same
+    // way the customer-facing cancel-my-order.ts handles it. Every other
+    // transition here is a plain fulfilment step with no side effects
+    // beyond the status itself, so a direct update is fine for those.
+    if (order.status === "pending_payment" && newStatus === "cancelled") {
+      if (!session) return;
+      try {
+        const res = await fetch(`${import.meta.env.VITE_STOREFRONT_FUNCTIONS_URL}/.netlify/functions/admin-cancel-order`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ orderId: order.id }),
+        });
+        const resBody = await res.json();
+        if (!res.ok) throw new Error(resBody?.error ?? "Failed to cancel order");
+        await load();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Failed to cancel order");
+      } finally {
+        setUpdatingStatus(false);
+      }
+      return;
+    }
+
+    // The transition itself is still validated authoritatively by
+    // trg_validate_order_status_transition (0011_order_status_transition_guard.sql)
+    // regardless of what this button list offers — this is a second,
+    // UI-level guard against showing an invalid option in the first place,
+    // not the actual security boundary.
     const { error: updateError } = await supabase.from("orders").update({ status: newStatus }).eq("id", order.id);
     setUpdatingStatus(false);
     if (updateError) setActionError(updateError.message);
@@ -106,7 +170,13 @@ export function OrderDetail() {
           "content-type": "application/json",
           authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ orderId: order.id, amountCents }),
+        // A fresh key per click — see admin-refund-order.ts for why this
+        // can't be derived from order state server-side instead. Each
+        // click here is a genuinely new attempt as far as Stripe's
+        // idempotency should be concerned; the disabled-while-refunding
+        // button state below is what actually stops a double-click of the
+        // *same* click from firing two requests in the first place.
+        body: JSON.stringify({ orderId: order.id, amountCents, idempotencyKey: crypto.randomUUID() }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Refund failed");
@@ -118,12 +188,37 @@ export function OrderDetail() {
     }
   }
 
+  async function handleResendConfirmationEmail(): Promise<void> {
+    if (!order || !session) return;
+    setResendingEmail(true);
+    setResendMessage(null);
+    setActionError(null);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_STOREFRONT_FUNCTIONS_URL}/.netlify/functions/admin-resend-order-email`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "Failed to resend email");
+      setResendMessage("Confirmation email resent.");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to resend email");
+    } finally {
+      setResendingEmail(false);
+    }
+  }
+
   if (loading) return <p className="muted">Loading…</p>;
   if (error) return <p className="error-banner">{error}</p>;
   if (!order) return <p className="muted">Order not found.</p>;
 
   const remainingRefundCents = order.total_cents - order.refunded_cents;
   const r = order.recipient_snapshot;
+  const nextOptions = NEXT_STATUS_OPTIONS[order.status] ?? [];
 
   return (
     <div className="order-detail">
@@ -134,6 +229,20 @@ export function OrderDetail() {
 
       {actionError && <p className="error-banner">{actionError}</p>}
 
+      {order.status === "payment_review" && (
+        <div className="warning-banner">
+          <strong>⚠ Needs manual verification before doing anything else.</strong>
+          <p>
+            Stripe reported this payment as successful, but it couldn't be confirmed automatically — either the
+            charged amount didn't match this order's total, or the order was no longer awaiting payment when the
+            webhook arrived. <strong>Do not ship this order yet.</strong> Check the Payment Intent below in the
+            Stripe dashboard to confirm whether the charge really went through, then either confirm it manually in
+            the database or refund it — this app doesn't offer a one-click resolution for this state on purpose,
+            to avoid double-confirming or double-releasing stock.
+          </p>
+        </div>
+      )}
+
       <section className="order-section">
         <h2>Customer</h2>
         <p>{r.name} &middot; {r.phone} &middot; {r.email}</p>
@@ -141,6 +250,10 @@ export function OrderDetail() {
           {order.delivery_method === "self_collection" ? "Self collection" : `${r.address}, ${r.postalCode}`}
         </p>
         {r.notes && <p className="muted">Customer note: {r.notes}</p>}
+        <p className="muted">
+          This is the address captured at checkout time, not a live link to the customer's saved address book —
+          it won't change if they edit or delete that saved address later.
+        </p>
       </section>
 
       <section className="order-section">
@@ -150,6 +263,7 @@ export function OrderDetail() {
             <tr>
               <th>SKU</th>
               <th>Name</th>
+              <th>Unit price</th>
               <th>Qty</th>
               <th>Line total</th>
             </tr>
@@ -159,6 +273,7 @@ export function OrderDetail() {
               <tr key={i.id}>
                 <td>{i.sku}</td>
                 <td>{i.name_snapshot}</td>
+                <td className="num">{fmt(i.unit_price_cents)}</td>
                 <td>{i.qty}</td>
                 <td className="num">{fmt(i.line_total_cents)}</td>
               </tr>
@@ -168,6 +283,7 @@ export function OrderDetail() {
         <div className="order-totals">
           <div><span>Subtotal</span><span>{fmt(order.subtotal_cents)}</span></div>
           <div><span>Shipping</span><span>{order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</span></div>
+          <div><span>GST (inclusive)</span><span>{fmt(order.gst_cents)}</span></div>
           <div className="total-row"><span>Total</span><span>{fmt(order.total_cents)}</span></div>
           {order.refunded_cents > 0 && (
             <div className="refunded-row"><span>Refunded</span><span>{fmt(order.refunded_cents)}</span></div>
@@ -176,15 +292,34 @@ export function OrderDetail() {
       </section>
 
       <section className="order-section">
+        <h2>Payment</h2>
+        <p>{paymentStatusLabel(order)}</p>
+        <dl className="payment-ids">
+          <dt>Stripe Checkout Session</dt>
+          <dd>{order.stripe_checkout_session_id ?? <span className="muted">none</span>}</dd>
+          <dt>Stripe Payment Intent</dt>
+          <dd>{order.stripe_payment_intent_id ?? <span className="muted">none</span>}</dd>
+        </dl>
+      </section>
+
+      <section className="order-section">
         <h2>Fulfilment</h2>
         {canWrite ? (
-          <div className="status-actions">
-            {NEXT_STATUS_OPTIONS.map((s) => (
-              <button key={s} disabled={updatingStatus || order.status === s} onClick={() => void handleStatusChange(s)}>
-                {s}
-              </button>
-            ))}
-          </div>
+          nextOptions.length > 0 ? (
+            <div className="status-actions">
+              {nextOptions.map(({ status: s, label }) => (
+                <button key={s} disabled={updatingStatus} onClick={() => void handleStatusChange(s)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">
+              {order.status === "payment_review"
+                ? "No self-service action while this order needs manual verification — see the warning above."
+                : "No further status change available from here — use the Refund section below if this order needs to be undone."}
+            </p>
+          )
         ) : (
           <p className="muted">Read-only access — status changes require an ops or admin role.</p>
         )}
@@ -211,8 +346,20 @@ export function OrderDetail() {
         </section>
       )}
 
+      {canWrite && (
+        <section className="order-section">
+          <h2>Email</h2>
+          <button disabled={resendingEmail} onClick={() => void handleResendConfirmationEmail()}>
+            {resendingEmail ? "Sending…" : "Resend order confirmation email"}
+          </button>
+          {resendMessage && <p className="muted">{resendMessage}</p>}
+        </section>
+      )}
+
       <section className="order-section">
         <h2>History</h2>
+        <p className="muted">Order placed: {new Date(order.created_at).toLocaleString()}</p>
+        <p className="muted">Last updated: {new Date(order.updated_at).toLocaleString()}</p>
         <ul className="history-list">
           {history.map((h) => (
             <li key={h.id}>

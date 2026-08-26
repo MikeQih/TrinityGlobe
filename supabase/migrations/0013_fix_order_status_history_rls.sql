@@ -1,0 +1,21 @@
+-- -----------------------------------------------------------------------
+-- order_status_history only ever has a SELECT policy for staff (see
+-- "staff can view order status history" in 0001_init.sql) — it was never
+-- meant to be written to directly, only ever populated by the two triggers
+-- below. Those triggers, however, run with the privileges of whoever
+-- performed the update, since they weren't declared SECURITY DEFINER.
+-- That's invisible from a Netlify Function (the service_role client
+-- bypasses RLS entirely) and from the checkout RPCs, but the moment
+-- admin-app's status-change buttons perform a real update as the signed-in
+-- staff member's own JWT, the trigger's insert into order_status_history
+-- hits RLS with no matching policy and rejects it — which rolls back the
+-- entire status update, silently. Found by actually clicking "Mark as
+-- Preparing" in the running app rather than only reading the code.
+--
+-- Fix: these two are pure system bookkeeping with no user-controlled
+-- content beyond what's already permission-checked on `orders` itself, so
+-- SECURITY DEFINER (running as the function owner instead of the caller)
+-- is the correct fix — this table was always meant to be trigger-only.
+-- -----------------------------------------------------------------------
+alter function log_order_status_initial() security definer set search_path = public, pg_temp;
+alter function log_order_status_change() security definer set search_path = public, pg_temp;

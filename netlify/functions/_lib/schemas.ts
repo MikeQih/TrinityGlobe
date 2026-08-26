@@ -59,4 +59,8 @@ export const adminRefundRequestSchema = z.object({
   orderId: z.string().uuid(),
   // Omitted = full refund of whatever hasn't already been refunded.
   amountCents: z.number().int().positive().optional(),
+  // Generated fresh by admin-app on every button click and used as the
+  // Stripe idempotency key — see admin-refund-order.ts for why this can't
+  // be derived from server-side order state instead.
+  idempotencyKey: z.string().uuid(),
 });

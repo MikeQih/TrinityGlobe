@@ -61,7 +61,7 @@ export default async (req: Request): Promise<Response> => {
   }
   const parsed = adminRefundRequestSchema.safeParse(body);
   if (!parsed.success) return errorResponse(400, "Invalid request", "validation_error", corsHeaders());
-  const { orderId, amountCents } = parsed.data;
+  const { orderId, amountCents, idempotencyKey } = parsed.data;
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -75,6 +75,14 @@ export default async (req: Request): Promise<Response> => {
   }
 
   const remainingCents = order.total_cents - order.refunded_cents;
+  if (remainingCents <= 0) {
+    // Caught here instead of leaving it to Stripe: an omitted amountCents
+    // (the "full refund" button) would otherwise resolve to
+    // requestedCents=0, which Stripe rejects with a generic
+    // parameter_invalid_integer — a confusing "Refund failed at payment
+    // provider" for what's really just "there's nothing left to refund".
+    return errorResponse(409, "This order has already been fully refunded", "already_refunded", corsHeaders());
+  }
   const requestedCents = amountCents ?? remainingCents;
   if (requestedCents > remainingCents) {
     return errorResponse(409, "Refund amount exceeds what's left to refund", "amount_too_large", corsHeaders());
@@ -83,10 +91,25 @@ export default async (req: Request): Promise<Response> => {
   const stripe = getStripe();
   let refund;
   try {
-    refund = await stripe.refunds.create({
-      payment_intent: order.stripe_payment_intent_id,
-      amount: requestedCents,
-    });
+    // idempotencyKey is generated client-side once per button click (see
+    // OrderDetail.tsx#handleRefund), not derived from order state here —
+    // deriving it from refunded_cents was tried first and had a real bug:
+    // Stripe caches a *failed* response under its idempotency key for the
+    // same 24h window as a successful one, so if a refund ever failed for
+    // any reason (a transient Stripe error, a data mistake since fixed),
+    // every retry with the same derived key would just replay the original
+    // failure forever, since refunded_cents never changes when a refund
+    // keeps failing. A fresh per-click key means a manual retry after
+    // seeing an error is treated as a genuinely new attempt, while the
+    // admin-app UI's disabled-while-refunding state (not this key) is what
+    // guards against a true accidental double-click of the same click.
+    refund = await stripe.refunds.create(
+      {
+        payment_intent: order.stripe_payment_intent_id,
+        amount: requestedCents,
+      },
+      { idempotencyKey }
+    );
   } catch (err) {
     console.error("admin-refund-order: stripe refund failed", orderId, err);
     return errorResponse(502, "Refund failed at payment provider", undefined, corsHeaders());
