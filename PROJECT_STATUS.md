@@ -617,11 +617,38 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 **测试与清理**：47项断言（22项跨用户RLS读写、13项EXECUTE收回后的直接RPC调用应被拒绝、5项收回权限前后的匿名/普通用户只读回归对比、7项其余）全部通过；测试用的两个Supabase Auth账号、订单、地址、临时`finance_readonly`角色，测试结束后全部清理，`inventory.website_stock`确认全程未被真实测试触碰（回到基线50）；storefront与admin-app的`typecheck`/`test`/`build`本轮结束前重新跑过一遍，全部通过。
 
 **仍需人工确认的事项**：
-1. `admin_profiles`表"admins manage admin profiles"这条策略允许`admin`角色通过前端直接对`admin_profiles`做增删改（含把别人设为/取消admin）——本轮判断这是员工权限管理的自举机制（总要有办法设置第一个/后续管理员），不是漏洞，但admin-app目前**没有一个"管理员管理"页面**，实际操作只能靠直接进Supabase Dashboard改表。要不要在admin-app里做一个真正的管理员管理界面，还是保持现状由技术人员手动维护，需要用户决定。
-2. `checkout_rate_limits`/`stripe_events`两张纯内部记账表现在对**任何角色**（含staff）都没有读权限——如果以后想在admin-app里查看限流命中记录或webhook去重日志用于排查问题，需要专门加一条staff SELECT策略；目前admin-app没有用到这两张表，所以暂时不影响任何现有功能。
-3. `finance_readonly`角色的员工登录admin-app后，界面上仍然会看到"改状态"、"保存备注"这些按钮（点了会被数据库拒绝，现在也有明确报错），只是入口没有对这个角色单独隐藏。这是纯体验问题、不是安全问题（真正的把关始终在数据库层），要不要花时间按角色隐藏这些按钮，看用户是否需要。
+1. ~~`admin_profiles`表"admins manage admin profiles"这条策略允许`admin`角色通过前端直接对`admin_profiles`做增删改~~——**用户已决定**：暂不做专门的管理员管理界面，第一个/后续管理员继续由技术人员在数据库后台手动设置，但操作方法必须写清楚（见下面"管理员账号的创建/修改/撤销"）。**不提供公开的"申请管理员"入口。**
+2. ~~`checkout_rate_limits`/`stripe_events`两张纯内部记账表对任何角色都没有读权限~~——**用户已确认**：这是正确的，这两张属于安全与系统内部表，只应该让`service_role`访问，admin-app不需要展示，无需改动。
+3. ~~`finance_readonly`角色登录admin-app后界面上仍能看到"改状态"、"保存备注"等按钮~~——**用户要求UI层也隐藏/禁用**这些按钮（更新订单状态、编辑备注、取消订单、发起退款、重新发送邮件），保留查看订单/金额/GST/退款记录的权限。**核实后发现这一条其实早在更早的一轮（`0ba2d9d`，本次RLS审计之前）就已经实现**：`OrderDetail.tsx`里的`canWrite = role === "admin" || role === "ops"`已经把这5个操作入口全部包在`canWrite &&`条件里（状态变更按钮、备注文本框和保存按钮、整个Refund区块、整个Email区块）。本轮用一个真实创建的`finance_readonly`测试账号在真实浏览器里登录、打开一个已付款订单验证：页面上**只有"Sign out"一个按钮**，备注文本框是禁用状态，"Refund"和"Email"两个区块整个不渲染，Fulfilment区块显示"Read-only access"文字提示；Customer/Items/Payment（含GST行）/History这些只读区块正常显示。验证完毕后测试账号、测试订单已清理。**没有需要新增的代码。**
+
+### 管理员账号的创建/修改/撤销（运营文档，替代"专门管理界面"）
+
+`admin_profiles`表结构：`user_id`（主键，关联`auth.users`）+ `role`（`admin`/`ops`/`finance_readonly`三选一）+ `display_name`（可选）。目前**没有、也不打算做**前端管理界面，全部操作走Supabase Dashboard的SQL Editor（用的是`postgres`身份，天然绕过RLS，不需要先有一个admin账号才能设置第一个admin）：
+
+- **新增管理员**：先确认这个人已经用Google/Facebook/邮箱在**网站前台**（不是admin-app）注册过一次，拿到其`auth.users.id`（可以在Supabase Dashboard的Authentication页面按邮箱搜索），然后执行：
+  ```sql
+  insert into admin_profiles (user_id, role, display_name) values ('<user_id>', 'admin', '<姓名，可选>');
+  ```
+- **修改角色**：`update admin_profiles set role = 'ops' where user_id = '<user_id>';`
+- **撤销管理员权限**（不再是任何员工角色）：`delete from admin_profiles where user_id = '<user_id>';`——删除后这个账号仍然是一个普通登录用户，只是不再能看到任何后台数据，跟从未当过管理员的账号完全一样。
+- 这三个操作都是**立即生效**的（下次这个账号的请求会重新算出新的`current_admin_role()`），不需要重启任何服务，也不需要这个员工重新登录。
 
 本轮改动（`supabase/migrations/0018_lock_down_rpc_execute_grants.sql`、`admin-app/src/pages/OrderDetail.tsx`两处`.select()`修复、本文件）已经commit到本地`dev`分支，没有push、没有merge main、没有碰Stripe任何配置。
+
+## 2026-08-26（第十轮·收尾）：收权后的真实端到端回归
+
+用户认可第十轮的审计质量后，要求在正式关闭这一步之前，针对migration 0018收回EXECUTE权限这件事本身，专门做一次回归——确认真正合法的调用路径（匿名浏览、登录客户下单/改地址/取消订单、员工履约/退款、Netlify Functions内部调用）一个都没被误伤。同样坚持"真实测试账号+真实HTTP请求"，不满足于读代码。
+
+**测试方式**：不是又调一次RPC了事，而是真正打到本地`netlify dev`跑着的Function（`localhost:8888`），用真实创建的Supabase测试账号（客户1个、员工admin角色1个，测试完都删除）走完整HTTP请求链路，其中退款那一步用了真实的Stripe test-mode API创建了一笔货真价实的PaymentIntent（`pm_card_visa`）并让`admin-refund-order.ts`把它真退掉，不是造假数据。13项断言：
+
+- 匿名：`products-live.ts`正常返回真实库存（`availableStock: 50`）——确认`get_available_stock`收回EXECUTE后，前台库存查询完全不受影响，因为它本来就是通过`service_role`的后端接口查的，从来没有让浏览器直接调用过这个RPC。
+- 登录客户：`set_default_customer_address`直接调用仍然成功（这是唯一保留给`authenticated`的RPC），地址在数据库里确认被设为默认。
+- 登录客户：`create-checkout-session.ts`正常创建订单（内部调用`create_pending_order`）、`resume-checkout-session.ts`正常续上同一个订单、`cancel-my-order.ts`正常取消（内部调用`cancel_own_pending_order`），三步全部通过真实HTTP请求验证，且数据库里的订单状态确认真的变了，不是接口"看起来成功"。
+- Admin账号：直接对`orders`表更新状态和备注（走的是admin-app实际使用的同一种直接更新方式，靠RLS的"ops and admin can update orders"策略把关）都成功；`admin-cancel-order.ts`和`admin-refund-order.ts`（真实Stripe退款）都端到端跑通，数据库里订单状态、`refunded_cents`都确认正确落地。
+
+**13/13全部通过，没有发现任何回归**。测试产生的订单、地址、Supabase测试账号全部清理，`inventory.website_stock`确认全程未受影响（回到基线50，因为唯一一笔真实预留在同一轮测试内被取消释放了）。收尾时`storefront`和`admin-app`的`typecheck`/`test`/`build`未再变动（上一轮已经跑过，本轮没有改动业务代码，只改了`PROJECT_STATUS.md`）。
+
+**这一步（Supabase RLS + admin-app权限审计）到此正式关闭。** 下一步按原计划开始邮件失败追踪账本（见"必须做"清单里的"邮件发送失败追踪账本"一条）。
 
 ---
 
