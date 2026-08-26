@@ -77,6 +77,8 @@ export interface CreateCheckoutSessionRequest {
   deliveryMethod: DeliveryMethod;
   recipient: CheckoutRecipient;
   ageConfirmed: boolean;
+  /** One UUID per checkout form visit, reused across retries — see src/cart.ts and create-checkout-session.ts's idempotency handling. */
+  checkoutAttemptId?: string;
 }
 
 // The `mode` a given create-checkout-session call returns is decided

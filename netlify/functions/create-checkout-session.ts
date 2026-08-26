@@ -1,3 +1,4 @@
+import type { Context } from "@netlify/functions";
 import { getSupabaseAdmin, getUserIdFromRequest, releaseOrderReservations } from "./_lib/supabase";
 import { getStripe } from "./_lib/stripe";
 import { requireEnv } from "./_lib/env";
@@ -15,12 +16,14 @@ import { SELF_COLLECTION_ENABLED } from "../../src/feature-flags";
 // refuses payment on an already-expired session.
 const RESERVATION_TTL_MINUTES = 30;
 
-// NOTE: there's no request-level idempotency key here — a network retry or
-// a very fast double-click that slips past the storefront's disabled-button
-// guard (src/cart.ts#isSubmitting) could create two orders/reservations for
-// the same cart. Acceptable for the Phase 1 MVP; if this becomes a real
-// problem, have the client generate a UUID per checkout attempt and thread
-// it through as a Stripe idempotency key + a unique constraint check here.
+// Anti-abuse thresholds — deliberately generous starting points (a genuine
+// customer should never come close), not a considered final policy. Revisit
+// once there's real traffic to tune against. Both are checked before any
+// order is created, so they can't be bypassed by a request that never makes
+// it as far as create_pending_order.
+const MAX_PENDING_ORDERS_PER_EMAIL = 3;
+const MAX_ORDERS_PER_IP_WINDOW_MINUTES = 10;
+const MAX_ORDERS_PER_IP_IN_WINDOW = 5;
 
 interface StoreSettings {
   standard_shipping_fee_cents: number;
@@ -41,7 +44,11 @@ interface ProductVariantRow {
   allow_self_collection: boolean;
 }
 
-export default async (req: Request): Promise<Response> => {
+type CheckoutResponseBody =
+  | { mode: "hosted"; checkoutUrl: string; orderId: string }
+  | { mode: "elements"; clientSecret: string; orderId: string };
+
+export default async (req: Request, context: Context): Promise<Response> => {
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
 
   let body: unknown;
@@ -55,7 +62,7 @@ export default async (req: Request): Promise<Response> => {
   if (!parsed.success) {
     return errorResponse(400, "Invalid request", "validation_error");
   }
-  const { items, deliveryMethod, recipient, ageConfirmed } = parsed.data;
+  const { items, deliveryMethod, recipient, ageConfirmed, checkoutAttemptId } = parsed.data;
 
   // The storefront doesn't render the self-collection radio at all while
   // SELF_COLLECTION_ENABLED is false (see src/feature-flags.ts) — this is
@@ -73,6 +80,89 @@ export default async (req: Request): Promise<Response> => {
   const userId = await getUserIdFromRequest(req);
 
   const supabase = getSupabaseAdmin();
+  const stripe = getStripe();
+
+  // Idempotency: a double-click, a slow-network retry, or "back" then
+  // resubmit from the payment stage (see src/cart.ts) all resend the same
+  // checkoutAttemptId. If an order already exists for it, hand back its
+  // existing Stripe session instead of creating a second order/reservation
+  // for the same cart. checkout_attempt_id has a unique index (see
+  // 0007_checkout_idempotency.sql), so this is also what stops a genuine
+  // race between two near-simultaneous requests with the same id from ever
+  // producing two orders.
+  if (checkoutAttemptId) {
+    const { data: existing, error: existingError } = await supabase
+      .from("orders")
+      .select("id, status, stripe_checkout_session_id")
+      .eq("checkout_attempt_id", checkoutAttemptId)
+      .maybeSingle<{ id: string; status: string; stripe_checkout_session_id: string | null }>();
+
+    if (existingError) {
+      console.error("create-checkout-session: failed to check checkout_attempt_id", checkoutAttemptId, existingError);
+      return errorResponse(500, "Failed to process checkout attempt");
+    }
+
+    if (existing) {
+      if (existing.status !== "pending_payment" || !existing.stripe_checkout_session_id) {
+        // This exact attempt already concluded (paid/failed/expired/cancelled)
+        // or never got as far as having a session. Not safe to reuse — the
+        // client should start a fresh attempt (a new checkoutAttemptId) and
+        // resubmit, not retry this same one forever.
+        return errorResponse(409, "This checkout attempt has already been used", "checkout_attempt_conflict");
+      }
+
+      const retrieved = await stripe.checkout.sessions.retrieve(existing.stripe_checkout_session_id);
+      if (retrieved.status !== "open") {
+        return errorResponse(409, "This checkout attempt has already been used", "checkout_attempt_conflict");
+      }
+
+      const reused: CheckoutResponseBody | null =
+        retrieved.ui_mode === "elements"
+          ? retrieved.client_secret
+            ? { mode: "elements", clientSecret: retrieved.client_secret, orderId: existing.id }
+            : null
+          : retrieved.url
+          ? { mode: "hosted", checkoutUrl: retrieved.url, orderId: existing.id }
+          : null;
+
+      if (reused) return jsonResponse(200, reused);
+      console.error("create-checkout-session: reusable session missing expected field", retrieved.id);
+      return errorResponse(500, "Failed to resume checkout attempt");
+    }
+  }
+
+  // Rate limiting — only reached once we know this is genuinely a new
+  // order, not a retry of one that already exists. Both checks look at
+  // data already on `orders` (no new infrastructure), and are deliberately
+  // simple counting queries rather than a sliding-window algorithm: good
+  // enough to stop naive abuse (script hammering this endpoint to lock up
+  // stock, or one visitor opening many tabs), not a claim of being
+  // attack-proof. See MAX_* constants above for current thresholds.
+  const { count: pendingForEmail, error: pendingCountError } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending_payment")
+    .eq("recipient_snapshot->>email", recipient.email)
+    .gte("created_at", new Date(Date.now() - RESERVATION_TTL_MINUTES * 60_000).toISOString());
+  if (pendingCountError) {
+    console.error("create-checkout-session: pending-order rate limit check failed", pendingCountError);
+  } else if ((pendingForEmail ?? 0) >= MAX_PENDING_ORDERS_PER_EMAIL) {
+    return errorResponse(429, "Too many unpaid orders for this email — please complete or wait for one to expire", "rate_limited");
+  }
+
+  const clientIp = context.ip;
+  if (clientIp) {
+    const { count: ordersForIp, error: ipCountError } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("ip_address", clientIp)
+      .gte("created_at", new Date(Date.now() - MAX_ORDERS_PER_IP_WINDOW_MINUTES * 60_000).toISOString());
+    if (ipCountError) {
+      console.error("create-checkout-session: IP rate limit check failed", ipCountError);
+    } else if ((ordersForIp ?? 0) >= MAX_ORDERS_PER_IP_IN_WINDOW) {
+      return errorResponse(429, "Too many checkout attempts from this connection — please try again shortly", "rate_limited");
+    }
+  }
 
   const { data: settings, error: settingsError } = await supabase
     .from("store_settings")
@@ -161,6 +251,8 @@ export default async (req: Request): Promise<Response> => {
       p_age_confirmed: ageConfirmed,
       p_reservation_ttl_minutes: RESERVATION_TTL_MINUTES,
       p_user_id: userId,
+      p_checkout_attempt_id: checkoutAttemptId ?? null,
+      p_ip_address: clientIp ?? null,
     })
     .single<{ id: string }>();
 
@@ -168,11 +260,17 @@ export default async (req: Request): Promise<Response> => {
     if (orderError?.message?.includes("insufficient_stock")) {
       return errorResponse(409, "Some items are no longer available in the requested quantity", "insufficient_stock");
     }
+    // A checkout_attempt_id unique-index violation lands here too — most
+    // likely two near-simultaneous requests for the same attempt racing
+    // each other. The one that lost the race just asks the client to retry,
+    // which will find the winner's order via the idempotency check above.
+    if (orderError?.message?.includes("checkout_attempt_id")) {
+      return errorResponse(409, "This checkout attempt is already being processed", "checkout_attempt_conflict");
+    }
     console.error("create-checkout-session: create_pending_order failed", orderError);
     return errorResponse(500, "Failed to create order");
   }
 
-  const stripe = getStripe();
   const siteUrl = requireEnv("SITE_URL").replace(/\/$/, "");
   const expiresAtSeconds = Math.floor(Date.now() / 1000) + RESERVATION_TTL_MINUTES * 60;
 
@@ -225,7 +323,13 @@ export default async (req: Request): Promise<Response> => {
             expires_at: expiresAtSeconds,
             success_url: `${siteUrl}/?checkout=success&order_id=${order.id}`,
             cancel_url: `${siteUrl}/?checkout=cancelled&order_id=${order.id}`,
-          }
+          },
+      // Stripe-level idempotency on top of our own DB check: if our function
+      // crashed or timed out after this call was sent but before we got a
+      // response, a retry with the same key returns the original session
+      // instead of creating a second one. Requires identical request
+      // params, which they are — same order, same attempt id.
+      checkoutAttemptId ? { idempotencyKey: `checkout-session-${checkoutAttemptId}` } : undefined
     );
 
     const { error: updateError } = await supabase

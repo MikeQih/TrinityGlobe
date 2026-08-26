@@ -462,7 +462,51 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 **仍然建议在正式上线前，找一个熟悉新加坡电商/PDPA/酒牌要求的人做最终审核**——这轮内容已经比之前完整很多，但终究不是律师做的正式审核。
 
-这次改动（导航文字改版、自提功能开关、5个政策页面全面重写、邮件模板清理、全站页脚UEN）**还没 commit**。
+这次改动（导航文字改版、自提功能开关、5个政策页面全面重写、邮件模板清理、全站页脚UEN）**已经 commit**（`e44457b`，用户确认过"commit this"）。
+
+## 2026-08-26（第七轮）：支付安全审计——2个真bug + 幂等性 + 限流；Resend配额确认；admin-app确认无影响
+
+用户发来一份很详细的支付攻防清单（重复下单、锁库存、webhook乱序、盗刷卡等），要求先核对5件事：Session过期时间是否跟库存预留同步、下单+Session创建有没有幂等、webhook有没有事件去重和状态单向流转、下单接口有没有限流、金额是否全部由后端重新计算。逐条查了代码，不是纸上谈兵：
+
+**审计结果**：
+- ✅ **Session过期时间**：`create-checkout-session.ts` 里 hosted 和 elements 两种模式的 `expires_at` 本来就用的是同一个 `RESERVATION_TTL_MINUTES`（30分钟），跟库存预留时间本来就同步，不用改。
+- ✅ **金额由后端计算**：`create-checkout-session.ts` 本来就是从数据库读真实价格算的，从不信任前端传来的金额，这块本来就是对的。
+- ✅ **最后一瓶两人同时买**：查了 `supabase/migrations/0001_init.sql` 的 `reserve_inventory()`，本来就用 `for update` 行锁保证原子性，跟之前记录的"已用Docker Postgres验证过"一致，没问题。
+- ❌ **发现真bug1（严重）：webhook乱序会把已付款订单错误改回失败，还会把已经卖出的库存放回去**——`handlePaymentFailed()` 之前完全没检查订单当前状态，如果 Stripe 的 `checkout.session.expired` 事件比 `checkout.session.completed` 晚到（比如客户卡在过期边界那一刻刚好付款成功），就会把一个已经 `paid` 的订单改回 `payment_failed`，并且调用 `release_inventory_reservation`——这个 RPC 连*已确认*的预留也会释放并把库存加回去（代码注释里写得很清楚，是特意为"已付款订单后来被取消退款"这个场景设计的），也就是说这个bug会导致**已经卖给客户、已经收了钱的酒被系统当成没卖出去，可能被别人再买一次**。已经修复：`handlePaymentFailed()` 现在会先查订单当前状态，如果已经是 `paid` 就直接跳过，不释放库存、不改状态；`update` 语句本身也加了 `.neq("status", "paid")` 双重保险。
+- ❌ **发现真bug2（无关这次审计，顺手查出来的）**：`src/cart-store.ts` 的 `MAX_QTY_PER_ITEM` 之前从120改成了999（为了支持大宗客户直接在购物车输入几百瓶），但后端 `_lib/schemas.ts` 的 Zod 校验一直没跟着改，还卡在 `max(24)`——**意味着这段时间只要有人真的下单超过24瓶同一款酒，后端会直接拒绝这个请求**，跟前端"改成999"这个功能完全对不上。已经把校验上限也改成引用同一个 `MAX_QTY_PER_ITEM` 常量，不会再出现两边不一致。补了一条对应的单测（250瓶应该成功，1000瓶应该被拒绝）。
+- ⚠️ **没有幂等性**：代码注释里原来就承认"NOTE: there's no request-level idempotency key here"，这个是真的没做。
+- ⚠️ **没有限流**：原来完全没有任何频率限制。
+
+**幂等性 + 限流已经实现并用真实 Supabase 测试过**：
+- 新迁移 `0007_checkout_idempotency.sql`（已跑到线上）：`orders` 表加了 `checkout_attempt_id`（唯一索引，允许为空）和 `ip_address` 两列，`create_pending_order` RPC 加了两个对应的可选参数。
+- `src/cart.ts`：每次从购物车进入结账表单（`goToCheckout()`）生成一个 `checkoutAttemptId`（UUID），双击、网络重试、"返回再提交"这些场景都会带着同一个 ID 重新提交
+- `create-checkout-session.ts`：收到请求后先查有没有已存在的订单用这个 attempt ID——如果有且还是 `pending_payment` 状态，直接把已有的 Stripe Session 重新取一次返回给前端，**不会创建第二个订单、不会重复锁库存**；创建 Stripe Session 时也带上了 Stripe 自己的 `idempotencyKey`，双重保险
+- 限流：同一邮箱30分钟内最多3个未付款订单、同一IP（用 Netlify 的 `context.ip`，不是容易伪造的请求头）10分钟内最多5次下单请求，超过返回429，都是先查询已有数据做判断，没有引入新的外部服务
+- **真实测试**：起了本地 `netlify dev`，真实调用 Supabase——同一个 attempt ID 提交两次，确认数据库里真的只有一个订单一个预留；连续用同一邮箱下4个订单，第4个被正确拒绝；同一IP（本地是127.0.0.1）下第6次请求被正确拒绝。测试产生的订单都已清理（释放预留、标记cancelled）。
+
+**顺手加的一个防线**：webhook 收到"支付成功"事件时，现在会核对 Stripe 那边的 `amount_total`/`currency` 跟数据库里这笔订单的金额是否一致，不一致就拒绝标记为已付款并打日志，不再默认信任 Stripe 传来的金额。
+
+**这次没做、建议先观察不用现在建的**：
+- 用户提到的 CAPTCHA（Cloudflare Turnstile）——这个需要新开一个账号/site key，涉及跟用户对接注册，不是纯代码能搞定的，建议等真的观察到滥用迹象再上，不然平白无故给正常客户增加一道验证摩擦
+- 卡片测试/盗刷的专门风控——Stripe Checkout/Payment Element 默认就带 Radar 风控模型和自动限流，我们也一直有把 `customer_email` 传给 Stripe（Payment Element 场景下 Stripe.js 本身也会采集浏览器指纹用于风控），没有再另外自建一套检测逻辑。建议上线后留意 Stripe 后台的 Radar 报表，真出现异常再针对性加强，而不是提前造一堆可能用不上的规则。
+
+## Resend 邮件配额确认
+
+登录 Resend 后台查了实际状态：**当前是免费版**，账单页面显示 "Transactional 3,000 emails $0/mo"，没有绑定支付方式。查了 Resend 官方文档确认免费版限制是 **每天100封、每月3000封**，超过每天100封之后什么行为文档没写清楚（大概率是直接发不出去，不是排队）。
+
+因为一笔订单会触发2封邮件（客户确认+员工通知），**每天100封的免费额度撑死也就50笔订单/天**——如果真的做到"一天几百个用户下单"，会很快撞到这个墙。往上一档是 Pro 版 $20/月，5万封/月，**没有每日上限**，对"几百单/天"这个量级来说完全够用。
+
+由于 `sendOrderConfirmationEmail`/`sendStaffNotificationEmail` 本来就是失败只打日志、不会让订单流程失败（`Promise.allSettled` + 各自 try/catch），所以即使撞到 Resend 限额，**订单本身不会出问题，客户依然能正常付款、订单依然会被正确标记为已付款**——唯一的影响是那封邮件可能发不出去，而且目前没有任何监控/告警会告诉你"这封邮件其实没发出去"。
+
+**建议**：
+1. 真要冲量之前（比如老板开始大规模推广/大促），先把 Resend 升级到 Pro，成本很低（$20/月），能一次性解决每日上限问题
+2. 不要让客户/员工完全依赖邮件——现在客户有"My Orders"页面、老板/员工有 admin-app 后台，两边都是直接查 Supabase 数据库、不经过邮件，**订单状态本身不会因为邮件发不出去而丢失或不准确**，只是"收到通知"这个体验会打折扣。这个属于运营提醒，不是这次改代码能解决的事。
+
+## admin-app 是否受影响
+
+**确认没有受影响**。今天这几轮改动（Payment Element、自提暂停、政策页面重写、幂等性/限流）都没有碰 `admin-app/` 目录本身，也没有改 `orders`/`order_items` 表的既有字段结构（新增的 `checkout_attempt_id`/`ip_address` 是全新列，admin-app 不读取这两列，不受影响）。唯一沾边的地方是 `admin-app/src/pages/OrderDetail.tsx` 和 `admin-app/src/lib/types.ts` 里有 `self_collection` 这个枚举值的展示逻辑——这个只是显示用的分支判断，不会报错，只是以后新订单基本不会再出现这个值（历史上如果有自提订单，展示依然正常）。`admin-refund-order.ts`（老板/你在后台点退款走的这个函数）也完全没有改动。你和老板现在通过 admin-app 收订单、看后台，跟今天的改动没有任何冲突。
+
+这次改动（webhook乱序bug修复、qty上限不一致bug修复、幂等性、限流、金额核对）**还没 commit**。
 
 ## 2026-08-26（第四轮）：My Address 功能上线 + Terms/Privacy 内容补完 + 政策页脚统一
 

@@ -67,10 +67,18 @@ describe("createCheckoutSessionRequestSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts a wholesale-sized quantity within the per-item cap", () => {
+    const result = createCheckoutSessionRequestSchema.safeParse({
+      ...baseRequest,
+      items: [{ sku: "SKU-A", qty: 250 }],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects a quantity above the per-item cap", () => {
     const result = createCheckoutSessionRequestSchema.safeParse({
       ...baseRequest,
-      items: [{ sku: "SKU-A", qty: 25 }],
+      items: [{ sku: "SKU-A", qty: 1000 }],
     });
     expect(result.success).toBe(false);
   });

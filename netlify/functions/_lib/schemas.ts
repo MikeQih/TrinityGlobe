@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_QTY_PER_ITEM } from "../../../src/cart-store";
 
 export const skuSchema = z.string().min(1).max(64);
 
@@ -17,9 +18,13 @@ export const recipientSchema = z.object({
   notes: z.string().trim().max(1000),
 });
 
+// Kept in lockstep with src/cart-store.ts#MAX_QTY_PER_ITEM — that limit was
+// raised to 999 for wholesale-sized orders (a customer typing a large qty
+// directly into the cart), but this schema was never updated to match, so
+// every such order was silently rejected by this endpoint at qty > 24.
 export const cartItemSchema = z.object({
   sku: skuSchema,
-  qty: z.number().int().min(1).max(24),
+  qty: z.number().int().min(1).max(MAX_QTY_PER_ITEM),
 });
 
 // Server-side mirror of src/cart.ts#validateRecipient: the client already
@@ -31,6 +36,11 @@ export const createCheckoutSessionRequestSchema = z
     deliveryMethod: deliveryMethodSchema,
     recipient: recipientSchema,
     ageConfirmed: z.literal(true),
+    // Client-generated once per checkout form visit (see src/cart.ts) and
+    // reused across retries of that same attempt — see create-checkout-
+    // session.ts's idempotency handling. Optional so an older/cached
+    // frontend bundle without it still works, just without dedup.
+    checkoutAttemptId: z.string().uuid().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.deliveryMethod === "standard") {

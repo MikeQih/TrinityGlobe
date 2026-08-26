@@ -93,9 +93,9 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, status")
+    .select("id, status, total_cents")
     .eq("id", orderId)
-    .single<Pick<OrderRow, "id" | "status">>();
+    .single<Pick<OrderRow, "id" | "status" | "total_cents">>();
 
   if (orderError || !order) {
     console.error("stripe-webhook: order not found for session", session.id, orderId, orderError);
@@ -104,6 +104,22 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
 
   // Idempotency belt-and-braces alongside the stripe_events ledger above.
   if (order.status === "paid") return;
+
+  // Belt-and-braces on top of create-checkout-session.ts always computing
+  // the amount server-side: confirms Stripe actually collected what our own
+  // database says this order costs, in the currency we expect, before this
+  // deducts stock or sends a confirmation email. A mismatch here would mean
+  // either a bug in how the session was built, or the order row changed
+  // between session creation and payment — either way, not something to
+  // silently paper over by trusting Stripe's number blindly.
+  if (session.amount_total !== order.total_cents || session.currency !== "sgd") {
+    console.error(
+      "stripe-webhook: amount/currency mismatch, refusing to mark paid",
+      orderId,
+      { sessionAmount: session.amount_total, sessionCurrency: session.currency, orderTotal: order.total_cents }
+    );
+    return;
+  }
 
   const { data: reservations, error: reservationsError } = await supabase
     .from("inventory_reservations")
@@ -159,6 +175,25 @@ async function handlePaymentFailed(supabase: SupabaseClient, session: Stripe.Che
   const orderId = session.client_reference_id ?? (session.metadata?.order_id as string | undefined);
   if (!orderId) return;
 
+  // Stripe doesn't guarantee delivery order across event types — a
+  // checkout.session.expired for this session can arrive *after* the
+  // checkout.session.completed that already marked it paid (e.g. the
+  // customer paid right at the expiry boundary). Without this guard, that
+  // late event would release/restock an already-confirmed reservation and
+  // flip a paid order back to payment_failed — selling the same stock
+  // twice and corrupting the order record. Once an order is paid, no
+  // "it failed/expired" event is allowed to undo that.
+  const { data: existingOrder, error: existingOrderError } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .single<Pick<OrderRow, "status">>();
+  if (existingOrderError) {
+    console.error("stripe-webhook: failed to load order before marking failed", orderId, existingOrderError);
+    return;
+  }
+  if (existingOrder?.status === "paid") return;
+
   const { data: reservations, error } = await supabase
     .from("inventory_reservations")
     .select("id")
@@ -176,7 +211,13 @@ async function handlePaymentFailed(supabase: SupabaseClient, session: Stripe.Che
     }
   }
 
-  const { error: updateError } = await supabase.from("orders").update({ status: "payment_failed" }).eq("id", orderId);
+  // .neq("status", "paid") is a second guard at the same update, in case a
+  // concurrent delivery of the paid event raced past the pre-check above.
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({ status: "payment_failed" })
+    .eq("id", orderId)
+    .neq("status", "paid");
   if (updateError) {
     console.error("stripe-webhook: failed to mark order payment_failed", orderId, updateError);
   }
