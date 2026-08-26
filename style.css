@@ -1049,7 +1049,8 @@ footer .container {
   color: #c8beb0;
   background: none;
   border: none;
-  padding: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0 0 0.25rem;
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.2s;

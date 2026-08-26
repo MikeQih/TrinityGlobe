@@ -31,6 +31,11 @@ const policyTranslations = {
     'h1-delivery': 'Delivery Policy',
     'h1-refund': 'Refund & Return Policy',
     'h1-age': 'Responsible Drinking & Age Restriction Notice',
+    'footer-terms': 'Terms & Conditions',
+    'footer-privacy': 'Privacy Policy',
+    'footer-delivery': 'Delivery Policy',
+    'footer-refund': 'Refund & Returns',
+    'footer-age': 'Responsible Drinking',
   },
   zh: {
     'policy-eyebrow-legal': '法律',
@@ -44,6 +49,11 @@ const policyTranslations = {
     'h1-delivery': '配送政策',
     'h1-refund': '退款与退货政策',
     'h1-age': '理性饮酒与年龄限制须知',
+    'footer-terms': '条款与条件',
+    'footer-privacy': '隐私政策',
+    'footer-delivery': '配送政策',
+    'footer-refund': '退款与退货',
+    'footer-age': '理性饮酒',
   },
 };
 
