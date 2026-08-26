@@ -194,7 +194,8 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 - [ ] **Stripe 还在 test mode**——`.env`/Netlify 后台配的是 `STRIPE_SECRET_KEY=sk_test_`，上线收真钱前要换成 live key（`sk_live_`）；换 key 的同时要把 Stripe webhook 指向生产环境公网 URL，重新拿一次 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配（目前是空的）。
   **2026-08-26 已核实（用户明确只要求先做这一步确认，还没要求切 live key）**：登录 Stripe 正式账号（`acct_1U66mYBAev1issbv`）→ 设置 → 商家 →"账户状态"，右侧"功能"栏确认 **支付（Charges）和 Payouts 都是"活跃"状态**（唯一"已暂停"的是 Cartes Bancaires，法国本地卡组织，跟新加坡业务无关，不影响）；"银行账户和货币"页确认已经关联了默认 SGD 收款账户（DBS Bank/POSB）。**结论：账户已经具备实际收款+提现能力，不是只过了身份验证。** 真正切 live key 时还有个真实风险要注意：现在 Netlify 的环境变量是"All scopes / 全部5个部署环境同一个值"，包括公开的 `dev--trinity-globe.netlify.app` 预览站——直接把 `STRIPE_SECRET_KEY` 全局换成 live 会让那个公开预览站也开始跑真实扣款。更安全的做法是用 Netlify"按部署环境设不同值"这个功能（不需要升级付费版），只给 Production 配 `sk_live_`，其余环境继续留 `sk_test_`。
 - [x] ~~前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点~~——**2026-08-26 已完成**：登录 Netlify 后台（`trinity-globe` 项目 → Project configuration → Environment variables），两个变量都已添加（All scopes，Same value in all deploy contexts，跟其他现有变量的配置方式一致），值取自本地 `.env`。这两个是客户端匿名key，本身就会被打进浏览器构建产物，不算敏感信息。
-- [ ] **GST 合规确认**——数据库 `store_settings.gst_registered` 目前是 false（占位）。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册），需要尽快跟老板/会计确认公司是否已经注册，直接影响网站价格要不要显示含税、以及现在是否已存在合规风险
+- [ ] **GST 注册信息确认**——2026-08-26 已把数据库设计从一个手动 boolean 改成基于生效日期（详见下面"GST 生效日期设计"一节），代码已经按"未注册期间绝不显示/收取 GST"的规则实现并上线，**但目前 `store_settings.gst_registration_effective_at` 仍是 `null`（即当前网站对所有订单都不收 GST）**。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册）。需要向老板/会计确认的不是简单的"是否注册"，而是两个具体信息：**(1) 公司的 GST Registration Number；(2) IRAS 批准信上注明的 GST Registration Effective Date**。拿到这两项后，只需要在 `store_settings` 表里填入这两个字段，新订单会从生效日期当天起自动开始按 9/109 计算并显示 GST，不需要再改代码。
+- [ ] **邮件发送失败追踪账本**——目前订单确认邮件/员工通知邮件发送失败只会 `console.error`，没有持久化记录，后台看不到"哪些订单的确认邮件没发出去"。游客下单没有"我的订单"页面兜底，如果确认邮件没送达，游客除了打客服电话没有别的办法知道订单状态。计划做一个发送状态账本（记录每次发送尝试的成功/失败/失败原因）+ admin-app 里的提醒 UI + 一个不会重复触碰订单状态/库存的"重新发送"按钮（`admin-resend-order-email.ts` 已经有重发功能，但还没有失败可见性）。用户明确说这个不算小改动，但仍然是上线前必须完成的项，不是可选项。
 - [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
 - [ ] **确认 `release-expired-reservations` 这个定时释放库存的 Function 真的在 Netlify 生产环境跑着**——2026-08-26 admin-app 回归测试时发现好几条库存预留早就过了 `expires_at` 但状态还停在 `pending`，说明这个任务大概率从来没在生产环境真正成功执行过。Netlify Scheduled Functions **只在正式 Published Deploy 上运行，Deploy Preview/branch deploy 不会自动跑**，所以本地 `netlify dev` 测试正常不代表生产环境真的在跑。上线前必须手动确认：(1) Netlify 后台 Functions 列表里能看到这个函数、cron 时间对；(2) 它需要的环境变量对 Functions 可用，且改动环境变量后已经重新部署过；(3) 手动点一次"Run now"；(4) 建一笔到期时间很短的测试预留，等它到期后确认订单状态/预留状态/库存三者都正确变化；(5) 再跑一次，确认不会对同一笔预留重复加库存。代码这边已经加了心跳记录（见下面 2026-08-26 admin-app 回归那一轮）：admin-app 订单列表页顶部会在这个任务超过15分钟没成功执行时显示醒目警告，可以直接用它来判断生产环境是否正常。
 
@@ -559,6 +560,22 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 全部改动已过 storefront + admin-app 的 typecheck/test/build，用真实 Stripe test-mode 付款（不是 mock）在 admin-app 真实界面走完了 付款→处理中→配送中→已完成、全额退款、部分退款三条路径，库存三种场景分别验证，`SECURITY DEFINER` 加固后重新跑过一次状态变更确认功能没坏。测试产生的订单/预留/历史记录全部清理，`inventory.website_stock` 确认回到统一基线 50。
 
+## 2026-08-26（第九轮）：GST 生效日期设计 + 客户端展示
+
+用户否决了"无论是否注册都保存 `gst_cents`"这个初版方案，理由是 IRAS 规定 GST 只能从注册生效日期起收取，未注册期间显示或保存一个非零 GST 金额会造成税务含义错误。改成了基于生效日期的设计：
+
+- `store_settings` 表：去掉了原来的 `gst_registered` boolean，改成 `gst_registration_effective_at`（timestamptz，来自 IRAS 批准信）+ `gst_registration_number`（正式注册后填）。是否收 GST 由"当前时间是否已过生效日期"决定，不再是一个人工手动切换的开关。
+- `orders` 表新增两个下单时刻的快照字段：`gst_registered_at_checkout`（bool）、`gst_rate`（下单时的税率，未生效时为0）。`gst_cents` 本身也是快照——未注册/未生效时永远是 0，绝不会保存一个"算出来但没实际收取"的金额。这样历史订单的税务含义不会因为后来打开开关或修改生效日期而被重新解释。
+- 迁移：`supabase/migrations/0017_gst_registration_effective_date.sql`（已上线执行），同时把 `create_pending_order` RPC 改成接收并存储这两个新快照参数。
+- 计算逻辑本身（`src/pricing.ts#computeInclusiveGstCents`，未生效返回0，生效则按 `金额 - 金额/1.09` 算出含税价里的GST部分）在更早的回合就已经写对了，这轮真正做的是把它接上 `create-checkout-session.ts` 的生效日期判断，并且**把它第一次真正展示给客户**——此前 `gst_cents` 虽然一直在存，但结账页、我的订单、确认邮件里从来没有一个地方显示过它，只有 admin-app 有。这轮补上了：我的订单详情页（`orders-page.ts`，仅在 `gstRegisteredAtCheckout` 为真时才出现的一行）、订单确认邮件（`_lib/email.ts`，同样条件展示，灰色小字"Includes GST: S$X.XX"）、`get-my-orders.ts`/`src/types.ts`/`orders-i18n.js`（新增中英文 "GST"/"消费税(GST)" 词条）全部打通。admin-app 那边的展示行也同步改成读新字段，未生效时显示"Not applicable — not GST-registered at checkout"而不是显示一个 S$0.00。
+- **实测验证**（真实 Supabase 写入，不是 mock）：(1) 当前真实状态（未注册）下单一笔 S$170 的订单，确认存了 `gst_cents=0, gst_registered_at_checkout=false, gst_rate=0`；(2) 临时把 `gst_registration_effective_at` 改到过去的日期模拟"已生效"，同样金额下单，确认存了 `gst_cents=1404, gst_registered_at_checkout=true, gst_rate=0.09`——手工验证 `1404 = round(17000 - 17000/1.09)`，跟 9/109 公式精确吻合。验证完成后**已经把 `gst_registration_effective_at` 改回 `null`**（真实状态就是还没注册，不能让模拟状态留在生产数据库里），两笔测试订单也已删除干净，`typecheck`/`test`/`build` 两个项目都重新跑过一遍全部通过。
+- **浏览器像素级 UI 检查这轮没做**：需要一个真实登录态的顾客账号在 `orders.html` 上打开一笔含 GST 的订单详情才能肉眼确认样式，而这轮尝试用脚本刷新一个测试账号的 session token 被 Claude Code 自身的权限分类器拦截（把"程序化操作认证 token"归类为高风险操作，合理拒绝）。逻辑本身很简单（一个三元表达式，`orders-page.ts`/`OrderDetail.tsx`/`email.ts` 三处写法一致），且已经在 DB 和 API 字段层面完整验证过，风险不高，但严格来说这一步应该并入用户自己在 Deploy Preview 阶段做真实手机测试时顺带看一眼订单详情页的 GST 那一行是否正确显示/隐藏。
+- 顺带确认：配送费政策的中文版（`policies/delivery.html`）其实早就正确写着 S$15/S$120（跟英文版一致），之前某一轮里我曾经错误地告诉用户"中文版没写数字"，这轮翻回原文确认是我看错了，已经当面纠正，没有做多余的改动。
+
+这轮改动尚未 commit：`supabase/migrations/0017_gst_registration_effective_date.sql` + `netlify/functions/create-checkout-session.ts`/`get-my-orders.ts`/`stripe-webhook.ts`/`admin-resend-order-email.ts`/`_lib/email.ts` + `src/types.ts`/`src/orders-page.ts`/`orders-i18n.js` + `admin-app/src/lib/types.ts`/`admin-app/src/pages/OrderDetail.tsx` + 本文件本身。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -579,7 +596,7 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 3. **Facebook 应用图标需要用户自己上传**（文件在 `/tmp/fb-icon/app-icon-1024.png`，机器重启/清理后可能已经不在，需要的话让我重新生成），传完才能提交 App Review
 4. 问用户：查完 Meta Business Portfolio 状态后，Facebook App Review 要不要现在就正式提交申请
 5. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
-6. 提醒老板确认公司是否已注册 GST（年营收已超S$1M）
+6. 请老板/会计确认公司的 **GST Registration Number**，以及 **IRAS 批准信中注明的 GST Registration Effective Date**（不是简单的"是否注册"——年营收已超S$1M，按 IRAS 规定已触发强制注册义务；拿到这两项后填进 `store_settings` 表即可，见下面 GST 章节，不需要再改代码）
 7. 问用户：Terms/Privacy 页面各自的"内部草稿，还没过律师"提示块要不要也去掉（age-restriction 那条已经按要求删了，这两份目前还留着，见上面第二轮记录）
 8. **用户已明确表示现在还没准备好，先不把 `dev` 合并到 `main`**——不要主动提起或推动这件事，等用户自己说要上线再做（合并前记得：a. 把 `dev` 分支上还没 commit 的这批改动先 commit；b. 决定 Stripe live key 要怎么切——见上面"Stripe 还在 test mode"条目里"按部署环境设不同值"的方案）
 

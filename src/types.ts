@@ -134,6 +134,10 @@ export interface MyOrder {
   totalCents: number;
   subtotalCents: number;
   shippingFeeCents: number;
+  /** The GST component already included in totalCents — 0 whenever the business wasn't GST-registered yet at checkout time (see gstRegisteredAtCheckout). Never shown as a line item unless gstRegisteredAtCheckout is true. */
+  gstCents: number;
+  /** Snapshotted at checkout — whether GST applied to this specific order, independent of the store's current registration status. See supabase/migrations/0017_gst_registration_effective_date.sql. */
+  gstRegisteredAtCheckout: boolean;
   refundedCents: number;
   currency: string;
   deliveryMethod: DeliveryMethod;

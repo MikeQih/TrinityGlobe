@@ -38,6 +38,11 @@ export interface Order {
   subtotal_cents: number;
   shipping_fee_cents: number;
   gst_cents: number;
+  // Snapshotted at checkout — whether/at what rate GST applied to *this*
+  // order, independent of store_settings' current registration status.
+  // See supabase/migrations/0017_gst_registration_effective_date.sql.
+  gst_registered_at_checkout: boolean;
+  gst_rate: number;
   total_cents: number;
   currency: string;
   refunded_cents: number;

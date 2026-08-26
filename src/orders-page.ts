@@ -265,6 +265,16 @@ export function initOrdersPage(): void {
     }</span></div>
           <div class="cart-summary-row cart-total-row"><span>${t("checkout-total")}</span><span>${formatCents(order.totalCents)}</span></div>
           ${
+            // Only ever shown for orders where GST genuinely applied at
+            // checkout time (see gstRegisteredAtCheckout) — never a "GST:
+            // S$0.00" line implying tax was collected when it wasn't.
+            order.gstRegisteredAtCheckout
+              ? `<div class="cart-summary-row order-detail-gst-note"><span>${t("checkout-gst")}</span><span>${formatCents(
+                  order.gstCents
+                )}</span></div>`
+              : ""
+          }
+          ${
             order.refundedCents > 0
               ? `<div class="cart-summary-row"><span>${t("orders-detail-refunded-amount")}</span><span>${formatCents(
                   order.refundedCents

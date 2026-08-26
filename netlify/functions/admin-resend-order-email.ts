@@ -57,7 +57,7 @@ export default async (req: Request): Promise<Response> => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents")
+    .select("id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout")
     .eq("id", parsed.data.orderId)
     .single();
   if (orderError || !order) return errorResponse(404, "Order not found", undefined, corsHeaders());

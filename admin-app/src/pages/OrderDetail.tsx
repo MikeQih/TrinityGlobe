@@ -285,7 +285,14 @@ export function OrderDetail() {
         <div className="order-totals">
           <div><span>Subtotal</span><span>{fmt(order.subtotal_cents)}</span></div>
           <div><span>Shipping</span><span>{order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</span></div>
-          <div><span>GST (inclusive)</span><span>{fmt(order.gst_cents)}</span></div>
+          <div>
+            <span>GST (inclusive)</span>
+            <span>
+              {order.gst_registered_at_checkout
+                ? `${fmt(order.gst_cents)} (${(order.gst_rate * 100).toFixed(0)}%)`
+                : "Not applicable — not GST-registered at checkout"}
+            </span>
+          </div>
           <div className="total-row"><span>Total</span><span>{fmt(order.total_cents)}</span></div>
           {order.refunded_cents > 0 && (
             <div className="refunded-row"><span>Refunded</span><span>{fmt(order.refunded_cents)}</span></div>

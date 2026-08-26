@@ -7,6 +7,8 @@ interface OrderRow {
   total_cents: number;
   subtotal_cents: number;
   shipping_fee_cents: number;
+  gst_cents: number;
+  gst_registered_at_checkout: boolean;
   refunded_cents: number;
   currency: string;
   delivery_method: string;
@@ -53,7 +55,7 @@ export default async (req: Request): Promise<Response> => {
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
     .select(
-      "id, status, total_cents, subtotal_cents, shipping_fee_cents, refunded_cents, currency, delivery_method, created_at, paid_at, cancelled_at, recipient_snapshot, stripe_checkout_session_id"
+      "id, status, total_cents, subtotal_cents, shipping_fee_cents, gst_cents, gst_registered_at_checkout, refunded_cents, currency, delivery_method, created_at, paid_at, cancelled_at, recipient_snapshot, stripe_checkout_session_id"
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -116,6 +118,8 @@ export default async (req: Request): Promise<Response> => {
     totalCents: o.total_cents,
     subtotalCents: o.subtotal_cents,
     shippingFeeCents: o.shipping_fee_cents,
+    gstCents: o.gst_cents,
+    gstRegisteredAtCheckout: o.gst_registered_at_checkout,
     refundedCents: o.refunded_cents,
     currency: o.currency,
     deliveryMethod: o.delivery_method,

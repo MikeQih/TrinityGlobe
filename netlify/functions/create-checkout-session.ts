@@ -24,7 +24,10 @@ interface StoreSettings {
   standard_shipping_fee_cents: number;
   free_shipping_threshold_cents: number;
   gst_rate: number;
-  gst_registered: boolean;
+  // null until the business is actually IRAS-registered — the timestamp
+  // itself (not a separately-flipped boolean) is what decides whether GST
+  // applies to a given order. See 0017_gst_registration_effective_date.sql.
+  gst_registration_effective_at: string | null;
 }
 
 interface ProductVariantRow {
@@ -178,7 +181,7 @@ export default async (req: Request, context: Context): Promise<Response> => {
 
   const { data: settings, error: settingsError } = await supabase
     .from("store_settings")
-    .select("standard_shipping_fee_cents, free_shipping_threshold_cents, gst_rate, gst_registered")
+    .select("standard_shipping_fee_cents, free_shipping_threshold_cents, gst_rate, gst_registration_effective_at")
     .eq("id", 1)
     .single<StoreSettings>();
 
@@ -243,10 +246,21 @@ export default async (req: Request, context: Context): Promise<Response> => {
     deliveryMethod,
   });
   const totalCents = subtotalCents + shippingFeeCents;
+  // Per IRAS rules a business may only charge GST from its registration's
+  // effective date onward — checked here as a plain timestamp comparison,
+  // not a separately-maintained boolean, so there's nothing to remember to
+  // flip on the right day. Snapshotted onto the order itself (gstCents,
+  // gstRegisteredAtCheckout, gstRateSnapshot) so a rate change or
+  // registration finally taking effect later never reinterprets a
+  // historical order's tax status.
+  const gstRegisteredNow =
+    settings.gst_registration_effective_at != null &&
+    new Date(settings.gst_registration_effective_at).getTime() <= Date.now();
+  const gstRateSnapshot = gstRegisteredNow ? Number(settings.gst_rate) : 0;
   const gstCents = computeInclusiveGstCents({
     amountCents: totalCents,
-    gstRate: Number(settings.gst_rate),
-    gstRegistered: settings.gst_registered,
+    gstRate: gstRateSnapshot,
+    gstRegistered: gstRegisteredNow,
   });
 
   const fingerprint = computeFingerprint({
@@ -350,6 +364,8 @@ export default async (req: Request, context: Context): Promise<Response> => {
       p_subtotal_cents: subtotalCents,
       p_shipping_fee_cents: shippingFeeCents,
       p_gst_cents: gstCents,
+      p_gst_registered_at_checkout: gstRegisteredNow,
+      p_gst_rate: gstRateSnapshot,
       p_total_cents: totalCents,
       p_age_confirmed: ageConfirmed,
       p_reservation_ttl_minutes: RESERVATION_TTL_MINUTES,

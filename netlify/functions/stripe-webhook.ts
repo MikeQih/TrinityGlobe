@@ -14,6 +14,8 @@ interface OrderRow {
   delivery_method: string;
   subtotal_cents: number;
   shipping_fee_cents: number;
+  gst_cents: number;
+  gst_registered_at_checkout: boolean;
 }
 
 /**
@@ -162,7 +164,7 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
 
   const { data: fullOrder } = await supabase
     .from("orders")
-    .select("id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents")
+    .select("id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout")
     .eq("id", orderId)
     .single<OrderRow>();
   const { data: items } = await supabase

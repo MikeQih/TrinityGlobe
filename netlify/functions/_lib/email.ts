@@ -17,6 +17,12 @@ interface OrderForEmail {
   subtotal_cents: number;
   shipping_fee_cents: number;
   total_cents: number;
+  gst_cents: number;
+  // Snapshotted at checkout — whether GST applied to *this* order,
+  // independent of the store's current registration status. Only ever
+  // shown when true, never as a "GST: S$0.00" line implying tax was
+  // collected when it wasn't. See 0017_gst_registration_effective_date.sql.
+  gst_registered_at_checkout: boolean;
 }
 
 interface OrderItemForEmail {
@@ -77,6 +83,7 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail, items: Or
         <p>Subtotal: ${fmt(order.subtotal_cents)}</p>
         <p>Shipping: ${order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</p>
         <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
+        ${order.gst_registered_at_checkout ? `<p style="color:#999;font-size:12px;">Includes GST: ${fmt(order.gst_cents)}</p>` : ""}
         ${deliveryDetailsHtml(order.delivery_method)}
         ${footerHtml()}
       `,
