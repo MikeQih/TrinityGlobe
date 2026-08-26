@@ -190,12 +190,13 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ### 必须做（不做会直接出问题）
 
-- [x] ~~库存还是占位数~~——**2026-08-26 已完成**：用户说先统一设成 50，已用临时 `.mjs` 脚本 + service role key 把 Supabase `inventory.website_stock` 全部 72 行更新为 50（跑完即删，脚本没留在仓库里），更新前后各查询一次确认 72 行全部生效。**这仍然是占位值，不是每款酒的真实库存**——上线前如果用户有更准确的数字，需要再覆盖一次。
+- [ ] **库存统一为 50 只是临时测试基线，不是真实可售库存，上线前必须重新录入**——数据库 `inventory.website_stock` 目前 72 行统一是 50（最近一次是 2026-08-26 admin-app 回归测试后重新拉平的，测试过程中一度有 SKU 因脚本清理疏漏偏离过基线）。**在运营明确确认每款酒实际分配给官网的可售数量之前，绝不能把这个 50 当成真实库存直接开放付款**——客户付了钱却缺货，只能事后退款，既影响体验也会给 Stripe 的风控数据留下坏记录。正式开放付款前二选一：(a) 如果确认每款酒实际至少有 50 瓶，可以继续沿用 50；(b) 实际数量不确定的话，建议先保守设成每款 1–5 瓶，老板盘点后再在 admin-app 里逐个调高。**这一条不需要写代码，是纯运营确认项。**
 - [ ] **Stripe 还在 test mode**——`.env`/Netlify 后台配的是 `STRIPE_SECRET_KEY=sk_test_`，上线收真钱前要换成 live key（`sk_live_`）；换 key 的同时要把 Stripe webhook 指向生产环境公网 URL，重新拿一次 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配（目前是空的）。
   **2026-08-26 已核实（用户明确只要求先做这一步确认，还没要求切 live key）**：登录 Stripe 正式账号（`acct_1U66mYBAev1issbv`）→ 设置 → 商家 →"账户状态"，右侧"功能"栏确认 **支付（Charges）和 Payouts 都是"活跃"状态**（唯一"已暂停"的是 Cartes Bancaires，法国本地卡组织，跟新加坡业务无关，不影响）；"银行账户和货币"页确认已经关联了默认 SGD 收款账户（DBS Bank/POSB）。**结论：账户已经具备实际收款+提现能力，不是只过了身份验证。** 真正切 live key 时还有个真实风险要注意：现在 Netlify 的环境变量是"All scopes / 全部5个部署环境同一个值"，包括公开的 `dev--trinity-globe.netlify.app` 预览站——直接把 `STRIPE_SECRET_KEY` 全局换成 live 会让那个公开预览站也开始跑真实扣款。更安全的做法是用 Netlify"按部署环境设不同值"这个功能（不需要升级付费版），只给 Production 配 `sk_live_`，其余环境继续留 `sk_test_`。
 - [x] ~~前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点~~——**2026-08-26 已完成**：登录 Netlify 后台（`trinity-globe` 项目 → Project configuration → Environment variables），两个变量都已添加（All scopes，Same value in all deploy contexts，跟其他现有变量的配置方式一致），值取自本地 `.env`。这两个是客户端匿名key，本身就会被打进浏览器构建产物，不算敏感信息。
 - [ ] **GST 合规确认**——数据库 `store_settings.gst_registered` 目前是 false（占位）。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册），需要尽快跟老板/会计确认公司是否已经注册，直接影响网站价格要不要显示含税、以及现在是否已存在合规风险
 - [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
+- [ ] **确认 `release-expired-reservations` 这个定时释放库存的 Function 真的在 Netlify 生产环境跑着**——2026-08-26 admin-app 回归测试时发现好几条库存预留早就过了 `expires_at` 但状态还停在 `pending`，说明这个任务大概率从来没在生产环境真正成功执行过。Netlify Scheduled Functions **只在正式 Published Deploy 上运行，Deploy Preview/branch deploy 不会自动跑**，所以本地 `netlify dev` 测试正常不代表生产环境真的在跑。上线前必须手动确认：(1) Netlify 后台 Functions 列表里能看到这个函数、cron 时间对；(2) 它需要的环境变量对 Functions 可用，且改动环境变量后已经重新部署过；(3) 手动点一次"Run now"；(4) 建一笔到期时间很短的测试预留，等它到期后确认订单状态/预留状态/库存三者都正确变化；(5) 再跑一次，确认不会对同一笔预留重复加库存。代码这边已经加了心跳记录（见下面 2026-08-26 admin-app 回归那一轮）：admin-app 订单列表页顶部会在这个任务超过15分钟没成功执行时显示醒目警告，可以直接用它来判断生产环境是否正常。
 
 ### 建议做但不是技术阻塞
 
@@ -536,6 +537,27 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 **5个政策页面（Terms/Privacy/Delivery/Refund/Age Restriction）页脚统一加上了政策链接导航**：用户截图指出打开 Privacy 页面后，页脚只有"TRINITY GLOBE TRADING"和版权文字，没有 Terms & Conditions/Privacy Policy/Delivery Policy/Refund & Returns/Responsible Drinking 这五个链接——而首页 `index.html` 的页脚是有的（`.footer-links`）。已经给这5个政策页面的页脚都补上了跟首页一模一样的这组链接（用相对路径互相指向，因为都在 `policies/` 目录下），5个页面现在页脚完全一致。浏览器截图确认 Privacy 页面页脚 5 个链接正确显示。
 
 这次改动（`customer_addresses` 迁移已跑到线上、`addresses.html`/`addresses-i18n.js`/`src/addresses-page.ts`、导航下拉菜单加 My Address、Terms/Privacy 内容补完、四个政策页去掉草稿大通知、五个政策页页脚统一）**还没 commit**。
+
+---
+
+## 2026-08-26（第八轮）：admin-app 完整回归 + 4 个后续修正
+
+用户要求对 admin-app 做一次完整回归（订单列表/详情、新状态、地址快照、GST/配送费金额、状态操作、退款、库存变化），并实际用 Stripe test-mode 走一遍付款流程。**这轮发现的最关键问题**：`order_status_history` 只有 SELECT 的 RLS 策略，记录状态变更的触发器以调用者身份运行——admin-app 用自己的员工 JWT（而非 Netlify Function 的 service_role）直接改状态时，触发器插入历史记录会被 RLS 拒绝，导致**整个状态更新静默回滚**（"Mark as Preparing"点了看起来没反应，数据库其实压根没变）。这个 bug 在这轮之前从来没被发现过，因为之前从来没有人真正点开运行中的 admin-app 测试过这些按钮。
+
+修了这个之后，用户又指出这轮的初版修复还不够严谨，追加了 4 点必须做到才能算过关：
+
+1. **退款幂等要用持久化记录，不能只在前端生成一次性 key**——已重写：新增 `refund_requests` 表（`0014_refund_request_ledger.sql`），`claim_refund_request`/`settle_refund_request` 两个 RPC。每次退款意图对应一条持久记录，用它自己的 `id` 当 Stripe 幂等键；网络超时/页面刷新/两个后台标签页/两个管理员同时操作，都会命中同一条 `pending` 记录、复用同一个幂等键重试，不会生成新 key——完全对齐 Stripe 官方"结果不确定时用同一个幂等键重试"的建议。只有 Stripe 明确拒绝（`StripeInvalidRequestError`，比如金额不对）才会把记录标记 `failed`、允许下次用新记录重试；任何其他错误（网络/超时/5xx）保持 `pending`，明确告诉后台"请稍后重试，重试是安全的"。
+2. **定时释放库存任务的运行状态需要能被看见**——`release-expired-reservations.ts` 现在每次执行（不论成功失败）都会往新增的 `scheduled_job_runs` 表（`0015_scheduled_job_health.sql`）写 `last_run_at`/`last_success_at`/`last_error`；admin-app 订单列表页顶部新增了 `StaleJobWarning`，超过15分钟没有成功记录就会显示醒目黄色警告。**这只解决了"能不能被发现"，实际部署状态（Netlify 后台 Functions 列表是否真的有这个函数、cron 有没有跑、Run now 手动测试）仍需要用户自己去 Netlify 后台确认**——这台机器没有登录 Netlify CLI，够不到。
+3. **库存恢复规则不是一条，是三条不同的规则，之前的总结把它们混在一起了**——已经用真实数据分别验证：
+   - 待付款订单取消（`cancel_pending_order_as_staff`/`cancel_own_pending_order`）：`inventory.website_stock` 全程不变（因为 `pending` 预留本来就没扣过这个字段），但 `get_available_stock()`（给可售数量算法用的"可用库存"）会立刻恢复——实测 50→49（预留）→50（取消）。
+   - 待付款订单过期（`expire_stale_reservations` + `mark_order_failed_from_webhook`）：跟取消完全一样的机制，实测同样 50→49→50。
+   - 已付款订单退款：`website_stock` 在确认付款时已经真的扣减过，退款**不会**自动加回来——实测 49→48（付款扣减）→48（退款后不变），是刻意设计，是否补库存需要老板自己确认商品是否退回且能再卖。
+   三个场景的 SQL 脚本跑完都已清理，`inventory.website_stock` 确认恢复到统一基线 50。
+4. **`SECURITY DEFINER` 函数需要防住 search_path 劫持**——`0013` 里加了 `search_path = public, pg_temp`，但这还不够：Postgres 解析未加schema前缀的表名时，会话自己的临时表（`pg_temp`）**永远优先被查**，跟 search_path 里写没写 `pg_temp`、写在哪个位置都无关——这正是 CVE-2018-1058 那类 SECURITY DEFINER 权限提升手法的原理。已经在 `0016_harden_status_history_functions.sql` 里把函数体内的表引用改成完整限定名 `public.order_status_history`，从根本上排除被临时表偷换的可能。用 `pg_proc` 直接查询确认了 `prosecdef=true`、`proconfig=["search_path=public, pg_temp"]` 都生效，且函数体内只有这一处、别无其他表引用或动态SQL，不存在被利用去做别的事的空间。
+
+**上线前检查清单也做了两处对应更新**：库存=50 那条改成了明确的"临时测试基线，运营确认前不得当真实库存"措辞；新增了"确认 `release-expired-reservations` 真的在生产环境跑着"这一条完整的验证步骤清单。
+
+全部改动已过 storefront + admin-app 的 typecheck/test/build，用真实 Stripe test-mode 付款（不是 mock）在 admin-app 真实界面走完了 付款→处理中→配送中→已完成、全额退款、部分退款三条路径，库存三种场景分别验证，`SECURITY DEFINER` 加固后重新跑过一次状态变更确认功能没坏。测试产生的订单/预留/历史记录全部清理，`inventory.website_stock` 确认回到统一基线 50。
 
 ## 重要的操作纪律（继续遵守）
 

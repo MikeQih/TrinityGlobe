@@ -30,6 +30,43 @@ function fmt(cents: number): string {
 // up promptly" for a back-office tool that's usually just left open.
 const AUTO_REFRESH_MS = 30_000;
 
+// release-expired-reservations.ts runs every 5 minutes (see its own
+// `config.schedule`) and records a heartbeat in scheduled_job_runs on
+// every run — see 0015_scheduled_job_health.sql. Three missed runs' worth
+// of slack before flagging it here, since Netlify's scheduler isn't
+// perfectly on-the-second and a single slow run shouldn't page anyone.
+const STALE_JOB_THRESHOLD_MS = 15 * 60_000;
+
+function StaleJobWarning() {
+  const [lastSuccessAt, setLastSuccessAt] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    supabase
+      .from("scheduled_job_runs")
+      .select("last_success_at")
+      .eq("job_name", "release_expired_reservations")
+      .maybeSingle()
+      .then(({ data }) => setLastSuccessAt(data?.last_success_at ?? null));
+  }, []);
+
+  if (lastSuccessAt === undefined) return null; // still loading — don't flash a false warning
+  const isStale = !lastSuccessAt || Date.now() - new Date(lastSuccessAt).getTime() > STALE_JOB_THRESHOLD_MS;
+  if (!isStale) return null;
+
+  return (
+    <div className="warning-banner">
+      <strong>⚠ Stock-release job hasn't reported success recently.</strong>
+      <p>
+        {lastSuccessAt
+          ? `Last successful run: ${new Date(lastSuccessAt).toLocaleString()}.`
+          : "It has never reported a successful run."}{" "}
+        Abandoned pending-payment orders may be holding stock past their expiry — check that
+        release-expired-reservations is deployed and its scheduled runs are succeeding in the Netlify dashboard.
+      </p>
+    </div>
+  );
+}
+
 export function OrdersList() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +115,7 @@ export function OrdersList() {
 
   return (
     <div className="orders-list">
+      <StaleJobWarning />
       <div className="orders-toolbar">
         <input
           type="search"

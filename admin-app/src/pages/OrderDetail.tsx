@@ -170,13 +170,15 @@ export function OrderDetail() {
           "content-type": "application/json",
           authorization: `Bearer ${session.access_token}`,
         },
-        // A fresh key per click — see admin-refund-order.ts for why this
-        // can't be derived from order state server-side instead. Each
-        // click here is a genuinely new attempt as far as Stripe's
-        // idempotency should be concerned; the disabled-while-refunding
-        // button state below is what actually stops a double-click of the
-        // *same* click from firing two requests in the first place.
-        body: JSON.stringify({ orderId: order.id, amountCents, idempotencyKey: crypto.randomUUID() }),
+        // No client-generated idempotency key — admin-refund-order.ts's
+        // claim_refund_request RPC hands back a durable server-side
+        // request row (or resumes an existing pending one for this order)
+        // and uses *that* row's own id as the Stripe idempotency key. See
+        // supabase/migrations/0014_refund_request_ledger.sql for why a
+        // fresh per-click key wasn't enough — it did nothing for a
+        // network timeout, a page refresh, a second tab, or two staff
+        // members refunding the same order at once.
+        body: JSON.stringify({ orderId: order.id, amountCents }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Refund failed");

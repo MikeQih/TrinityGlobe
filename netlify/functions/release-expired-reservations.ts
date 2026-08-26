@@ -2,6 +2,8 @@ import type { Config } from "@netlify/functions";
 import { getSupabaseAdmin } from "./_lib/supabase";
 import { getStripe } from "./_lib/stripe";
 
+const JOB_NAME = "release_expired_reservations";
+
 /**
  * Runs on a schedule (see `config` export below) to flip overdue pending
  * reservations to 'expired' — see expire_stale_reservations() in
@@ -19,17 +21,46 @@ import { getStripe } from "./_lib/stripe";
  * checkout.session.expired webhook, which flows through the same
  * mark_order_failed_from_webhook path as a natural expiry — no separate
  * order-status logic duplicated here.
+ *
+ * Records its own last-run/last-success timestamp in scheduled_job_runs
+ * (see 0015_scheduled_job_health.sql) on every invocation, success or
+ * failure — Netlify Scheduled Functions only run on a real Published
+ * Deploy (never a Deploy Preview or branch deploy), so this is what lets
+ * admin-app notice if this job has silently never run, rather than that
+ * only surfacing when a customer hits "sold out" stock that should have
+ * been released back.
  */
 export default async (): Promise<Response> => {
   const supabase = getSupabaseAdmin();
-  const { data: expiredReservationIds, error } = await supabase.rpc("expire_stale_reservations");
+  const startedAt = new Date().toISOString();
 
-  if (error) {
-    console.error("release-expired-reservations: expire_stale_reservations failed", error);
+  try {
+    const result = await run(supabase);
+    await supabase
+      .from("scheduled_job_runs")
+      .update({ last_run_at: startedAt, last_success_at: startedAt, last_error: null })
+      .eq("job_name", JOB_NAME);
+    return new Response(JSON.stringify({ ok: true, ...result }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("release-expired-reservations: run failed", err);
+    await supabase.from("scheduled_job_runs").update({ last_run_at: startedAt, last_error: message }).eq("job_name", JOB_NAME);
     return new Response(JSON.stringify({ ok: false }), {
       status: 500,
       headers: { "content-type": "application/json" },
     });
+  }
+};
+
+async function run(
+  supabase: ReturnType<typeof getSupabaseAdmin>
+): Promise<{ expired: number; stripeSessionsExpired: number }> {
+  const { data: expiredReservationIds, error } = await supabase.rpc("expire_stale_reservations");
+  if (error) {
+    throw new Error(`expire_stale_reservations failed: ${error.message}`);
   }
 
   const ids: string[] = Array.isArray(expiredReservationIds) ? expiredReservationIds : [];
@@ -88,11 +119,8 @@ export default async (): Promise<Response> => {
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, expired: ids.length, stripeSessionsExpired: expiredSessionCount }), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
-};
+  return { expired: ids.length, stripeSessionsExpired: expiredSessionCount };
+}
 
 export const config: Config = {
   schedule: "*/5 * * * *",

@@ -121,41 +121,26 @@ describe("productsLiveRequestSchema", () => {
 });
 
 describe("adminRefundRequestSchema", () => {
-  const idempotencyKey = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
-
   it("accepts a full-refund request with no amountCents", () => {
-    expect(
-      adminRefundRequestSchema.safeParse({ orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", idempotencyKey }).success
-    ).toBe(true);
+    expect(adminRefundRequestSchema.safeParse({ orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6" }).success).toBe(
+      true
+    );
   });
 
   it("accepts a partial-refund request with a positive amountCents", () => {
     expect(
-      adminRefundRequestSchema.safeParse({
-        orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        amountCents: 500,
-        idempotencyKey,
-      }).success
+      adminRefundRequestSchema.safeParse({ orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", amountCents: 500 })
+        .success
     ).toBe(true);
   });
 
   it("rejects a non-uuid orderId", () => {
-    expect(adminRefundRequestSchema.safeParse({ orderId: "not-a-uuid", idempotencyKey }).success).toBe(false);
+    expect(adminRefundRequestSchema.safeParse({ orderId: "not-a-uuid" }).success).toBe(false);
   });
 
   it("rejects a zero or negative amountCents", () => {
     expect(
-      adminRefundRequestSchema.safeParse({
-        orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        amountCents: 0,
-        idempotencyKey,
-      }).success
-    ).toBe(false);
-  });
-
-  it("rejects a request with no idempotencyKey", () => {
-    expect(
-      adminRefundRequestSchema.safeParse({ orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6" }).success
+      adminRefundRequestSchema.safeParse({ orderId: "3fa85f64-5717-4562-b3fc-2c963f66afa6", amountCents: 0 }).success
     ).toBe(false);
   });
 });
