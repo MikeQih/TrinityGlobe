@@ -2005,6 +2005,28 @@ ul.order-detail-items li {
 
 .address-form-actions .btn-gold { border: none; font-family: 'Inter', sans-serif; }
 
+.addresses-empty-state {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.addresses-empty-title {
+  color: var(--text);
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+
+.addresses-empty-subtitle {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  margin: 0 0 1.5rem;
+}
+
+.addresses-empty-state .btn-gold { border: none; font-family: 'Inter', sans-serif; }
+
 @media (max-width: 480px) {
   .cart-drawer { width: 100vw; }
 }
