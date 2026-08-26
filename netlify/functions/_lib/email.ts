@@ -86,6 +86,44 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail, items: Or
   }
 }
 
+/**
+ * Fires when stripe-webhook.ts's mark_order_paid_from_webhook RPC returns
+ * 'payment_review' (Stripe reports success on an order that wasn't sitting
+ * at pending_payment anymore) or when its own amount/currency check fails —
+ * both cases where Stripe has genuinely taken the customer's money but the
+ * order can't be safely auto-confirmed. See 0008_checkout_hardening.sql for
+ * why neither confirming nor ignoring it automatically is safe. Same
+ * failed-is-logged-not-thrown rule as the other email functions here — a
+ * flaky Resend call must never take down webhook processing.
+ */
+export async function sendPaymentReviewAlertEmail(orderId: string, reason: string): Promise<void> {
+  const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (staffEmails.length === 0) return;
+
+  try {
+    const resend = new Resend(requireEnv("RESEND_API_KEY"));
+    await resend.emails.send({
+      from: fromAddress(),
+      to: staffEmails,
+      subject: `⚠️ Order #${orderId.slice(0, 8)} needs manual review — payment received`,
+      html: `
+        <h1 style="font-family:serif;color:#b00;">Payment review needed</h1>
+        <p>Order <strong>#${orderId.slice(0, 8)}</strong> — Stripe reported a successful payment for this order,
+        but it couldn't be automatically confirmed.</p>
+        <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+        <p>Check this order in admin-app before fulfilling it — confirm with Stripe's dashboard whether the
+        charge really went through and whether the stock is still available, then either confirm or refund it
+        manually.</p>
+      `,
+    });
+  } catch (err) {
+    console.error("sendPaymentReviewAlertEmail failed", orderId, err);
+  }
+}
+
 export async function sendStaffNotificationEmail(order: OrderForEmail, items: OrderItemForEmail[]): Promise<void> {
   const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
     .split(",")

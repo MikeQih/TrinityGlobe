@@ -4,16 +4,16 @@ import { getStripe } from "./_lib/stripe";
 import { getSupabaseAdmin } from "./_lib/supabase";
 import { requireEnv } from "./_lib/env";
 import { errorResponse, jsonResponse } from "./_lib/responses";
-import { sendOrderConfirmationEmail, sendStaffNotificationEmail } from "./_lib/email";
+import { sendOrderConfirmationEmail, sendStaffNotificationEmail, sendPaymentReviewAlertEmail } from "./_lib/email";
 
 interface OrderRow {
   id: string;
   status: string;
+  total_cents: number;
   recipient_snapshot: { name: string; phone: string; email: string; address: string; postalCode: string; notes: string };
   delivery_method: string;
   subtotal_cents: number;
   shipping_fee_cents: number;
-  total_cents: number;
 }
 
 /**
@@ -22,6 +22,14 @@ interface OrderRow {
  * redelivered event whose id is already there is a no-op. If handling
  * throws, we deliberately do NOT record the event, so Stripe's automatic
  * retry gets another chance — see https://docs.stripe.com/webhooks#retries.
+ *
+ * The actual order-status transitions live in Postgres RPCs
+ * (mark_order_paid_from_webhook / mark_order_failed_from_webhook, see
+ * 0008_checkout_hardening.sql) rather than here: "read current status, then
+ * decide, then write" as three separate round-trips from this function
+ * would leave a window for two concurrent webhook deliveries for the same
+ * order to interleave. Each RPC does its status check, its reservation
+ * confirm/release, and its status write as one locked transaction.
  */
 export default async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
@@ -58,9 +66,15 @@ export default async (req: Request): Promise<Response> => {
         await handlePaymentSucceeded(supabase, event.data.object as Stripe.Checkout.Session);
         break;
       }
-      case "checkout.session.async_payment_failed":
+      case "checkout.session.async_payment_failed": {
+        await handlePaymentFailed(supabase, event.data.object as Stripe.Checkout.Session, "payment_failed");
+        break;
+      }
       case "checkout.session.expired": {
-        await handlePaymentFailed(supabase, event.data.object as Stripe.Checkout.Session);
+        // Distinct from a genuine decline — see the "已取消/支付已过期" vs
+        // "付款失败" distinction on the My Orders page (src/orders-page.ts):
+        // one means "try a different card", the other means "buy again".
+        await handlePaymentFailed(supabase, event.data.object as Stripe.Checkout.Session, "expired");
         break;
       }
       default:
@@ -77,7 +91,8 @@ export default async (req: Request): Promise<Response> => {
   if (recordError) {
     // Handling already succeeded above; failing to record the ledger row
     // just means a redelivery would re-run handling (safe, since the
-    // handlers below are themselves idempotent via order.status checks).
+    // handlers below are themselves idempotent via the RPCs' own status
+    // checks).
     console.error("stripe-webhook: failed to record stripe_events row", event.id, recordError);
   }
 
@@ -93,65 +108,57 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, status, total_cents")
+    .select("id, total_cents")
     .eq("id", orderId)
-    .single<Pick<OrderRow, "id" | "status" | "total_cents">>();
+    .single<Pick<OrderRow, "id" | "total_cents">>();
 
   if (orderError || !order) {
     console.error("stripe-webhook: order not found for session", session.id, orderId, orderError);
     return;
   }
 
-  // Idempotency belt-and-braces alongside the stripe_events ledger above.
-  if (order.status === "paid") return;
-
-  // Belt-and-braces on top of create-checkout-session.ts always computing
-  // the amount server-side: confirms Stripe actually collected what our own
-  // database says this order costs, in the currency we expect, before this
-  // deducts stock or sends a confirmation email. A mismatch here would mean
-  // either a bug in how the session was built, or the order row changed
-  // between session creation and payment — either way, not something to
-  // silently paper over by trusting Stripe's number blindly.
-  if (session.amount_total !== order.total_cents || session.currency !== "sgd") {
-    console.error(
-      "stripe-webhook: amount/currency mismatch, refusing to mark paid",
-      orderId,
-      { sessionAmount: session.amount_total, sessionCurrency: session.currency, orderTotal: order.total_cents }
-    );
-    return;
-  }
-
-  const { data: reservations, error: reservationsError } = await supabase
-    .from("inventory_reservations")
-    .select("id")
-    .eq("order_id", orderId)
-    .eq("status", "pending");
-
-  if (reservationsError) {
-    console.error("stripe-webhook: failed to load reservations", orderId, reservationsError);
-  }
-
-  for (const r of reservations ?? []) {
-    const { error: confirmError } = await supabase.rpc("confirm_inventory_reservation", { p_reservation_id: r.id });
-    if (confirmError) {
-      console.error("stripe-webhook: confirm_inventory_reservation failed", r.id, confirmError);
-    }
-  }
-
   const paymentIntentId =
     typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
 
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({
-      status: "paid",
-      paid_at: new Date().toISOString(),
-      stripe_payment_intent_id: paymentIntentId,
-    })
-    .eq("id", orderId);
-  if (updateError) {
-    console.error("stripe-webhook: failed to mark order paid", orderId, updateError);
+  // Belt-and-braces on top of create-checkout-session.ts always computing
+  // the amount server-side: confirms Stripe actually collected what our own
+  // database says this order costs, in the currency we expect. A mismatch
+  // here is unusual enough (a bug in how the session was built, or the
+  // order row changing between session creation and payment) that it isn't
+  // something to silently paper over — but Stripe has genuinely taken the
+  // customer's money either way, so this can't just be logged and dropped:
+  // it needs a human to look at it, same as the RPC's own payment_review
+  // outcome below.
+  if (session.amount_total !== order.total_cents || session.currency !== "sgd") {
+    console.error(
+      "stripe-webhook: amount/currency mismatch, flagging for review",
+      orderId,
+      { sessionAmount: session.amount_total, sessionCurrency: session.currency, orderTotal: order.total_cents }
+    );
+    await supabase.from("orders").update({ status: "payment_review" }).eq("id", orderId).eq("status", "pending_payment");
+    await sendPaymentReviewAlertEmail(orderId, "Stripe session amount/currency did not match the order total.");
+    return;
   }
+
+  const { data: result, error: rpcError } = await supabase.rpc("mark_order_paid_from_webhook", {
+    p_order_id: orderId,
+    p_payment_intent_id: paymentIntentId,
+  });
+  if (rpcError) {
+    console.error("stripe-webhook: mark_order_paid_from_webhook failed", orderId, rpcError);
+    return;
+  }
+
+  if (result === "payment_review") {
+    console.error("stripe-webhook: order reached payment_review — paid on Stripe but wasn't pending_payment here", orderId);
+    await sendPaymentReviewAlertEmail(orderId, "Stripe reported this payment succeeded, but the order was no longer pending payment.");
+    return;
+  }
+
+  // 'already_paid' — a second event (e.g. both checkout.session.completed
+  // and .async_payment_succeeded fired for the same session) landed here
+  // after the first already sent the confirmation emails. Don't resend them.
+  if (result !== "paid_now") return;
 
   const { data: fullOrder } = await supabase
     .from("orders")
@@ -171,54 +178,24 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
   }
 }
 
-async function handlePaymentFailed(supabase: SupabaseClient, session: Stripe.Checkout.Session): Promise<void> {
+async function handlePaymentFailed(
+  supabase: SupabaseClient,
+  session: Stripe.Checkout.Session,
+  newStatus: "payment_failed" | "expired"
+): Promise<void> {
   const orderId = session.client_reference_id ?? (session.metadata?.order_id as string | undefined);
   if (!orderId) return;
 
-  // Stripe doesn't guarantee delivery order across event types — a
-  // checkout.session.expired for this session can arrive *after* the
-  // checkout.session.completed that already marked it paid (e.g. the
-  // customer paid right at the expiry boundary). Without this guard, that
-  // late event would release/restock an already-confirmed reservation and
-  // flip a paid order back to payment_failed — selling the same stock
-  // twice and corrupting the order record. Once an order is paid, no
-  // "it failed/expired" event is allowed to undo that.
-  const { data: existingOrder, error: existingOrderError } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single<Pick<OrderRow, "status">>();
-  if (existingOrderError) {
-    console.error("stripe-webhook: failed to load order before marking failed", orderId, existingOrderError);
-    return;
-  }
-  if (existingOrder?.status === "paid") return;
-
-  const { data: reservations, error } = await supabase
-    .from("inventory_reservations")
-    .select("id")
-    .eq("order_id", orderId)
-    .in("status", ["pending", "confirmed"]);
-
-  if (error) {
-    console.error("stripe-webhook: failed to load reservations for failed payment", orderId, error);
-  }
-
-  for (const r of reservations ?? []) {
-    const { error: releaseError } = await supabase.rpc("release_inventory_reservation", { p_reservation_id: r.id });
-    if (releaseError) {
-      console.error("stripe-webhook: release_inventory_reservation failed", r.id, releaseError);
-    }
-  }
-
-  // .neq("status", "paid") is a second guard at the same update, in case a
-  // concurrent delivery of the paid event raced past the pre-check above.
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({ status: "payment_failed" })
-    .eq("id", orderId)
-    .neq("status", "paid");
-  if (updateError) {
-    console.error("stripe-webhook: failed to mark order payment_failed", orderId, updateError);
+  // mark_order_failed_from_webhook only ever transitions an order that's
+  // still pending_payment — if it's already paid (a checkout.session.expired
+  // arriving after the completed event that paid it, since Stripe doesn't
+  // guarantee delivery order across event types) or in any other terminal
+  // state, this is a no-op that leaves it untouched.
+  const { error: rpcError } = await supabase.rpc("mark_order_failed_from_webhook", {
+    p_order_id: orderId,
+    p_new_status: newStatus,
+  });
+  if (rpcError) {
+    console.error("stripe-webhook: mark_order_failed_from_webhook failed", orderId, rpcError);
   }
 }
