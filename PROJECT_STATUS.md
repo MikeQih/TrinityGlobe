@@ -1,7 +1,8 @@
 # Trinity Globe 商城项目 — 当前状态清单
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
-> 最后更新：2026-08-22
+> 最后更新：2026-08-26
+> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：功能开发已完成，用户明确说"现在还没准备好"，先不合并 `dev` 到 `main`——不要主动催。
 
 ## 项目背景
 
@@ -183,16 +184,34 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
 
 ---
 
-## 尚未开始（部署相关）
+## 上线前检查清单（2026-08-26 整理，按阻塞程度分类）
 
-- [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`，或先给 `dev` 建分支预览
-- [ ] Stripe webhook 指向生产环境公网 URL，拿到 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配
-- [x] Netlify（storefront `trinity-globe` 站点）生产环境变量已配置（`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`STRIPE_SECRET_KEY`(还是sk_test_)/`RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`STAFF_NOTIFICATION_EMAILS`/`FREE_SHIPPING_THRESHOLD_CENTS`/`STANDARD_SHIPPING_FEE_CENTS`/`SITE_URL`），`STRIPE_WEBHOOK_SECRET`/`ADMIN_APP_ORIGIN` 还是空的
+**用户已明确表示现在还没准备好上线，先不把 `dev` 合并到 `main`**——不要主动提起或推动合并，等用户自己说要上线再做。下面这份清单是"等用户决定要上线时"要过一遍的东西。
+
+### 必须做（不做会直接出问题）
+
+- [ ] **库存还是占位数**——目前所有 72 个 SKU 都是占位库存 20（用户明确说过"先放着，后续再调整"），上线前必须换成真实库存数量
+- [ ] **Stripe 还在 test mode**——`.env`/Netlify 后台配的是 `STRIPE_SECRET_KEY=sk_test_`，上线收真钱前要换成 live key（`sk_live_`）；换 key 的同时要把 Stripe webhook 指向生产环境公网 URL，重新拿一次 `STRIPE_WEBHOOK_SECRET`，本地和 Netlify 后台都要配（目前是空的）
+- [ ] **前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点**——已配的是后端用的 `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`，前端专用的这两个变量名不一样、还没加，不加的话正式站点上 Google/Facebook/邮箱登录会静默不可用（访客结账不受影响）
+- [ ] **GST 合规确认**——数据库 `store_settings.gst_registered` 目前是 false（占位）。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册），需要尽快跟老板/会计确认公司是否已经注册，直接影响网站价格要不要显示含税、以及现在是否已存在合规风险
+- [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
+
+### 建议做但不是技术阻塞
+
+- [ ] 政策页面（`policies/*.html`）法律审阅：UEN、运费(S$15)、免运费门槛(S$120)、自提地址（11-03 The Suites Central, 57A Devonshire Road, S239897）、自提时间（24小时）已确认写死；配送时效/配送范围/派送失败处理流程仍是占位符，等业务决定；用户说"后续会找人过"法律
+- [ ] Facebook 登录：应用图标没传、App Review 没提交，不提交的话正式环境的 Facebook 登录选项对非测试用户不可用（Google 登录、邮箱注册不受影响）
+
+### 跟支付/上线无关，不阻塞
+
+- [ ] 老板反馈1（产品后台/订单后台加跳转入口）——纯体验优化
+- [ ] Airwallex 的 KYC（持股比例）——跟 Trinity Globe 网站上线无关，是另一条独立的账户注册进度
+
+### 已完成（部署相关，之前做过的）
+
+- [x] Netlify（storefront `trinity-globe` 站点）生产环境变量已配置（`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`/`STRIPE_SECRET_KEY`(还是sk_test_)/`RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`STAFF_NOTIFICATION_EMAILS`/`FREE_SHIPPING_THRESHOLD_CENTS`/`STANDARD_SHIPPING_FEE_CENTS`/`SITE_URL`）
 - [x] `admin-app/` **已部署上线**：`https://trinity-globe-admin.netlify.app`（独立 Netlify 站点，见上面第四轮记录）。`ADMIN_APP_ORIGIN` 也已经配到 storefront（`trinity-globe`）项目的环境变量里了，值就是这个正式地址
 - [x] 在 Supabase Auth 建了第一个管理员账号（`qihengchang1014@gmail.com`，role: admin），密码还没设置，等用户自己点链接设置
-- [ ] 库存：目前所有72个SKU都是**占位库存20**（用户已明确说"先放着，后续再调整"），真实上线前要换成真实库存数
-- [ ] 政策页面（`policies/*.html`）法律审阅：目前 UEN、运费(S$15)、免运费门槛(S$120)、自提地址（11-03 The Suites Central, 57A Devonshire Road, S239897）、自提时间（24小时）已确认写死；配送时效/配送范围/派送失败处理流程仍是占位符，等业务决定；用户说"后续会找人过"法律
-- [ ] GST：数据库 `store_settings.gst_registered` 目前是 **false（占位）**。**这次对话发现一个重要合规提醒**：公司年营收已超S$1M，按新加坡IRAS规定这已经触发强制注册GST的义务（超门槛后30天内需注册），**需要尽快跟老板/会计确认公司是否已经注册GST**，这直接影响网站价格是否要显示含税、以及是否已经存在合规风险
+- [x] Wang Lei 的 Stripe 身份验证已完成（见上面 Stripe 账号进度那段）
 
 ---
 
