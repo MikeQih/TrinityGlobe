@@ -1,6 +1,6 @@
 import { CartStore, MAX_QTY_PER_ITEM } from "./cart-store";
 import { createCheckoutSession, getCheckoutSessionStatus, ApiError } from "./api-client";
-import { t, onLangChange, getProductBySku, formatCents } from "./i18n";
+import { t, onLangChange, getProductBySku, formatCents, getLang } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
 import { SELF_COLLECTION_ENABLED } from "./feature-flags";
 import { getStripeClient } from "./lib/stripe-elements";
@@ -1375,6 +1375,7 @@ async function handleCheckoutSubmit(): Promise<void> {
       recipient,
       ageConfirmed,
       checkoutAttemptId: checkoutAttemptId ?? undefined,
+      locale: getLang(),
     });
     if (result.mode === "hosted") {
       window.location.href = result.checkoutUrl;

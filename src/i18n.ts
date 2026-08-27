@@ -15,6 +15,11 @@ export function t(key: string): string {
   return window.TG_I18N?.t(key) ?? key;
 }
 
+/** Current site language ("en"/"zh") — see script.js's `currentLang`. Used at checkout time to snapshot which language the customer was browsing in (see 0021_order_locale_snapshot.sql); never used for anything else. */
+export function getLang(): "en" | "zh" {
+  return window.TG_I18N?.getLang() === "zh" ? "zh" : "en";
+}
+
 /** Registers `cb` to run whenever the site-wide language toggle fires. */
 export function onLangChange(cb: () => void): void {
   window.TG_ON_LANG_CHANGE = window.TG_ON_LANG_CHANGE ?? [];

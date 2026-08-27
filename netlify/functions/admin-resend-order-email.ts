@@ -67,7 +67,7 @@ export default async (req: Request): Promise<Response> => {
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout, created_at, paid_at"
+      "id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout, created_at, paid_at, locale"
     )
     .eq("id", parsed.data.orderId)
     .single();

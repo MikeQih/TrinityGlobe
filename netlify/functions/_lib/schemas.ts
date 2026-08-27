@@ -41,6 +41,13 @@ export const createCheckoutSessionRequestSchema = z
     // session.ts's idempotency handling. Optional so an older/cached
     // frontend bundle without it still works, just without dedup.
     checkoutAttemptId: z.string().uuid().optional(),
+    // Accepted loosely here (any string, or missing) — create-checkout-
+    // session.ts is the one place that normalizes this to strictly "en" or
+    // "zh" before it's ever stored, per 0021_order_locale_snapshot.sql.
+    // Deliberately not a strict enum here so a bad/unexpected value falls
+    // back safely instead of failing the whole checkout request over a
+    // cosmetic field.
+    locale: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.deliveryMethod === "standard") {

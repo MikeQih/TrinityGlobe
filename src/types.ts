@@ -79,6 +79,8 @@ export interface CreateCheckoutSessionRequest {
   ageConfirmed: boolean;
   /** One UUID per checkout form visit, reused across retries — see src/cart.ts and create-checkout-session.ts's idempotency handling. */
   checkoutAttemptId?: string;
+  /** The site language the customer is currently browsing in ("en"/"zh") — snapshotted onto the order so its confirmation email language never changes later. Server re-validates and falls back to "en" for anything else. See 0021_order_locale_snapshot.sql. */
+  locale?: string;
 }
 
 // The `mode` a given create-checkout-session call returns is decided

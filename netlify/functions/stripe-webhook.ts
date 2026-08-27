@@ -18,6 +18,11 @@ interface OrderRow {
   gst_registered_at_checkout: boolean;
   created_at: string;
   paid_at: string | null;
+  // The database order row is the sole authority for which language the
+  // confirmation email goes out in — see 0021_order_locale_snapshot.sql.
+  // Stripe's session metadata carries a copy of this for debugging only;
+  // it is never read back here.
+  locale: string;
 }
 
 /**
@@ -167,7 +172,7 @@ async function handlePaymentSucceeded(supabase: SupabaseClient, session: Stripe.
   const { data: fullOrder } = await supabase
     .from("orders")
     .select(
-      "id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout, created_at, paid_at"
+      "id, recipient_snapshot, delivery_method, subtotal_cents, shipping_fee_cents, total_cents, gst_cents, gst_registered_at_checkout, created_at, paid_at, locale"
     )
     .eq("id", orderId)
     .single<OrderRow>();

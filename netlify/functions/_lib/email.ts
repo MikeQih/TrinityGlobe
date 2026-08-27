@@ -29,6 +29,12 @@ interface OrderForEmail {
   // once payment is confirmed); created_at is the fallback.
   created_at?: string | null;
   paid_at?: string | null;
+  // Snapshotted once by create_pending_order at checkout time (see
+  // 0021_order_locale_snapshot.sql) — the sole authority for which
+  // language the *customer* confirmation email goes out in. Re-validated
+  // below rather than trusted as-is, since the column, while constrained
+  // by a CHECK, is still just a string by the time it gets here.
+  locale?: string | null;
 }
 
 interface OrderItemForEmail {
@@ -39,18 +45,20 @@ interface OrderItemForEmail {
 
 type EmailType = "customer_confirmation" | "staff_notification";
 
-/**
- * No column on `orders` currently records which language the customer was
- * browsing in at checkout (checked: recipient_snapshot, create-checkout-
- * session.ts, and the Stripe Checkout Session metadata all carry no
- * language signal). Defaulting to "en" here is the same behavior the site
- * has always had — this parameter exists so the templates themselves are
- * genuinely bilingual and independently testable (see the round-18 note in
- * PROJECT_STATUS.md for the minimal follow-up needed to wire a real
- * per-order snapshot through checkout).
- */
 type Lang = "en" | "zh";
-const DEFAULT_LANG: Lang = "en";
+
+/**
+ * The customer confirmation email's language is always derived from the
+ * order's own `locale` column (see 0021_order_locale_snapshot.sql) — never
+ * passed in by a caller, never re-read from Stripe metadata, and never
+ * affected by the site's language toggle or an admin's own language when
+ * they trigger a resend. Anything other than exactly "en"/"zh" (missing,
+ * null, or some future unexpected value) falls back to "en" rather than
+ * failing the send.
+ */
+function resolveOrderLocale(locale: string | null | undefined): Lang {
+  return locale === "zh" ? "zh" : "en";
+}
 
 const WHATSAPP_URL = "https://wa.me/6598680555";
 
@@ -625,11 +633,8 @@ async function sendTrackedEmail(params: {
 }
 
 /** Failures are logged, never thrown — a flaky email provider must not fail order creation/confirmation. */
-export async function sendOrderConfirmationEmail(
-  order: OrderForEmail,
-  items: OrderItemForEmail[],
-  lang: Lang = DEFAULT_LANG
-): Promise<void> {
+export async function sendOrderConfirmationEmail(order: OrderForEmail, items: OrderItemForEmail[]): Promise<void> {
+  const lang = resolveOrderLocale(order.locale);
   await sendTrackedEmail({
     orderId: order.id,
     emailType: "customer_confirmation",
@@ -645,13 +650,16 @@ export async function sendOrderConfirmationEmail(
 /**
  * Staff-initiated resend from admin-app — always a new tracked attempt
  * (see forceNew's doc comment on sendTrackedEmail/claim_email_send).
+ * Uses the order's own locale, same as the automatic send — an admin/ops
+ * user resending in their own UI language must never change which
+ * language the customer actually receives.
  */
 export async function resendOrderConfirmationEmail(
   order: OrderForEmail,
   items: OrderItemForEmail[],
-  staffUserId: string,
-  lang: Lang = DEFAULT_LANG
+  staffUserId: string
 ): Promise<{ outcome: SendOutcome }> {
+  const lang = resolveOrderLocale(order.locale);
   return sendTrackedEmail({
     orderId: order.id,
     emailType: "customer_confirmation",

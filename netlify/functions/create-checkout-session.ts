@@ -101,7 +101,11 @@ async function buildStripeSessionParams(
   shippingFeeCents: number,
   recipientEmail: string,
   siteUrl: string,
-  expiresAtSeconds: number
+  expiresAtSeconds: number,
+  // Diagnostic only — the order row's own `locale` column (set once by
+  // create_pending_order) is the sole authority the webhook reads from to
+  // pick the confirmation email's language. Never read back from here.
+  locale: string
 ) {
   const stripeLineItems = lineItems.map((li) => ({
     price_data: {
@@ -124,7 +128,7 @@ async function buildStripeSessionParams(
         ui_mode: "elements" as const,
         payment_method_types: ["card", "paynow"],
         line_items: stripeLineItems,
-        metadata: { order_id: orderId },
+        metadata: { order_id: orderId, locale },
         customer_email: recipientEmail,
         expires_at: expiresAtSeconds,
         // {CHECKOUT_SESSION_ID} is a literal template Stripe substitutes
@@ -137,7 +141,7 @@ async function buildStripeSessionParams(
         payment_method_types: ["card", "paynow"],
         line_items: stripeLineItems,
         client_reference_id: orderId,
-        metadata: { order_id: orderId },
+        metadata: { order_id: orderId, locale },
         customer_email: recipientEmail,
         expires_at: expiresAtSeconds,
         success_url: `${siteUrl}/?checkout=success&order_id=${orderId}`,
@@ -170,6 +174,11 @@ export default async (req: Request, context: Context): Promise<Response> => {
     return errorResponse(400, "Invalid request", "validation_error");
   }
   const { items, deliveryMethod, recipient, ageConfirmed, checkoutAttemptId } = parsed.data;
+  // Server is the authority on what actually gets stored — never trust the
+  // client's value past this point. See 0021_order_locale_snapshot.sql;
+  // create_pending_order normalizes again on its own as a second layer,
+  // since this RPC could in principle be called from elsewhere someday.
+  const locale = parsed.data.locale === "zh" ? "zh" : "en";
 
   if (deliveryMethod === "self_collection" && !SELF_COLLECTION_ENABLED) {
     return errorResponse(409, "Self collection is not currently available", "self_collection_unavailable");
@@ -322,7 +331,8 @@ export default async (req: Request, context: Context): Promise<Response> => {
             shippingFeeCents,
             recipient.email,
             siteUrl,
-            expiresAtSeconds
+            expiresAtSeconds,
+            locale
           );
           const session = await stripe.checkout.sessions.create(params, {
             idempotencyKey: `checkout-session-${checkoutAttemptId}`,
@@ -368,6 +378,7 @@ export default async (req: Request, context: Context): Promise<Response> => {
       p_gst_rate: gstRateSnapshot,
       p_total_cents: totalCents,
       p_age_confirmed: ageConfirmed,
+      p_locale: locale,
       p_reservation_ttl_minutes: RESERVATION_TTL_MINUTES,
       p_user_id: userId,
       p_checkout_attempt_id: checkoutAttemptId ?? null,
@@ -394,7 +405,16 @@ export default async (req: Request, context: Context): Promise<Response> => {
   }
 
   try {
-    const params = await buildStripeSessionParams(uiMode, order.id, lineItems, shippingFeeCents, recipient.email, siteUrl, expiresAtSeconds);
+    const params = await buildStripeSessionParams(
+      uiMode,
+      order.id,
+      lineItems,
+      shippingFeeCents,
+      recipient.email,
+      siteUrl,
+      expiresAtSeconds,
+      locale
+    );
     const session = await stripe.checkout.sessions.create(
       params,
       checkoutAttemptId ? { idempotencyKey: `checkout-session-${checkoutAttemptId}` } : undefined
