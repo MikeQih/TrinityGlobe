@@ -899,6 +899,39 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-27（第十九轮）：补上订单语言快照——客户确认邮件终于真的按下单语言发送
+
+上一轮邮件模板重写完成后，用户指出还差最后一块：模板是双语的，但真正发出去的客户邮件一直是英文，因为没有任何地方记录客户下单时选的是中/英文。这一轮把这个缺口堵上，完成后邮件优化正式收尾，进入合并 main 前的最后阶段。
+
+**迁移**（`supabase/migrations/0021_order_locale_snapshot.sql`，已在 Supabase SQL Editor 里手动执行并验证过，不是只写了文件）：
+- `orders` 新增 `locale text not null default 'en' check (locale in ('en','zh'))`——历史订单和任何缺失值自动回退成 `'en'`（`add column ... not null default` 本身就会把已有行一起回填，不用额外补一条 UPDATE）。
+- `create_pending_order` 需要新增一个 `p_locale` 参数。上一次改这个函数的签名时（0002/0005/0007/0008）踩过"新增参数=新建一个重载，旧版本没被清理"的坑，`0018` 才靠动态扫描全部清理掉。这次改之前先用 `select p.oid::regprocedure from pg_proc where proname='create_pending_order'` 确认线上当时确实只有一个版本，改的时候用同样的"扫描 `pg_proc` + 动态 `drop function`"写法整个重建，不是手写死一个旧签名去 drop，新函数补上了 `security invoker set search_path = pg_catalog, public`（跟 `0019` 的新写法对齐，`0001`/`0017` 那会儿没写）和 `public.` 前缀限定表名。执行完之后直接查 `pg_proc.proacl` 确认新函数的 ACL 只有 `postgres=X`（owner）和 `service_role=X`，没有裸的 `=X`（PUBLIC）——`0018` 那条"以后新建的函数默认不给 PUBLIC 执行权"的 `alter default privileges` 也确认依然生效。
+
+**语言快照怎么从前端一路传到邮件**：
+1. `src/i18n.ts` 新增 `getLang()`，读 `script.js` 已经暴露的 `window.TG_I18N.getLang()`（顶层 `currentLang`，只有 `'en'`/`'zh'` 两个值）。
+2. `src/cart.ts` 提交结账表单时把 `locale: getLang()` 一起发给 `create-checkout-session.ts`。
+3. `create-checkout-session.ts` 收到后自己再校验一遍（`locale === "zh" ? "zh" : "en"`，不是 zh 就是 en，不信任客户端），存进 `create_pending_order` 的 `p_locale`，同时也塞进 Stripe Checkout Session 的 `metadata.locale`——**这份 metadata 只用来排查问题，绝不作为邮件语言的依据**，`stripe-webhook.ts` 只从数据库订单行的 `locale` 字段读。
+4. `email.ts` 里 `sendOrderConfirmationEmail`/`resendOrderConfirmationEmail` 不再接受调用方传语言，改成自己内部用新加的 `resolveOrderLocale(order.locale)` 算，`stripe-webhook.ts`/`admin-resend-order-email.ts` 的 `select()` 都加了 `locale` 字段，调用点完全没变——这样无论是首次付款自动发信还是 admin/ops 手动重发，用的都是订单自己那一份，客户后来切语言、员工重发时自己的后台是什么语言，都影响不到已经下单那一份的邮件语言。员工通知邮件本身继续固定英文，不受这个影响。
+5. `resume-checkout-session.ts`（"继续付款"）读代码确认过：这个函数只会重新打开已有的 Stripe Session 或判定过期，从头到尾不会碰 `orders.locale`，所以"继续付款不改变语言"这条不需要额外写代码保证，本来就是这样。
+
+**真实测试**（全部走真实浏览器 + 真实 Stripe test-mode 付款，不是直接写数据库伪造）：
+- **游客下单，英文界面** → 真实 Stripe 付款成功 → 订单 `locale='en'`，`email_logs` 两条都是 `delivered`。
+- **登录客户，先用中文界面下单**（订单创建，`locale='zh'`）→ **故意放弃这次 Stripe 支付**，回到"我的订单"页面 → **把网站语言切到英文** → 点"继续付款"（`resume-checkout-session.ts`，复用同一个 Stripe Session）→ 用测试卡完成真实付款 → 确认订单 `locale` 依然是 `'zh'`，没有被后来的英文界面覆盖。这是最关键的一条，验证通过。
+- 登录客户英文下单、登录客户中文下单（只验证订单创建，`locale` 字段和 `user_id` 关联都对）。
+- **邮件内容验证**：`RESEND_API_KEY` 本身是"仅限发送"的受限密钥（拿不到读权限去反查已发邮件内容，这是件好事，没有为了这轮测试去放宽这个密钥的权限）。改用另一种同样真实、不是猜测的办法：把上面两笔真实订单从数据库里查出来的真实数据，交给**没有改过的、线上同一份** `customerConfirmationHtml()`/`resolveOrderLocale()` 直接渲染——中文那笔渲染出"您的订单已确认"，英文那笔渲染出"Your order is confirmed"，反过来都不成立。这就是这两封邮件真实发出去时的内容（同一个函数、同一份订单数据，没有第二条路径）。
+- **RPC 层兜底测试**：直接调 `create_pending_order`，`p_locale` 不传/传 `'fr'`/传空字符串，三种情况都落地成 `'en'`；传 `'zh'` 正确落地成 `'zh'`。
+- **Stripe 幂等性**：两笔真实付款各自的 `inventory_reservations` 只有 1 条 `confirmed`、`inventory_movements` 只有 1 条 `delta=-1`、`email_logs` 只有 2 条（客户+员工各一条），没有重复扣库存或重复发信。
+- **手动重发不改动业务状态**：对中文订单发起一次 admin 重发（真实调用 Preview 的 `admin-resend-order-email` 函数，不是模拟），重发前后订单的 `status`/`total_cents`/`locale`、库存数量全部一致，只多了一条新的 `email_logs` 记录（`forceNew` 正确生效）。
+- **finance_readonly 仍不能重发**：同一个订单，finance_readonly 测试账号调同一个接口，返回 `403 Not authorized to resend order emails`。
+
+**清理**：4 个客户测试账号（其中一个是访客订单，没有账号）、2 个 admin-app 测试账号（`locale-verify-admin`/`locale-verify-finance`）、4 笔测试订单及其 `order_items`/`email_logs`/`inventory_reservations`/`inventory_movements` 全部删除；两笔真实付款各扣了 1 瓶 Hennessy VSOP 库存，手动改回基线 50。
+
+**三张邮件截图**（用的是上面两笔真实订单的真实数据渲染出来的，收件人用的是 `Test Customer A/B`、`locale-test-x@resend.dev` 这类测试占位符，没有任何真实客户信息）：见下方随回复发出的图片。
+
+`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部重新跑过，通过。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
