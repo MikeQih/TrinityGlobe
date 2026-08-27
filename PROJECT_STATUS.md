@@ -768,6 +768,49 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-27（第十五轮）：Deploy Preview 最终回归——补上 Stripe Webhook 真实端到端验证
+
+合并完成后继续 Part 2 的 Deploy Preview 回归，检查到"支付成功→订单状态/库存/邮件"这一项时，发现 Netlify 的环境变量里 `STRIPE_WEBHOOK_SECRET` **从未配置过**（Production 和 Deploy Preview 都没有）——这意味着真实部署的 `stripe-webhook.ts` 遇到任何 webhook 请求都会直接因为缺少这个环境变量而报错，之前几轮的 Stripe 相关测试全部是在本地 `netlify dev` 用手动加的测试密钥完成的，从未针对真实部署环境验证过这条路径。
+
+征得用户明确授权后（用户明确要求用 Stripe 真实生成的 Signing Secret，而不是本地自造的测试值），按以下方式补上了这个缺口：
+
+1. 在 Stripe **测试模式/沙盒**的 Workbench 里创建了一个新的 Event Destination："Trinity Globe Deploy Preview #1"（id `we_1U8y8fB3ybi6KwedEnmrpgs0`），范围选"您的账户"，Payload 类型选**快照（Snapshot）**（跟 `stripe-webhook.ts` 用的 `stripe.webhooks.constructEvent` 匹配，不是新的 Thin Events），API 版本保持账户默认（`2026-07-29.dahlia`，代码本来就没有 pin 版本，不需要跟着改），端点 URL 指向 `https://deploy-preview-1--trinity-globe.netlify.app/.netlify/functions/stripe-webhook`，只订阅代码实际处理的 4 个事件：`checkout.session.completed`、`checkout.session.async_payment_succeeded`、`checkout.session.async_payment_failed`、`checkout.session.expired`。
+2. 拿到 Stripe 为这个 endpoint 生成的真实 `whsec_...` Signing Secret，配置进 Netlify 的 `STRIPE_WEBHOOK_SECRET`，做法跟之前 `RESEND_WEBHOOK_SECRET` 完全一致：勾选"Contains secret values"，Scopes 限定 Builds/Functions/Runtime，"Different value for each deploy context"里**只填 Deploy Previews 一栏**，Production/Branch deploys/Local development 全部留空。
+3. **过程中出现一次密钥暴露**：截图 Netlify 的"Deploy Previews"字段时，该字段跟之前 Resend 密钥那次一样默认不遮罩，截图里出现了明文密钥；发现后立即点击遮罩切换按钮（用 JS 检查 `input.type` 确认变成了 `"password"`），并在给用户的回复里如实说明了这个失误，没有隐瞒。另外 Stripe Workbench 页面本身的密钥字段默认也是遮罩的，但用 `find` 工具查询"复制密钥按钮"时，工具返回的元素描述里意外包含了明文密钥（因为查询前点过一次"显示密钥"按钮）——这个值只出现在工具调用结果里，没有出现在给用户的回复文本、日志或 commit 里，随后立即点击"隐藏密钥"恢复遮罩状态。
+4. 用 Netlify 的"Retry with latest branch commit"重新构建了 Deploy Preview #1（不需要改代码/不需要新 commit），确认新环境变量生效。
+5. 在真实的 Deploy Preview 网站上走了一次完整的真实购物流程验证——加购 Yanghe New Sky Blue（S$45+S$15 运费=S$60），游客结账，用 Stripe 官方测试卡 `4242 4242 4242 4242` 在真实的 Stripe **测试模式**结账页完成付款（不是模拟请求，是真的走了 Stripe 的结账页面）。Stripe 平台随后向部署的 Preview 端点发送了真实签名的 webhook（事件 id `evt_1U8yMwB3ybi6Kwed9er7QLrf`，`checkout.session.completed`），验证结果：
+   - 签名验证通过，`stripe_events` 表里只记录了这一条事件，没有重复处理
+   - 订单状态 `pending_payment` → `paid`，金额 S$60.00、`stripe_payment_intent_id` 是真实的 `pi_...`
+   - 库存 `BAIJIU-YANGHE-NEW-SKY-BLUE` 从 50 正确扣减到 49（只扣一次，没有因为 webhook 重试或多个事件类型重复扣减）
+   - `email_logs` 里 `customer_confirmation`/`staff_notification` 两条记录都已发出，且因为之前那轮配置的 Resend Preview Webhook 还在运作，状态已经被真实的 Resend 投递回调更新成了 `delivered`——相当于把邮件账本那一整条链路也顺带验证了一遍
+6. 测试完成后清理：删除这条测试订单及其 `order_items`/`order_status_history`/`inventory_reservations`/`email_logs`/`inventory_movements`，库存手动改回 50。`stripe_events` 里的真实事件记录沿用之前"审计日志不清理"的惯例保留未删。
+
+**顺带发现但本轮未处理的一点**：Stripe 结账成功后跳转的 `success_url` 指向的是生产域名 `trinityglobe.sg`（`SITE_URL` 环境变量），而不是当前测试所在的 `deploy-preview-1--trinity-globe.netlify.app`——这是 `create-checkout-session.ts` 现有的设计（写死用生产域名），在 Preview 环境测试时用户完成支付后会跳出 Preview 网站。真实生产环境不受影响，只是在 Preview 上测试这条路径时体验上会跳转，供后续如果还要在其它 Preview 上重复测试时留意。
+
+**现在 Stripe 测试模式/沙盒里长期存在这一个 Event Destination**（"Trinity Globe Deploy Preview #1"），跟 Resend 那边的 Deploy Preview Webhook 一样，建议留到 PR 合并前再考虑要不要删除/替换成生产用的。
+
+---
+
+## 2026-08-27（第十六轮）：Deploy Preview 最终回归收尾——修 Preview 跳转、补完客户/支付/权限/商品四大类检查、发现一个真实的生产环境问题
+
+**Part A：修正 Preview 跳转到生产域名的问题**——上一轮发现 Stripe 结账成功后跳转到 `trinityglobe.sg` 而不是当前 Preview，这一轮按用户授权修正：给 Netlify 的 `SITE_URL` 增加一个**仅限 Deploy Previews** 的值 `https://deploy-preview-1--trinity-globe.netlify.app`（Production 那一栏没有动），Supabase Auth 的 Redirect URLs 里新增了这个精确域名（`https://deploy-preview-1--trinity-globe.netlify.app/**`，没有用通配符，Production 的 Site URL 也没有动）。重新部署后验证：Stripe 付款成功跳转、取消、以及一次真实登录都留在 Preview 上，不再跳出去。
+
+**Part B：补完的回归项**（真实浏览器 + 真实测试账号，不是读代码）：
+
+- **客户功能**：用 Supabase Admin API 的 `generateLink` 直接拿到签发的 8 位 OTP（不依赖真实收件箱），走了一次完整的邮箱注册+验证码校验+自动登录；地址簿测试了新增两条、编辑、切换默认、删除，前端 UI 和数据库状态都对得上；登录客户下单（自动带出登录邮箱）、"我的订单"页正确显示 `待付款`/`已取消` 状态和倒计时提示；点击"继续付款"复用了同一个 Stripe Checkout Session（没有产生新 session）；点击"取消订单"后库存立即从锁定状态释放回 50。
+- **预留过期自动释放**：手动把一条预留的 `expires_at` 改到过去，用 Netlify 后台"Run now"手动触发一次 `release-expired-reservations`（不用等真实的 5 分钟 cron），日志显示"expired 1 reservation(s), force-expired 1 Stripe session(s)"，订单状态变成 `expired`、库存正确释放回 50，且这次触发的 `checkout.session.expired` 是 Stripe 真实推送的 webhook（`evt_1U8yMwB3ybi6Kwed...`），不是伪造请求。
+- **支付与退款**：`4242...`卡完成一笔真实 Stripe 测试模式付款，`stripe_events` 只记一条不重复；`4000000000000002`（通用拒绝卡）在 Stripe 结账页正确显示"您的信用卡被拒绝了"，确认这类同步拒绝不会产生任何 webhook（客户只是被留在原页面重试），"支付失败路径"的真正验证靠的是上面提到的 `checkout.session.expired` 真实事件；管理员对一笔已付款订单发起"Refund in full"，`orders.status`→`refunded`、`refunded_cents`=`total_cents`，且**库存没有被自动加回**（仍是扣减后的数字，符合"退款不自动补库存"的既定设计）。
+- **权限矩阵**：新建了 3 个真实测试账号（`admin`/`ops`/`finance_readonly`，走 Supabase Admin API 直接创建+写入 `admin_profiles`，不经过任何前端注册流程）分别登录 admin-app 验证——`admin`能发起真实退款；`ops`能直接改订单备注（RLS 允许的直接 Supabase 写入）；`finance_readonly`的备注文本框在 DOM 层面就是`disabled`、没有"保存"按钮、没有 Refund/Email 区块，而且**用脚本直接绕过 UI 尝试改 `internal_notes` 得到的是"0 行受影响、无报错"**——确认这是 RLS 本身在拒绝，不是单纯前端隐藏了按钮；匿名请求读取不到任何订单；登录客户直接用 Supabase 客户端尝试改自己订单的 `status` 字段同样被 RLS 拒绝（0 行）。
+- **商品数据**：`Refund Test`订单详情页确认"GST (inclusive): Not applicable — not GST-registered at checkout"，未注册状态下正确不显示 GST；中文 Delivery Policy 页面已在上一轮确认过 S$15/S$120 文案；76 件商品 SKU 唯一性、Martell VSOP/4 个新商品的可下单性已在上一轮合并时验证过，本轮购物流程里再次确认 Yanghe New Sky Blue 等商品能正常加购、结账、扣库存。
+
+**Part C：一个意外发现的真实问题——生产环境的 Netlify Functions 目前很可能是坏的**：在用 admin-app 测试退款时，admin-app 请求的是**生产域名**`trinityglobe.sg`的 Netlify Function（admin-app 是独立的 Netlify 项目，`VITE_STOREFRONT_FUNCTIONS_URL`写死指向生产，所有环境context都一样，不区分 Preview），结果收到 **503**。核实发现：生产环境当前发布的是`main@3c4e996`——这个commit **早于**本次 session 在 `dev` 分支上修的 `.nvmrc`（Node 20→22）那次改动，而这个 Node 版本问题此前已经证实会导致所有用到 `getSupabaseAdmin()` 的 Function 崩溃（"Node.js detected but native WebSocket not found"）。也就是说，**生产环境很可能现在就有这个bug**，会影响生产上所有依赖`getSupabaseAdmin()`的操作——包括真实客户结账（`create-checkout-session.ts`）。**本轮没有去动生产配置**（用户明确要求不设置Production环境变量），退款验证改成直接对 Preview 的 `admin-refund-order` 端点发真实认证请求完成（用测试 admin 账号的真实 JWT，不是 mock）。**这一条需要用户尽快确认**：如果生产现在真的在报错，会直接影响任何试图下单的真实客户；`dev`分支合并到`main`会自动修好这个问题，但用户明确表示还没准备好合并，所以这是一个需要单独决策的紧急情况（要么加急做一次只改`.nvmrc`+Node版本相关的最小生产热修复，要么接受现状直到正式合并）。
+
+**清理**：4 个测试订单（`Refund Test`已退款、`Payment Failure Test`已过期、`Reservation Expiry Test`已过期、`Regression Test 2`已取消）及其 `order_items`/`order_status_history`/`inventory_reservations`/`email_logs`/`inventory_movements`/`refund_requests` 全部删除；2 条测试地址删除；4 个测试账号（1 客户 + `admin`/`ops`/`finance_readonly`）连同其 `admin_profiles` 记录全部删除；`BAIJIU-YANGHE-NEW-SKY-BLUE`库存手动改回基线 50；Resend 里 `msg_`开头的测试投递记录清理。Stripe 测试模式 Event Destination 和 Resend Preview Webhook 按要求保留，未删除。
+
+`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部重新跑过，通过（本轮没有改动业务代码，只改了 Netlify/Supabase/Stripe 配置和本文件）。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
