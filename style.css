@@ -900,11 +900,29 @@ footer .container {
 }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 768px) {
+
+/* Nav bar collapses at a wider breakpoint than the content sections below:
+   the full desktop nav (wordmark + Home/About/Collection/Contact/English +
+   Sign In + cart icon) needs ~925px to fit and was overflowing invisibly
+   past the viewport edge on any window between 768px and ~925px wide (a
+   landscape phone, e.g. 844×390, falls right in that gap) — no scrollbar
+   appeared because fixed-position overflow doesn't add to document
+   scrollWidth, so the cart and nav links were simply unreachable rather
+   than visibly broken. At the narrow end (375px wide), the wordmark alone
+   ate 244px of a 311px row, pushing the cart icon and hamburger off-screen
+   the same way. Both are fixed together here since they're really one bug. */
+@media (max-width: 960px) {
   .nav-links { display: none; }
   .nav-enquire { display: none; }
   .nav-lang { display: none; }
-  .nav-hamburger { display: flex; }
+  .nav-hamburger { display: flex; margin-left: 0; }
+  #navbar { padding: 1rem 1.25rem; }
+  .nav-inner { gap: 0.6rem; }
+  .nav-logo { font-size: 0.82rem; letter-spacing: 0.08em; gap: 0.5rem; }
+  .nav-logo-img { height: 34px; }
+}
+
+@media (max-width: 768px) {
   .hero-main .container { padding: 0 1.5rem; }
 
   /* Hero */
