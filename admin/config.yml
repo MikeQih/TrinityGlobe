@@ -21,6 +21,11 @@ collections:
               - label: "Product Name"
                 name: "name"
                 widget: "string"
+              - label: "SKU"
+                name: "sku"
+                widget: "string"
+                required: true
+                hint: "Must be unique and match the sku in the Supabase product_variants table exactly — this is what links this product to its live price and stock."
               - label: "Category"
                 name: "category"
                 widget: "string"
@@ -48,9 +53,21 @@ collections:
                     required: false
                     value_type: "int"
                     hint: "Leave blank if not applicable"
+                  - label: "Case Size (bottles)"
+                    name: "caseSize"
+                    widget: "number"
+                    required: false
+                    value_type: "int"
+                    hint: "How many bottles make up '1 Case'. Once a customer's cart quantity for this SKU reaches this number, the cart automatically switches to the case price. Currently set to 12 for every product as a placeholder — update per product once the real number is known."
                   - label: "5 Cases"
                     name: "fiveCases"
                     widget: "number"
                     required: false
                     value_type: "int"
                     hint: "Leave blank if not applicable"
+                  - label: "5-Case Size (bottles)"
+                    name: "fiveCaseSize"
+                    widget: "number"
+                    required: false
+                    value_type: "int"
+                    hint: "How many bottles make up '5 Cases' (usually 5x Case Size, but not assumed). Cart auto-switches to the 5-case price once quantity reaches this number. Leave blank until known."

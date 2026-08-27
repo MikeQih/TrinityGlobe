@@ -1,0 +1,10 @@
+node_modules/
+assets/
+dist/
+.env
+.env.local
+.netlify/
+admin-app/node_modules/
+admin-app/dist/
+*.log
+deno.lock

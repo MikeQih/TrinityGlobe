@@ -1,0 +1,44 @@
+[build]
+  command = "npm run build"
+  publish = "."
+
+  # Netlify's secret scanner fails the build if any env var *value* shows up
+  # anywhere in the build output, with no distinction between real secrets
+  # and plain config that's meant to be visible (a shipping fee in cents, a
+  # from-address, the Supabase project URL used client-side). These are the
+  # non-secret ones that legitimately appear in netlify/functions output —
+  # actual secrets (STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, the OAuth
+  # client secrets, RESEND_API_KEY) are deliberately left off this list so
+  # the scanner still catches those.
+  [build.environment]
+    SECRETS_SCAN_OMIT_KEYS = "FREE_SHIPPING_THRESHOLD_CENTS,STANDARD_SHIPPING_FEE_CENTS,RESEND_FROM_EMAIL,STAFF_NOTIFICATION_EMAILS,SITE_URL,SUPABASE_URL"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# release-expired-reservations' schedule is declared via its own
+# `export const config: Config = { schedule: ... }` (Netlify Functions v2
+# style) rather than here, to keep one source of truth for it.
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Local dev: `netlify dev` serves the static root files directly and runs
+# the functions in `netlify/functions` on the same origin so
+# fetch("/.netlify/functions/...") works without CORS setup.
+#
+# framework = "#static" is required: without it, Netlify auto-detects this
+# as a Vite project (from package.json's vite devDependency) and tries to
+# proxy to a Vite dev SERVER on port 5173 — but our `npm run dev` is
+# `vite build --watch`, a build-only watcher that never opens a port, so
+# that auto-detection just times out. We want Vite purely as a bundler for
+# assets/storefront.js (see vite.config.ts), not as the dev server; run
+# `npm run dev` yourself in a separate terminal to keep that bundle
+# rebuilding while `netlify dev` serves everything.
+[dev]
+  framework = "#static"
+  publish = "."
+  functions = "netlify/functions"

@@ -1,0 +1,201 @@
+:root {
+  --ink: #1c1a17;
+  --ink-soft: #635c52;
+  --border: #e4ddd2;
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --accent: #8a5a1e;
+  --good: #2f6f4e;
+  --good-bg: #e5f2ea;
+  --attention: #9a6b17;
+  --attention-bg: #faf0dc;
+  --bad: #a13a2e;
+  --bad-bg: #fbe8e4;
+  --neutral: #635c52;
+  --neutral-bg: #f0ede6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--ink);
+}
+
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+input, select, textarea {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.muted { color: var(--ink-soft); }
+.center-page { text-align: center; margin-top: 80px; }
+
+.error-banner {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+/* payment_review banner (OrderDetail) — deliberately the "attention" amber
+   rather than "bad" red: it isn't an error to dismiss, it's a required
+   manual step before this order can be touched further. */
+.warning-banner {
+  background: var(--attention-bg);
+  color: var(--attention);
+  border: 1px solid var(--attention);
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.warning-banner strong { display: block; margin-bottom: 6px; }
+.warning-banner p { margin: 0; line-height: 1.5; }
+
+.payment-ids {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+.payment-ids dt { color: var(--ink-soft); }
+.payment-ids dd { margin: 0; font-family: monospace; word-break: break-all; }
+
+/* OrdersList row flag for a failed/bounced/suppressed email — same
+   severity as .error-banner, just inline rather than a full block. */
+.email-issue-flag {
+  color: var(--bad);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.email-status-section { margin-top: 10px; }
+.email-status-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.email-status-row:last-child { border-bottom: none; }
+.email-status-label { min-width: 160px; color: var(--ink-soft); }
+.email-status-reason { color: var(--bad); font-size: 13px; }
+.email-status-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }
+.email-status-badge[data-status="pending"],
+.email-status-badge[data-status="accepted"] { background: var(--neutral-bg); color: var(--neutral); }
+.email-status-badge[data-status="delayed"] { background: var(--attention-bg); color: var(--attention); }
+.email-status-badge[data-status="delivered"] { background: var(--good-bg); color: var(--good); }
+.email-status-badge[data-status="failed"],
+.email-status-badge[data-status="bounced"],
+.email-status-badge[data-status="suppressed"] { background: var(--bad-bg); color: var(--bad); }
+
+/* Login */
+.login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 32px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-card h1 { font-size: 18px; margin: 0 0 4px; }
+.login-card label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-soft); }
+.login-hint { font-size: 12px; color: var(--ink-soft); margin: 0; }
+.login-error { color: var(--bad); font-size: 13px; margin: 0; }
+
+/* Shell */
+.admin-shell { min-height: 100vh; }
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.admin-logo { font-weight: 600; color: var(--ink); text-decoration: none; }
+.admin-topbar-right { display: flex; align-items: center; gap: 12px; }
+.admin-main { padding: 24px; max-width: 960px; margin: 0 auto; }
+
+/* Status badge */
+.status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+.status-neutral { color: var(--neutral); background: var(--neutral-bg); }
+.status-good { color: var(--good); background: var(--good-bg); }
+.status-attention { color: var(--attention); background: var(--attention-bg); }
+.status-bad { color: var(--bad); background: var(--bad-bg); }
+
+/* Orders list */
+.orders-toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+.orders-toolbar input[type="search"] { flex: 1; }
+.orders-table, .order-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.orders-table th, .orders-table td,
+.order-items-table th, .order-items-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.orders-table th, .order-items-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Order detail */
+.order-detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.order-detail-header h1 { font-size: 20px; margin: 0; }
+.order-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.order-section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin: 0 0 10px; }
+.order-totals { margin-top: 10px; font-variant-numeric: tabular-nums; }
+.order-totals > div { display: flex; justify-content: space-between; padding: 2px 0; }
+.order-totals .total-row { font-weight: 600; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
+.order-totals .refunded-row { color: var(--bad); }
+.status-actions, .refund-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.order-detail textarea { width: 100%; margin-bottom: 8px; resize: vertical; }
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.history-list li { display: flex; justify-content: space-between; color: var(--ink-soft); }

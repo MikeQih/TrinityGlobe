@@ -23,12 +23,78 @@ const translations = {
     'contact-sub': 'Reach out via WhatsApp or WeChat. Free delivery on orders above S$120.',
     'contact-wechat': 'WeChat', 'contact-phone': 'Phone',
     'contact-note': '✦ Free delivery on orders S$120 and above &nbsp;·&nbsp; Free tasting available on request',
-    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · Singapore · Premium Spirits Supplier',
+    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · UEN 202509360N · Singapore · Premium Spirits Supplier',
+    'footer-terms': 'Terms & Conditions', 'footer-privacy': 'Privacy Policy', 'footer-delivery': 'Delivery Policy',
+    'footer-refund': 'Refund & Returns', 'footer-age': 'Responsible Drinking',
     'price-bottle': '1 Bottle', 'price-case': '1 Case', 'price-five': '5 Cases', 'price-enquire': 'Enquire',
     'filter-all': 'All',
     'cat-cognac': 'Cognac', 'cat-whisky': 'Whisky', 'cat-champagne': 'Champagne',
     'cat-wine': 'Wine', 'cat-sake': 'Sake', 'cat-baijiu': 'Baijiu',
     'cat-beer': 'Beer', 'cat-vodka': 'Vodka', 'cat-tequila': 'Tequila', 'cat-other': 'Others',
+
+    // Cart / checkout (rendered by assets/storefront.js, src/cart.ts)
+    'cart-add-btn': 'Add to Cart', 'cart-added': 'Added ✓',
+    'cart-title': 'Your Cart', 'cart-empty': 'Your cart is empty.',
+    'cart-continue-shopping': 'Continue Shopping',
+    'cart-subtotal': 'Subtotal', 'cart-remove': 'Remove',
+    'cart-qty-decrease': 'Decrease quantity', 'cart-qty-increase': 'Increase quantity', 'cart-qty-label': 'Quantity',
+    'cart-checkout-btn': 'Checkout',
+    'cart-checkout-disabled-btn': 'Checkout Unavailable',
+    'cart-checkout-disabled-msg': 'Online checkout is temporarily unavailable.',
+    'cart-checkout-disabled-whatsapp': 'Order via WhatsApp',
+    'cart-free-shipping-hint': 'Add {amount} more for free delivery',
+    'cart-free-shipping-met': "You've unlocked free delivery!",
+    'cart-close': 'Close cart',
+    'cart-order-success': 'Payment received — thank you! We’ll email you a confirmation shortly.',
+    'cart-order-cancelled': 'Checkout was cancelled — your cart has been saved.',
+    'cart-tier-case': 'Case price', 'cart-tier-five-case': '5-case price',
+    'checkout-back-to-cart': '‹ Back to cart',
+    'checkout-title': 'Checkout',
+    'nav-sign-in': 'Sign In', 'nav-account': 'Account', 'nav-my-orders': 'My Orders', 'nav-my-address': 'My Addresses', 'nav-sign-out': 'Sign Out',
+    'checkout-account-lead': 'Sign in to view this order later, or continue as a guest.',
+    'checkout-signin-google': 'Sign in with Google',
+    'checkout-signin-facebook': 'Sign in with Facebook',
+    'checkout-use-email': 'Continue with Email',
+    'checkout-continue-guest': 'Continue as Guest',
+    'checkout-signed-in-as': 'Signed in as',
+    'checkout-sign-out': 'Sign out',
+    'checkout-back': '‹ Back',
+    'checkout-tab-signup': 'Sign Up', 'checkout-tab-signin': 'Sign In',
+    'checkout-first-name': 'First Name', 'checkout-last-name': 'Last Name',
+    'checkout-gender': 'Gender',
+    'checkout-gender-male': 'Male', 'checkout-gender-female': 'Female', 'checkout-gender-prefer-not-say': 'Prefer not to say',
+    'checkout-dob': 'Date of Birth',
+    'checkout-password': 'Password', 'checkout-password-confirm': 'Confirm Password',
+    'checkout-newsletter': 'Sign up for the Trinity Globe newsletter so we can let you know about the best promotions and offers.',
+    'checkout-create-account-btn': 'Create Account', 'checkout-signin-btn': 'Sign In',
+    'checkout-or-continue-with': 'Or continue with',
+    'checkout-otp-lead': "Enter the 8-digit code we've sent to {email}",
+    'checkout-otp-label': 'Verification code',
+    'checkout-otp-verify-btn': 'Verify', 'checkout-otp-resend': 'Resend code', 'checkout-otp-resent': 'Code resent — check your inbox.',
+    'checkout-signup-error-generic': "We couldn't create your account. Please try again.",
+    'checkout-signin-error-generic': 'Incorrect email or password.',
+    'checkout-otp-error-generic': "That code didn't work — please check it and try again.",
+    'checkout-password-mismatch': "Passwords don't match.",
+    'checkout-password-too-short': 'Password must be at least 8 characters.',
+    'checkout-age-under-18': 'You must be at least 18 years old to create an account.',
+    'checkout-profile-save-error': "Account created, but we couldn't save your profile details. You can update them later.",
+    'checkout-name': 'Full Name', 'checkout-phone': 'Phone Number', 'checkout-email': 'Email',
+    'checkout-address': 'Delivery Address', 'checkout-postal': 'Postal Code',
+    'checkout-notes': 'Order Notes (optional)',
+    'checkout-delivery-method': 'Delivery Method',
+    'checkout-standard-delivery': 'Standard Delivery', 'checkout-self-collection': 'Self Collection',
+    'checkout-standard-delivery-info': 'Delivered to the address below. Free above S$120, otherwise a flat S$15 delivery fee applies (shown in the total below). Estimated delivery: 1–2 business days.',
+    'checkout-self-collection-info': 'Free — no delivery fee. We\'ll send the collection address, hours, and pickup instructions to the phone/email above once your order is confirmed; please wait for that notice before coming down.',
+    'checkout-age-confirm': 'I confirm I am at least 18 years old. It is illegal to purchase alcohol if you are under the legal age.',
+    'checkout-age-learn-more': 'Learn more',
+    'checkout-age-required': 'Please confirm you are 18 or older to continue.',
+    'checkout-shipping-fee': 'Shipping Fee', 'checkout-free': 'Free', 'checkout-gst': 'GST',
+    'checkout-total': 'Total',
+    'checkout-submit': 'Proceed to Payment', 'checkout-submitting': 'Processing…',
+    'checkout-pay-now': 'Pay Now',
+    'checkout-field-required': 'This field is required.',
+    'checkout-error-generic': 'Something went wrong. Please try again, or contact us on WhatsApp.',
+    'checkout-error-stock': 'Some items in your cart are no longer available in the requested quantity.',
   },
   zh: {
     'nav-home': '首页', 'nav-about': '关于', 'nav-collection': '产品', 'nav-contact': '联系我们',
@@ -49,18 +115,96 @@ const translations = {
     'contact-sub': '通过 WhatsApp 或微信联系我们，订单满 S$120 免费配送。',
     'contact-wechat': '微信', 'contact-phone': '电话',
     'contact-note': '✦ 订单满 S$120 免费配送 &nbsp;·&nbsp; 可预约免费品鉴',
-    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · 新加坡 · 顶级烈酒供应商',
+    'footer-copy': '© 2025 Trinity Globe Trading Pte. Ltd. · UEN 202509360N · 新加坡 · 顶级烈酒供应商',
+    'footer-terms': '条款与条件', 'footer-privacy': '隐私政策', 'footer-delivery': '配送政策',
+    'footer-refund': '退款与退货', 'footer-age': '理性饮酒',
     'price-bottle': '单瓶', 'price-case': '一箱', 'price-five': '五箱', 'price-enquire': '限量供应',
     'filter-all': '全部',
     'cat-cognac': '干邑', 'cat-whisky': '威士忌', 'cat-champagne': '香槟',
     'cat-wine': '葡萄酒', 'cat-sake': '清酒', 'cat-baijiu': '白酒',
     'cat-beer': '啤酒', 'cat-vodka': '伏特加', 'cat-tequila': '龙舌兰', 'cat-other': '其他',
+
+    // 购物车 / 结账（由 assets/storefront.js 即 src/cart.ts 渲染）
+    'cart-add-btn': '加入购物车', 'cart-added': '已加入 ✓',
+    'cart-title': '购物车', 'cart-empty': '购物车是空的。',
+    'cart-continue-shopping': '继续购物',
+    'cart-subtotal': '小计', 'cart-remove': '移除',
+    'cart-qty-decrease': '减少数量', 'cart-qty-increase': '增加数量', 'cart-qty-label': '数量',
+    'cart-checkout-btn': '去结账',
+    'cart-checkout-disabled-btn': '结账暂未开放',
+    'cart-checkout-disabled-msg': '在线结账暂未开放。',
+    'cart-checkout-disabled-whatsapp': '通过 WhatsApp 下单',
+    'cart-free-shipping-hint': '再购 {amount} 即可免运费',
+    'cart-free-shipping-met': '已享受免运费！',
+    'cart-close': '关闭购物车',
+    'cart-order-success': '支付成功，感谢您的订购！确认邮件稍后发送。',
+    'cart-order-cancelled': '结账已取消 —— 购物车内容已保留。',
+    'cart-tier-case': '整箱价', 'cart-tier-five-case': '五箱价',
+    'checkout-back-to-cart': '‹ 返回购物车',
+    'checkout-title': '结账',
+    'nav-sign-in': '登录', 'nav-account': '账户', 'nav-my-orders': '我的订单', 'nav-my-address': '我的地址', 'nav-sign-out': '退出登录',
+    'checkout-account-lead': '登录以便日后查看该订单，或以访客身份继续结账。',
+    'checkout-signin-google': '使用 Google 登录',
+    'checkout-signin-facebook': '使用 Facebook 登录',
+    'checkout-use-email': '使用邮箱继续',
+    'checkout-continue-guest': '以访客身份继续',
+    'checkout-signed-in-as': '已登录：',
+    'checkout-sign-out': '退出登录',
+    'checkout-back': '‹ 返回',
+    'checkout-tab-signup': '注册', 'checkout-tab-signin': '登录',
+    'checkout-first-name': '名', 'checkout-last-name': '姓',
+    'checkout-gender': '性别',
+    'checkout-gender-male': '男', 'checkout-gender-female': '女', 'checkout-gender-prefer-not-say': '不愿透露',
+    'checkout-dob': '出生日期',
+    'checkout-password': '密码', 'checkout-password-confirm': '确认密码',
+    'checkout-newsletter': '订阅 Trinity Globe 通讯，第一时间获取优惠活动信息。',
+    'checkout-create-account-btn': '创建账号', 'checkout-signin-btn': '登录',
+    'checkout-or-continue-with': '或使用以下方式继续',
+    'checkout-otp-lead': '验证码已发送至 {email}，请输入 8 位验证码',
+    'checkout-otp-label': '验证码',
+    'checkout-otp-verify-btn': '验证', 'checkout-otp-resend': '重新发送验证码', 'checkout-otp-resent': '验证码已重新发送，请查收邮箱。',
+    'checkout-signup-error-generic': '账号创建失败，请重试。',
+    'checkout-signin-error-generic': '邮箱或密码不正确。',
+    'checkout-otp-error-generic': '验证码不正确，请检查后重试。',
+    'checkout-password-mismatch': '两次输入的密码不一致。',
+    'checkout-password-too-short': '密码至少需要 8 位字符。',
+    'checkout-age-under-18': '您必须年满 18 周岁才能创建账号。',
+    'checkout-profile-save-error': '账号已创建，但个人资料保存失败，您可以稍后再补充。',
+    'checkout-name': '姓名', 'checkout-phone': '手机号', 'checkout-email': '邮箱',
+    'checkout-address': '收货地址', 'checkout-postal': '邮编',
+    'checkout-notes': '订单备注（选填）',
+    'checkout-delivery-method': '配送方式',
+    'checkout-standard-delivery': '标准配送', 'checkout-self-collection': '自提',
+    'checkout-standard-delivery-info': '配送至下方填写的地址。订单满 S$120 免运费，未满则收取 S$15 运费（详见下方总计）。预计配送时间：1–2 个工作日。',
+    'checkout-self-collection-info': '免费自提，不收取运费。订单确认后，我们会将具体自提地址、开放时间和取货说明发送到您填写的电话/邮箱，请等待通知后再前来取货。',
+    'checkout-age-confirm': '我确认已达到法定饮酒年龄。未达法定年龄购买酒类属违法行为。',
+    'checkout-age-learn-more': '了解详情',
+    'checkout-age-required': '请先确认您已达到法定饮酒年龄。',
+    'checkout-shipping-fee': '运费', 'checkout-free': '免费', 'checkout-gst': '消费税(GST)',
+    'checkout-total': '总计',
+    'checkout-submit': '前往支付', 'checkout-submitting': '处理中…',
+    'checkout-pay-now': '立即支付',
+    'checkout-field-required': '此项为必填。',
+    'checkout-error-generic': '出现问题，请重试，或通过 WhatsApp 联系我们。',
+    'checkout-error-stock': '购物车中部分商品库存不足，请调整数量。',
   },
 };
 
 function t(key) {
   return translations[currentLang][key] ?? translations.en[key] ?? key;
 }
+
+// ── Bridge for assets/storefront.js (src/cart.ts) ──
+// `t` and `currentLang` live in this file's module-less top-level scope;
+// currentLang is a `let` so it never becomes a `window` property on its own.
+// Cart/checkout code needs to read the live language and re-render its own
+// (non data-i18n) DOM — like formatted prices — whenever it changes, so we
+// expose a tiny explicit API instead of relying on incidental globals.
+window.TG_I18N = {
+  t,
+  getLang: () => currentLang,
+};
+window.TG_ON_LANG_CHANGE = [];
 
 function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -98,6 +242,10 @@ function toggleLanguage() {
     });
     initMarquee();
   }
+
+  window.TG_ON_LANG_CHANGE.forEach(cb => {
+    try { cb(); } catch (err) { console.error(err); }
+  });
 }
 
 // ── NAV scroll effect + active link ──
@@ -132,6 +280,13 @@ function fmt(price) {
 }
 
 // ── Build price grid HTML (always show all 3 tiers, "—" when null) ──
+// Purely informational — the actual "add to cart" control is the single
+// button rendered below it in renderProducts (always adds 1 bottle). Buying
+// case-size quantities happens by adjusting qty in the cart drawer instead,
+// where it auto-prices to the case/five-case tier once qty crosses that
+// threshold (src/pricing.ts#effectiveUnitPriceCents) — tried making each
+// tier its own tap target on the card, but the price cells are too narrow
+// on mobile to be a reliable tap target, so reverted to this.
 function buildPriceGrid(prices) {
   if (!prices) prices = {};
   const tiers = [
@@ -171,6 +326,7 @@ async function loadProducts() {
   }
 
   cachedProducts = products;
+  window.TG_PRODUCTS = products; // read by src/cart.ts to resolve sku -> name/image/price for optimistic cart UI
   renderProducts(products);
   buildFilterTabs(products);
   initFilter();
@@ -185,7 +341,7 @@ function renderProducts(products) {
     const primary  = currentLang === 'en' ? (p.nameEn || p.name) : (p.nameZh || p.name);
     const catLabel = t('cat-' + p.category) || p.categoryLabel;
     return `
-    <div class="product-card" data-category="${p.category}">
+    <div class="product-card" data-category="${p.category}" data-sku="${p.sku || ''}">
       <div class="card-img-wrap">
         <img src="${p.image}" alt="${(p.nameEn || p.name).replace(/<br\s*\/?>/gi, ' ')}" loading="lazy" />
       </div>
@@ -193,6 +349,7 @@ function renderProducts(products) {
         <span class="card-cat">${catLabel}</span>
         <h3>${primary}</h3>
         ${buildPriceGrid(p.prices)}
+        ${p.prices && p.prices.bottle > 0 ? `<button class="add-cart-btn" type="button" data-sku="${p.sku || ''}" data-i18n="cart-add-btn">${t('cart-add-btn')}</button>` : ''}
       </div>
     </div>`;
   }).join('');
