@@ -803,11 +803,73 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 - **权限矩阵**：新建了 3 个真实测试账号（`admin`/`ops`/`finance_readonly`，走 Supabase Admin API 直接创建+写入 `admin_profiles`，不经过任何前端注册流程）分别登录 admin-app 验证——`admin`能发起真实退款；`ops`能直接改订单备注（RLS 允许的直接 Supabase 写入）；`finance_readonly`的备注文本框在 DOM 层面就是`disabled`、没有"保存"按钮、没有 Refund/Email 区块，而且**用脚本直接绕过 UI 尝试改 `internal_notes` 得到的是"0 行受影响、无报错"**——确认这是 RLS 本身在拒绝，不是单纯前端隐藏了按钮；匿名请求读取不到任何订单；登录客户直接用 Supabase 客户端尝试改自己订单的 `status` 字段同样被 RLS 拒绝（0 行）。
 - **商品数据**：`Refund Test`订单详情页确认"GST (inclusive): Not applicable — not GST-registered at checkout"，未注册状态下正确不显示 GST；中文 Delivery Policy 页面已在上一轮确认过 S$15/S$120 文案；76 件商品 SKU 唯一性、Martell VSOP/4 个新商品的可下单性已在上一轮合并时验证过，本轮购物流程里再次确认 Yanghe New Sky Blue 等商品能正常加购、结账、扣库存。
 
-**Part C：一个意外发现的真实问题——生产环境的 Netlify Functions 目前很可能是坏的**：在用 admin-app 测试退款时，admin-app 请求的是**生产域名**`trinityglobe.sg`的 Netlify Function（admin-app 是独立的 Netlify 项目，`VITE_STOREFRONT_FUNCTIONS_URL`写死指向生产，所有环境context都一样，不区分 Preview），结果收到 **503**。核实发现：生产环境当前发布的是`main@3c4e996`——这个commit **早于**本次 session 在 `dev` 分支上修的 `.nvmrc`（Node 20→22）那次改动，而这个 Node 版本问题此前已经证实会导致所有用到 `getSupabaseAdmin()` 的 Function 崩溃（"Node.js detected but native WebSocket not found"）。也就是说，**生产环境很可能现在就有这个bug**，会影响生产上所有依赖`getSupabaseAdmin()`的操作——包括真实客户结账（`create-checkout-session.ts`）。**本轮没有去动生产配置**（用户明确要求不设置Production环境变量），退款验证改成直接对 Preview 的 `admin-refund-order` 端点发真实认证请求完成（用测试 admin 账号的真实 JWT，不是 mock）。**这一条需要用户尽快确认**：如果生产现在真的在报错，会直接影响任何试图下单的真实客户；`dev`分支合并到`main`会自动修好这个问题，但用户明确表示还没准备好合并，所以这是一个需要单独决策的紧急情况（要么加急做一次只改`.nvmrc`+Node版本相关的最小生产热修复，要么接受现状直到正式合并）。
+**Part C（原文，已被下一轮只读核查推翻，保留存档不删）**：~~在用 admin-app 测试退款时……收到 503……生产环境很可能现在就有这个 Node 22 bug~~ —— **这个结论是错的，证据不足就下了结论。见下面"第十六轮·纠正"一节的完整只读核查：生产根本没有部署任何电商 Function，也没有对外开放结账入口，跟 Node 版本无关。退款验证本身（改用直接调用 Preview 的 `admin-refund-order`）依然是有效、真实的验证，这部分结论不变。**
 
 **清理**：4 个测试订单（`Refund Test`已退款、`Payment Failure Test`已过期、`Reservation Expiry Test`已过期、`Regression Test 2`已取消）及其 `order_items`/`order_status_history`/`inventory_reservations`/`email_logs`/`inventory_movements`/`refund_requests` 全部删除；2 条测试地址删除；4 个测试账号（1 客户 + `admin`/`ops`/`finance_readonly`）连同其 `admin_profiles` 记录全部删除；`BAIJIU-YANGHE-NEW-SKY-BLUE`库存手动改回基线 50；Resend 里 `msg_`开头的测试投递记录清理。Stripe 测试模式 Event Destination 和 Resend Preview Webhook 按要求保留，未删除。
 
 `storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部重新跑过，通过（本轮没有改动业务代码，只改了 Netlify/Supabase/Stripe 配置和本文件）。
+
+---
+
+## 2026-08-27（第十六轮·纠正）：生产环境只读核查——上一轮"Node 22 导致生产崩溃"的结论证据不足，已推翻
+
+用户质疑得对：上一轮仅凭"0 functions active + 503"就推断生产在跑同一个 Node 版本 bug，证据不够（0 active 不代表异常；503 也可能另有原因；生产可能压根没部署过电商后端）。本轮做了一次**完全只读**的核查（未改任何 Production 配置、未 push main、未触发部署、未创建订单、未进 Stripe Live），结论：
+
+**1. `origin/main@3c4e996` 的 Git 树**：`git ls-tree -r origin/main` 显示整个仓库树里**没有 `netlify/functions` 目录，也没有 `netlify.toml`、`.nvmrc`、`package.json`**——`main` 上根本不是同一个 Node/Vite 项目结构，是一个更早期的纯静态展示站（`index.html`/`script.js`/`style.css`/`products.json`，`admin/` 目录只是 Netlify CMS 的 `config.yml`，跟 `admin-app` 无关）。`index.html`、`script.js` 里 grep 不到任何 `cart`/`checkout`/`stripe` 字样。
+
+**2. Netlify 生产部署详情**：`main@3c4e996` 这次发布（Aug 18, "Update Products"）构建日志只有 8 秒，"2 new files uploaded, 2 assets changed"，展开日志没有任何 Node/npm/esbuild/functions 打包的痕迹——这就是纯静态文件上传，不是一次 Node 构建。Netlify Functions 面板明确显示"0 functions actively running in production"、"**No functions found in production**"（不是运行时崩溃后归零，是从来没打包过）。
+
+**3. 正式站 `trinityglobe.sg` 实际界面**：导航栏只有 HOME/ABOUT/COLLECTION/CONTACT/ENGLISH，**没有购物车图标，没有 Account 入口**；每个商品卡片的按钮是"Enquire"，点击跳转到 WhatsApp（`https://wa.me/6598680555`），根本不是"Add to Cart"。也就是说，**普通客户现在访问正式站，物理上找不到任何结账入口**，这是个走 WhatsApp 询价的 B2B 展示站，不是能在线下单的电商站。
+
+**4. 对 `dev` 分支上真实存在的全部 12 个 Function 做精确 URL 探测**（不是通配符判断）：`admin-cancel-order`、`admin-refund-order`、`admin-resend-order-email`、`cancel-my-order`、`create-checkout-session`、`get-checkout-session-status`、`get-my-orders`、`products-live`、`release-expired-reservations`、`resend-webhook`、`resume-checkout-session`、`stripe-webhook`——对 `https://trinityglobe.sg/.netlify/functions/<name>` 逐个用 POST 直接调用，**全部返回 404**，`cache-status` 头显示 `"Netlify Edge"; fwd=miss; fwd-status=404`，是 Netlify 边缘节点自己判定"没有这个路由"返回的干净 404，不是 Lambda 崩溃后代理转发的 5xx。GET/OPTIONS/带 Authorization 头重试结果一致，`www` 子域名也是 308 重定向到裸域名后同样 404。
+
+**关于上一轮 503 的重新核对**：admin-app 生产环境变量 `VITE_STOREFRONT_FUNCTIONS_URL`（非密钥，纯 URL，已确认可查看）精确值就是 `https://trinityglobe.sg`，跟本轮直接 curl 测试的地址完全一致。本轮用完全相同的请求重新测试，得到的是稳定、可重复的 404，不是 503。**没能重现上一轮报告的 503**——最可能是上一轮读取/记录时出现误判，但这不影响最终结论：无论当时是 404 还是短暂 503，生产上现在、以及本轮所有直接探测得到的，都是"这个 Function 根本不存在"，跟 Node 版本无关。
+
+**结论：归类为 A —— main 尚未包含电商 Functions，正式站也未开放结账，不是线上故障，不需要热修复。** 上一轮"生产可能正在报错影响真实客户"的判断作废，已在上面 Part C 原文处标注推翻。真正需要记住的是：`dev`/Preview 上验证过的 Node 22 修复（`.nvmrc`）是为了将来 `main` 真正跑起电商 Function 时不再踩同一个坑，跟"现在" 的生产状态无关——现在的生产根本没跑这些 Function。
+
+---
+
+## 2026-08-27（第十七轮）：移动端视口精确验证——发现并修复一个真实的导航栏溢出 bug
+
+**背景**：用户要求用 Chrome DevTools 的 Device Toolbar 做移动端检查，但这个会话用的浏览器自动化工具是基于扩展的页面级操作，够不到 Chrome 原生 DevTools 面板（那是浏览器 chrome 级 UI，不在扩展能点击的范围内）；退一步试过的 `resize_window` 也再次确认不可靠（同一 tab 反复调用会卡在跟请求值毫无关系的固定尺寸）。用户后续明确要求改用 **Playwright** 启动独立 Chromium，直接设置精确 viewport——仓库里本来就有 `@playwright/test`（`devDependencies`，`package.json`/lockfile 都没有改动），只是浏览器二进制本地没下载，用 `npx playwright install chromium` 补齐（下载到 `~/Library/Caches/ms-playwright/`，不影响仓库任何文件）。
+
+**验证方法**：写了一个脚本（`mobile-viewport-check.mjs`，只在本地临时跑，跑完就删，没有提交），对 Deploy Preview 依次开 4 个独立 Browser Context：
+
+| viewport | innerWidth | innerHeight | scrollWidth ≤ innerWidth | 说明 |
+|---|---|---|---|---|
+| 375×667 | 375 ✓ | 667 ✓ | ✓（首页/商品页/切换语言后均成立） | iPhone SE/8 尺寸 |
+| 390×844 | 390 ✓ | 844 ✓ | ✓ | iPhone 12/13/14 尺寸 |
+| 412×915 | 412 ✓ | 915 ✓ | ✓ | 常见 Android 尺寸 |
+| 844×390 | 844 ✓ | 390 ✓ | ✓ | 手机横屏 |
+
+每个尺寸都是真实 Chromium 渲染（不是 DOM 数值猜测），`window.innerWidth`/`innerHeight` 与请求值逐一核对完全一致，`document.documentElement.scrollWidth` 全部不超过 `innerWidth`（首页、商品网格、切换中英文之后都单独测过一次）。
+
+**发现一个真实的响应式 bug，已修复**：第一次测试时，`#navHamburger`（汉堡菜单按钮）在 375px 宽度下的 `getBoundingClientRect()` 显示 `x: 472`——完全在 375px 的视口之外！用脚本量出根因：`.nav-inner` 是一个 `display:flex; gap:2rem`（32px）的行，桌面版 Logo 文案"TRINITY GLOBE"在原尺寸下就占了 244px，311px 可用宽度里剩下的空间根本放不下"Sign In"+购物车图标+汉堡按钮三样东西，多出来的部分顶到视口右边界外面——因为顶栏是 `position:fixed`，溢出内容不会撑出横向滚动条（`document.scrollWidth` 因此仍然正常），所以视觉上和数值检查上都看不出异常，**但购物车图标和汉堡菜单在真实手机上是完全点不到的**。更进一步发现这个溢出断点还没对齐：原来的移动端断点是 `max-width:768px`，但桌面版完整导航（含 Home/About/Collection/Contact）其实要到接近 925px 才放得下，所以 768px 到 925px 之间的宽度（横屏手机常见的 844px 正好落在这个区间）会同时触发"桌面导航已经显示"和"内容对齐爆框"两个问题一起出现。
+
+修复（`style.css`，`@media (max-width: 768px)` 里跟导航折叠相关的规则整体挪到新增的 `@media (max-width: 960px)`，并收紧顶栏内边距/间距/Logo 字号）：
+
+```css
+@media (max-width: 960px) {
+  .nav-links { display: none; }
+  .nav-enquire { display: none; }
+  .nav-lang { display: none; }
+  .nav-hamburger { display: flex; margin-left: 0; }
+  #navbar { padding: 1rem 1.25rem; }
+  .nav-inner { gap: 0.6rem; }
+  .nav-logo { font-size: 0.82rem; letter-spacing: 0.08em; gap: 0.5rem; }
+  .nav-logo-img { height: 34px; }
+}
+```
+
+修复前后都先在本地静态服务器（`python3 -m http.server`，不需要重新部署）上用 Playwright 量过：修复后购物车图标/汉堡按钮在 375/390/412/844 四个宽度下全部落在可视区域内（`right` 坐标分别是 287/327，远小于最窄的 375），再 commit（`be0d5ce`）、push、等 Deploy Preview 重新构建，最后**对着真正部署出来的 Preview 重新跑了一遍完整的 4 视口验证**，结果一致。
+
+**7 项交互检查结果**（`hamburger`/`scrollToProducts`/`addToCartAndCartPanel`/`accountMenuAndLogin`/`myOrders`/`myAddresses`/`langSwitch`，4 个视口 × 7 项，共 28 项）：**全部 `ok`**。用真实测试账号（`mobile-viewport-test-<viewport>@resend.dev`，走真实注册表单：姓名+性别+生日+邮箱+密码，用 Supabase Admin API 的 `generateLink` 拿真实 8 位 OTP 填入验证码框，不是 mock）在移动视口下完整走了一遍：打开汉堡菜单、滚动到商品区、加入购物车并打开购物车面板（数量调整器/移除/小计/免运提示都在，未截断）、点击 Sign In→（这个入口实际会先弹出 Google/Facebook/Continue with Email/Continue as Guest 的选择屏，均正常渲染）→完整签约表单（姓名/性别单选/生日/邮箱/密码/确认密码，含"性别三选项"横排在 375px 宽度下都没挤压）→提交→OTP 校验→登录成功→我的订单页/我的地址页（各自独立的 `orders.html`/`addresses.html`，不是同一个单页应用路由）→中英文切换（切到中文后同样没有横向溢出）。全程用 `page.screenshot()` 截了 30+ 张图，人工看过其中的首页/导航展开/购物车/登录表单/OTP/我的订单/我的地址几张关键截图，没有发现文字截断、按钮重叠超框、弹窗关不掉、输入框被挤压的情况。4 个视口全程 Console 0 条真实前端错误（横屏那次有一条来自 Facebook SDK 自己的 `ErrorUtils`/`fburl.com` 调试日志，是第三方 SDK 在非 Facebook 域下的正常噪音，不是本站代码问题）。
+
+**测试数据清理**：4 个测试账号（含 `customer_profiles` 行）全部删除；确认没有产生任何订单（`orders` 表最近 2 小时内为空）、没有保存任何地址（`customer_addresses` 为空）、库存未变（Hennessy VSOP 仍是 50）——购物车加购是纯前端 localStorage 状态，从未触发 `create-checkout-session`，没有任何后端副作用。
+
+**未覆盖的真机专属项**（用户已明确列为上线非阻塞观察项，不在这轮验证范围内）：iOS Safari 特有的地址栏收起/展开时的视口高度跳动、真实触屏手势（双指缩放、橡皮筋滚动）、iOS 键盘弹出对固定定位元素的遮挡——这些是浏览器引擎级差异，Chromium 模拟无法复现，需要用户日后用真实 iPhone Safari 走一遍确认。
+
+`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 在这次 CSS 改动后全部重新跑过，通过（51/51 测试，两边构建产物大小基本不变）。
 
 ---
 
