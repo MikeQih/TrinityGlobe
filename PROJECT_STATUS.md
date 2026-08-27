@@ -749,6 +749,23 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 2. Resend 后台这个 webhook endpoint **暂时保留着**（按用户要求没有删除），等这一轮 Deploy Preview 的其余回归项都做完、确认不再需要之后再决定是否清理；`RESEND_WEBHOOK_SECRET`/`AWS_LAMBDA_JS_RUNTIME` 这两个环境变量目前也还留在 Netlify 的 Deploy Preview 作用域里。
 3. Resend 后台的 Webhooks 功能本身不支持自定义名称，如果确实需要用名字管理多个 endpoint，只能自己在别处（比如这份文档）另外记录 URL 对应关系。
 
+## 2026-08-27（第十四轮）：安全解决 `products.json` 冲突，合并 main 进 dev
+
+**冲突真正的原因**：`main` 上有一条自动化流水线（"Update Products 'product_list'" 这类 commit，从分叉点起一共 24 次）一直在同步真实商品资料，但这条流水线完全不知道 `dev` 这边给 `products.json` 加过 `sku`（结账/库存系统靠这个字段跟 Supabase 的 `product_variants`/`inventory` 关联）和 `caseSize`（阶梯定价用）这两个字段——`main` 上的 76 件商品**一个 `sku` 都没有**。逐字段比较（不是看 git 原始 diff，行级 diff 对 JSON 数组重排序的情况会误导，比如一度看起来"Gaulois XO 1L 被删了"，实际上只是数组顺序变了，商品还在）后确认：
+
+- 72 件商品在两边都存在，`main` 对其中 18 件做了真实调价，其余字段没变——这部分直接采用 `main` 的新数据，同时把 `dev` 的 `sku`/`caseSize` 接回去，没有歧义。
+- 4 件商品是 `main` 新增、`dev` 完全没有的：LOUIS XIII、Martell Noblige、HAKUSHU DISTILLER'S RESERVE 700ML 43%、Domaine Anne et Hervé Sigaut 2022 Chambolle-Musigny 1er Cru Les Sentiers Vieilles Vignes——这几个在 `products.json` 里加了字段并不会让结账系统认识它们，需要真的建 SKU。
+- 1 件商品有歧义："Martell VSOP" 在 `main` 上变成小写的"Martell vsop"，换了新图、价格从 S$90/S$85 改成 S$100/S$95——已经跟用户确认过，这是同一款酒的资料更新，不是新商品。
+
+**用户的决定**（已完整执行）：
+- 新增 4 个 SKU：`WINE-SIGAUT-CHAMBOLLE-SENTIERS-2022`、`WHISKY-HAKUSHU-DISTILLERS-RESERVE-700ML`、`COGNAC-LOUIS-XIII`、`COGNAC-MARTELL-NOBLIGE`——先查过线上 `product_variants` 确认没有冲突，再通过新迁移 `supabase/migrations/0020_merge_main_catalog_updates.sql`（不是手动在 Supabase 后台加）建了对应的 `product_variants` 和 `inventory` 行，库存统一设成临时基线 50，跟其余所有 SKU 保持一致的"上线前必须重新盘点"警示。
+- Martell VSOP：沿用原 SKU `COGNAC-MARTELL-VSOP`，数据库身份不变（历史订单不受影响），名称统一规范回`Martell VSOP`（改正大小写），采用 `main` 的新图片，价格更新为 S$100/S$95——同一条迁移里做的，不是新建商品。
+- 同一条迁移里顺手把另外 18 件商品的真实调价也同步进了 `product_variants`——这一步不做的话会出现真正的价格事故：`products.json` 显示 `main` 的新价格，但 `create-checkout-session.ts` 实际收款用的 `product_variants.unit_price_cents` 还是旧价格，客户看到的价格和实际扣款的价格会对不上。
+
+**合并结果**：`git merge origin/main` 到 `dev`，只有 `products.json` 一个文件冲突（其余都是 `main` 独有的新文件，自动合并），手动用上面确认好的内容解决冲突，`main` 新增的 4 张真实商品图片文件（`img_1918.webp`/`img_1920.jpeg`/`img_1910.jpeg`/`febedcf7-eda6-4c68-b276-d9b205b8654b.jpeg`）随合并自动带入——这几张图之前只存在于 `main`，`dev` 的 `images/` 目录里没有，如果不特意确认这一步，新商品的图片会直接 404。合并完成后确认：`git log dev..origin/main` 为空（`main` 的全部历史已经完整进了 `dev`），`products.json` 是合法 JSON，76 件商品全部有唯一 SKU、必填字段齐全、价格合理、图片文件真实存在，`categoryLabel` 只有两处大小写不一致（都是 `main` 新商品带进来的，`whisky`→`Whisky`、`Red wine`→`Red Wine`），已手动改正；`wine`/`baijiu` 品类原本就有多个 `categoryLabel`（红酒/白酒细分、汾酒/洋河子品牌），确认是 `dev` 本来就有的设计，不是这轮引入的问题。
+
+`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 合并后全部重新跑过，通过。
+
 ---
 
 ## 重要的操作纪律（继续遵守）
