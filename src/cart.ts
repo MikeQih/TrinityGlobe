@@ -3,6 +3,7 @@ import { createCheckoutSession, getCheckoutSessionStatus, ApiError } from "./api
 import { t, onLangChange, getProductBySku, formatCents, getLang } from "./i18n";
 import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiveUnitPriceCents } from "./pricing";
 import { SELF_COLLECTION_ENABLED } from "./feature-flags";
+import { CHECKOUT_ENABLED } from "./checkout-availability";
 import { getStripeClient } from "./lib/stripe-elements";
 import type { StripeCheckoutElementsSdk } from "@stripe/stripe-js";
 import {
@@ -42,6 +43,11 @@ const store = new CartStore();
 // signup fields already typed — the visitor left, instead of dropping them
 // back at the account-choice screen and making them start over.
 const REOPEN_CHECKOUT_STORAGE_KEY = "tg_reopen_checkout";
+
+// Same number used on the orders page (src/orders-page.ts) — shown in place
+// of the Checkout button while CHECKOUT_ENABLED is off, so a visitor with a
+// full cart still has a way to actually place an order.
+const WHATSAPP_URL = "https://wa.me/6598680555";
 
 // Passwords are deliberately excluded — this snapshot sits in localStorage
 // across a full-page OAuth redirect, and a browser's own back/forward
@@ -556,6 +562,11 @@ function closeDrawer(): void {
 
 function goToCheckout(): void {
   if (store.getItems().length === 0) return;
+  // Defense in depth — the checkout button is already disabled/hidden below
+  // when this is false, but this guard covers any other future path that
+  // might call goToCheckout() directly. The real security boundary is the
+  // server's own CHECKOUT_ENABLED check (see netlify/functions/_lib/checkout-gate.ts).
+  if (!CHECKOUT_ENABLED) return;
   view = "checkout";
   submitErrorKey = null;
   fieldErrorKeys = {};
@@ -646,10 +657,28 @@ function cartViewHtml(): string {
     <div class="cart-drawer-footer">
       ${shippingHint}
       <div class="cart-summary-row"><span>${t("cart-subtotal")}</span><span>${formatCents(subtotal)}</span></div>
-      <button type="button" class="btn-gold" data-action="checkout" ${items.length === 0 ? "disabled" : ""}>
-        ${t("cart-checkout-btn")}
-      </button>
+      ${checkoutFooterButtonHtml(items.length === 0)}
     </div>
+  `;
+}
+
+// Cart items themselves stay fully browsable/editable regardless of
+// CHECKOUT_ENABLED — this only swaps out the footer's call-to-action, so a
+// visitor can still see and adjust their cart, just not pay online yet.
+function checkoutFooterButtonHtml(cartEmpty: boolean): string {
+  if (!CHECKOUT_ENABLED) {
+    return `
+      <button type="button" class="btn-gold" disabled>${t("cart-checkout-disabled-btn")}</button>
+      <p class="cart-checkout-disabled-msg">${t("cart-checkout-disabled-msg")}</p>
+      <a class="btn-dark cart-whatsapp-btn" href="${escapeAttr(WHATSAPP_URL)}" target="_blank" rel="noopener">${t(
+      "cart-checkout-disabled-whatsapp"
+    )}</a>
+    `;
+  }
+  return `
+    <button type="button" class="btn-gold" data-action="checkout" ${cartEmpty ? "disabled" : ""}>
+      ${t("cart-checkout-btn")}
+    </button>
   `;
 }
 
@@ -1557,4 +1586,3 @@ function validateRecipient(
   }
   return errors;
 }
-

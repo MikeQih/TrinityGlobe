@@ -932,6 +932,41 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-27（第二十轮）：合并前只读 Go/No-Go 审计 + 结账总开关（默认关闭，服务端强制执行）
+
+语言快照收尾后，进入合并 main 前的最后一次只读审计（不改代码、不改 Production 变量、不 merge）。结论是 **CONDITIONAL GO**：PR #1 本身可以无冲突合并（本地 `git merge-tree --write-tree origin/main origin/dev` 干净，GitHub 自己的合并状态后来也从卡住的 "unknown" 变成明确的 "Ready to merge / No conflicts / All checks passed"），迁移 0001–0021 连续且已在线上应用，storefront/admin-app 构建通过；但发现 Production 的 `STRIPE_WEBHOOK_SECRET`/`RESEND_WEBHOOK_SECRET` 都是空的，而 `STRIPE_SECRET_KEY` 是有效的 test key——这意味着**合并当天如果什么都不做**，正式网站会立即出现能走完整个 Stripe 托管支付页流程的"结账"入口（`CHECKOUT_UI_MODE=hosted`/未设置从来都不是关闭开关，只是 UI 呈现方式的选择），客户点击付款会被当作正常收单，但支付成功后 Stripe 的 webhook 回调会因为签名校验失败而 500，订单永远进不了"已支付"状态、客户永远收不到确认邮件。审计过程中还发现 3 个来自更早轮次（"我的订单"页面那一轮，非本轮产生）、从未清理的测试账号（`diag-myorders@resend.dev`、`diag6-test@resend.dev`、`qihengchang1014+cart-test@gmail.com`），审计当时判断这三个账号没有关联任何订单/地址，只是记录发现、未做修改。
+
+**用户看完审计后，授权做最后一件事再进入合并阶段**：加一个默认关闭、服务端强制执行的结账总开关，这样即使合并当天 Stripe webhook 配置还没就绪，Production 也不会真的开放结账。
+
+**开关实现位置**：
+- 新建 `netlify/functions/_lib/checkout-gate.ts`：`isCheckoutEnabled()` 只有在 `process.env.CHECKOUT_ENABLED` 严格等于字符串 `"true"` 时才返回 `true`——未设置、空字符串、`"false"`、`"TRUE"`（大小写不对）、`"1"` 等任何其他值一律当作关闭，没有"默认开启"这条路径。`checkoutDisabledResponse()` 返回 `503` + 稳定错误码 `checkout_disabled`。
+- `create-checkout-session.ts` 和 `resume-checkout-session.ts` 都在 method 校验之后、**任何其他逻辑之前**（早于 body 解析、早于 `getUserIdFromRequest`、早于任何 Supabase/Stripe 调用）插入 `if (!isCheckoutEnabled()) return checkoutDisabledResponse();`。检查过其余能调 `getStripe()` 的 Function（`get-checkout-session-status.ts` 只读、`admin-cancel-order.ts`/`admin-refund-order.ts` 是员工管理已有订单、`release-expired-reservations.ts` 是定时任务），都不是"新建/恢复客户支付会话"的入口，不需要接这个开关。
+- 前端镜像：`src/checkout-availability.ts` 新增 `export const CHECKOUT_ENABLED = import.meta.env.VITE_CHECKOUT_ENABLED === "true"`——单独建文件而不是塞进已有的 `feature-flags.ts`，因为后者会被 Netlify Functions 直接 `import`（esbuild 打包，不经过 Vite 的 `import.meta.env` 替换），混在一起会导致 Function 里出现 `import.meta.env` 这种在该运行时不存在的语法。`src/cart.ts` 的购物车抽屉底部按钮：关闭时不再渲染 `data-action="checkout"` 按钮，改成禁用态按钮文案"Checkout Unavailable／结账暂未开放" + 一行说明文字 + 复用 `orders-page.ts` 已有的 `wa.me/6598680555` WhatsApp 链接（购物车本身仍可正常浏览/加减/移除商品，只是换掉了这一个按钮）；`goToCheckout()` 函数本身也加了一道 `if (!CHECKOUT_ENABLED) return;` 兜底，双重保险。前端开关只影响体验展示，真正的安全边界是服务端那个检查，两者不一致时（比如构建时手滑配错）服务端会赢——按钮可能显示"Checkout"但请求照样 503。
+- `script.js` 新增三条中英文案（`cart-checkout-disabled-btn`/`-msg`/`-whatsapp`），沿用现有 i18n 字典格式。
+
+**真实验证（本地 `netlify dev`，非模拟）**：
+1. 分四轮重启本地 `netlify dev`（`CHECKOUT_ENABLED` 分别为未设置、`"false"`、`"TRUE"`（故意拼错大小写）、`"true"`），每轮用真实 HTTP 请求直接打 `create-checkout-session`/`resume-checkout-session` 两个 Function：
+   - 未设置/`"false"`/`"TRUE"` 三轮：两个接口均返回 `503` + `{"code":"checkout_disabled"}`；`resume-checkout-session` 在没带任何 `Authorization` 头的情况下也是先 503（证明开关检查确实排在鉴权和一切数据库查询之前）。
+   - `"true"` 一轮：故意用不存在的 SKU 请求 `create-checkout-session`，返回从 `503` 变成了 `409 insufficient_stock`——证明开关放行了，请求真的往后走到了正常业务逻辑（而不是因为随便什么原因巧合返回别的错误），同时因为 SKU 不存在，全程没有创建任何订单；`resume-checkout-session` 同理从 503 变成 `401 Not signed in`。
+   - 全程直接查询 Supabase 确认：`orders`/`inventory_reservations`/`checkout_rate_limits` 三张表在四轮测试前后计数都是 `0`，没有任何副作用产生。
+2. `tests/checkout-gate.test.ts`（vitest，已跑过，12/12 通过）覆盖 `isCheckoutEnabled()` 的完整矩阵：未设置/空字符串/`"false"`/`"1"`/`"TRUE"`/`"True"`/`" true"`（前导空格）/`"true "`（尾随空格）/`"yes"`/`"enabled"` 全部为 `false`，只有精确的 `"true"` 为 `true`；另外验证 `checkoutDisabledResponse()` 确实是 `503` + `checkout_disabled`。
+3. `tests/e2e/checkout-disabled.spec.ts`（Playwright，新增，默认跳过——需要单独起一个 `CHECKOUT_ENABLED` 为空/`false` 的 `netlify dev` 才能跑，跟现有 `checkout.spec.ts` 需要 `CHECKOUT_ENABLED=true` 冲突，所以拆成独立文件、独立开关 `RUN_E2E_DISABLED=1`）：断言两个接口在关闭状态下都是 `503`/`checkout_disabled`。
+4. Vite 构建验证：分别用 `VITE_CHECKOUT_ENABLED=true`/`=false` 各跑一次 `vite build`，确认产物里对应分支确实被打包/被摇树优化掉（`true` 时禁用态的翻译 key 字符串完全不出现在 bundle 里，`false` 时会出现）——证明这不是死代码，是真的随环境变量变化的开关。
+
+**测试账号清理（用户本轮明确授权）**：删除前用 SQL 逐一重新核对了这 3 个账号的 UID 和关联数据（`orders`/`customer_addresses`/`customer_profiles` 计数），确认为 0 关联后，通过 Supabase Auth 的 Users 页面逐个打开确认邮箱匹配、弹出的删除确认对话框也逐一核对了邮箱字符串完全一致后才点删除（不是批量勾选，避免手滑删到旁边那个真实账号 `qihengchang1014@gmail.com`）。删除后重新查询确认：`auth.users` 里带 `test`/`resend.dev`/`example.com` 特征的账号数量为 `0`，`customer_profiles` 里没有指向已删除用户的孤儿行（`auth.users`→`customer_profiles` 的外键是 `on delete cascade`，删除 auth 用户后其 `customer_profiles` 行也自动清掉了，额外验证过確实清空）。
+
+**提交卫生**：重新跑了一遍 `git diff --check`，修掉了 3 个文件末尾多余的空行（`admin-app/.env.example`、`admin-app/src/lib/types.ts`、`src/cart.ts`）；`Trinity_Globe_商城_PRD_v1.0.md` 开头那 4 行的行尾双空格**没有动**——那是 Markdown 里"强制换行"的标准写法，删掉会导致这几行渲染成挤在一起的一段话，属于会改变文档语义的情况，用户本轮的指示是"不要改变文档语义"，所以 `git diff --check` 目前仍会因为这 4 行报错（不是遗漏，是权衡后的有意保留）。再次扫描了本轮改动的完整 diff：没有任何密钥值、没有硬编码测试邮箱/订单 ID、没有临时截图或调试用的 Playwright 脚本混进去（`tests/e2e/checkout-disabled.spec.ts` 是正式提交的测试基础设施，不是临时脚本）、没有残留的 `console.log` 调试语句、没有 `.env` 真实文件（只有 `.env.example` 模板，逐行确认过没有真值）。
+
+**环境变量作用域（用户本轮授权配置）**：
+- Production：新建 `CHECKOUT_ENABLED=false`、`VITE_CHECKOUT_ENABLED=false`；给已存在但之前只配了 Deploy Previews 的 `AWS_LAMBDA_JS_RUNTIME` 补上 Production 值 `nodejs22.x`（Deploy Previews 原有的值原样保留，只是新增了 Production 这一档，没有改动其他环境）。
+- Deploy Previews：新建 `CHECKOUT_ENABLED=true`、`VITE_CHECKOUT_ENABLED=true`。
+- Branch deploys / Preview Server & Agent Runners / Local development (Netlify CLI) 这三档故意留空——本来就没配过，留空的效果是这两个新变量在这些环境里读到 `undefined`，按 fail-closed 设计自动等于关闭，跟"没做任何配置改动"是等价的安全默认值，不需要额外显式填 `false`。
+- 没有碰 `STRIPE_WEBHOOK_SECRET`/`RESEND_WEBHOOK_SECRET`/任何 Stripe key——这些留到 Production 结账真正要打开的那一天再处理，符合用户"main 部署成功且结账保持关闭后再处理"的指示。
+
+（本节末尾的最终结果——push 后的 commit hash、PR #1 最新状态、Preview 上 true/false 两种状态的真实验证——见对话记录里紧随本轮之后的汇报，因为这几项必须在实际执行 push 之后才有结果，写文档这一刻还没发生。）
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -954,7 +989,7 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 5. 问用户：Wang Lei 和 Shen Chuan 在 SC Prime Holdings Pte. Ltd. 里的持股比例，把 Airwallex 的 beneficial owner 列表补完整再继续
 6. 请老板/会计确认公司的 **GST Registration Number**，以及 **IRAS 批准信中注明的 GST Registration Effective Date**（不是简单的"是否注册"——年营收已超S$1M，按 IRAS 规定已触发强制注册义务；拿到这两项后填进 `store_settings` 表即可，见下面 GST 章节，不需要再改代码）
 7. 问用户：Terms/Privacy 页面各自的"内部草稿，还没过律师"提示块要不要也去掉（age-restriction 那条已经按要求删了，这两份目前还留着，见上面第二轮记录）
-8. **用户已明确表示现在还没准备好，先不把 `dev` 合并到 `main`**——不要主动提起或推动这件事，等用户自己说要上线再做（合并前记得：a. 把 `dev` 分支上还没 commit 的这批改动先 commit；b. 决定 Stripe live key 要怎么切——见上面"Stripe 还在 test mode"条目里"按部署环境设不同值"的方案）
+8. **合并 main 前的只读审计（第二十轮）已完成，结账总开关（`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED`，默认关闭）也已实现并在 Production/Deploy Previews 配好了正确的值**——PR #1 现在应该已经是 Git 层面无冲突、可以合并的状态，但**仍然不要主动 merge main**，除非用户明确说要合并；真正切到 Stripe live key、给 Production 补上 `STRIPE_WEBHOOK_SECRET`/`RESEND_WEBHOOK_SECRET` 之前，就算合并了 main，`CHECKOUT_ENABLED=false` 也会让 Production 的结账入口保持关闭（购物车按钮会显示"暂未开放"+ WhatsApp 联系方式），所以合并本身的风险已经大幅降低。真正要开放付款时按"Stripe 还在 test mode"条目里的方案切 key，同时把 Production 的这两个开关一起改回 `true` 并重新部署。
 
 **已解决，不用再问**：
 - ~~Wang Lei 的 Stripe 身份验证~~——2026-08-26 用户截图确认"已完成"任务里身份验证+账户代表信息/文件全部通过，"已激活"（待处理）已清空，阻塞解除

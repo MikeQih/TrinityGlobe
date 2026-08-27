@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getStripe } from "./_lib/stripe";
 import { getSupabaseAdmin, getUserIdFromRequest } from "./_lib/supabase";
 import { jsonResponse, errorResponse } from "./_lib/responses";
+import { isCheckoutEnabled, checkoutDisabledResponse } from "./_lib/checkout-gate";
 
 const requestSchema = z.object({ orderId: z.string().uuid() });
 
@@ -32,6 +33,7 @@ interface OrderRow {
  */
 export default async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
+  if (!isCheckoutEnabled()) return checkoutDisabledResponse();
 
   const userId = await getUserIdFromRequest(req);
   if (!userId) return errorResponse(401, "Not signed in");

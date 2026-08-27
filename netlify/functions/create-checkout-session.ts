@@ -4,6 +4,7 @@ import { getSupabaseAdmin, getUserIdFromRequest, releaseOrderReservations } from
 import { getStripe } from "./_lib/stripe";
 import { requireEnv } from "./_lib/env";
 import { jsonResponse, errorResponse } from "./_lib/responses";
+import { isCheckoutEnabled, checkoutDisabledResponse } from "./_lib/checkout-gate";
 import { createCheckoutSessionRequestSchema } from "./_lib/schemas";
 import { computeShippingFeeCents, computeInclusiveGstCents, effectiveUnitPriceCents } from "../../src/pricing";
 import { SELF_COLLECTION_ENABLED } from "../../src/feature-flags";
@@ -161,6 +162,7 @@ function sessionToResponseBody(
 
 export default async (req: Request, context: Context): Promise<Response> => {
   if (req.method !== "POST") return errorResponse(405, "Method not allowed");
+  if (!isCheckoutEnabled()) return checkoutDisabledResponse();
 
   let body: unknown;
   try {

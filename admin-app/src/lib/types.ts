@@ -93,4 +93,3 @@ export interface EmailLog {
   created_at: string;
   updated_at: string;
 }
-
