@@ -873,6 +873,32 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-27（第十八轮）：客户订单确认邮件 + 员工通知邮件——内容文案与视觉排版全面重写
+
+**改动范围**：只改了 `netlify/functions/_lib/email.ts`（重写）和 `stripe-webhook.ts`/`admin-resend-order-email.ts`（各自的 `orders` 表 `select()` 里加了 `created_at, paid_at` 两个字段，用于在邮件里显示下单时间——没有改任何幂等、Webhook 处理流程、订单状态机、库存或权限逻辑）。
+
+**修改前的问题**：旧模板是纯文字堆的 `<p>` 标签，没有品牌视觉，商品行没有对齐，没有下单时间，没有"查看订单"或 WhatsApp 入口，员工邮件的付款状态/配送方式等关键信息埋在正文里而不是一眼可见，纯文本 fallback 完全没有。
+
+**语言快照的调查结果（先查后做，没有猜历史订单语言）**：确认 `orders` 表、`create-checkout-session.ts`、Stripe Checkout Session 的 metadata 里**都没有任何字段记录客户下单时选的是中文还是英文**——这是一个真实的空白，不是我漏看。按要求没有自己编一个，而是：模板本身做成完全双语（内部 `lang: "en" | "zh"` 参数，两种语言的字符串表都写好、都测试过），`sendOrderConfirmationEmail`/`resendOrderConfirmationEmail` 新增一个可选的 `lang` 参数（默认 `"en"`，不传就是原来的行为，`stripe-webhook.ts` 的调用点完全不用改）。**真正发出去的客户邮件目前还是英文**，跟改之前的行为一致，没有制造新的不确定性。
+
+**最小实现方案（尚未做，留给用户决定要不要现在就做）**：如果想让客户邮件真的按下单时的语言发送，最小改动是：① 结账页面把当前 UI 语言（已经在用 `localStorage`）作为一个字段发给 `create-checkout-session.ts`；② `orders` 表加一列 `checkout_language text default 'en'`（新迁移文件）；③ `create-checkout-session.ts` 建单时把这个值存进去；④ `stripe-webhook.ts` 的 `select()` 里带上这一列，调用 `sendOrderConfirmationEmail` 时传进去。这四步都不影响现有的支付/库存/幂等逻辑，但确实触碰了结账建单和 webhook 的 select 语句，所以按本轮"不改订单/Webhook 逻辑"的要求没有直接做。
+
+**客户邮件最终结构**：黑底金字 "TRINITY GLOBE" 文字版 Logo（仓库里没有稳定可用的邮件安全 Logo 图片资源，用文字版避免图片挂掉的风险）→ "您的订单已确认" 标题 + 一句话说明付款已确认正在准备 → 订单号/下单时间 → 商品明细表（品名+数量+行金额，长商品名会正常换行不截断）→ 小计/运费（免费时显示"免费"）/GST（仅 `gst_registered_at_checkout` 为真时显示，为假时完全不出现，也绝不出现"Tax Invoice"字样）/总计 → 配送信息（收件人/电话/地址，自提订单不显示地址）→ 配送说明文案（直接复用 `policies/delivery.html` 和结账页现有的"1–2 个工作日"/"18周岁"措辞，中英文都对得上）→ "查看订单"（链接到 `${SITE_URL}/orders.html`）和"WhatsApp 联系我们"（复用 `orders-page.ts` 里现成的 `wa.me/6598680555`）两个按钮。中文版用的词汇（小计/运费/消费税(GST)/标准配送/自提/收件人）直接抄自 `orders-i18n.js` 已有的翻译，不是我自己现造的。
+
+**员工邮件最终结构**：Subject 固定 `New paid order／新已付款订单 #xxxxxxxx — S$xxx.xx`（按要求中英并列，且只有订单号和金额，没有客户姓名/电话/地址）。正文首屏是一个浅灰底框，付款状态（绿色"Paid"）/总额/配送方式/下单时间一次性展示，然后分区：商品明细、客户信息（姓名+电话+邮箱+地址，自提订单显示"—（自提）"）、客户备注（有备注才显示这一块）、金额明细，最后是"View in admin-app"按钮（读 `ADMIN_APP_ORIGIN` 这个已有的环境变量拼 `/orders/{id}`，没配置就不显示按钮而不是链接到空地址）。员工邮件本身保持纯英文，不受任何语言快照影响。
+
+**视觉实现**：所有邮件共用一个 `emailShell()` 布局——最大宽度 600px 的流式百分比宽度表格（不依赖 `<style>` 媒体查询，因为很多邮件客户端会把 `<style>` 剥掉；纯流式表格从 320px 到 600px 都能正常收缩，不需要额外适配代码），黑色页头/白色内容区/暗金色（`#c9a44c`）强调色，按钮用 table 包裹的写法兼顾 Outlook 兼容性。所有客户输入（姓名/电话/地址/备注）过 `escapeHtml`（这次顺带把它加强成同时转义引号，防御性更强，虽然目前用不上属性拼接）。
+
+**验证**：
+1. **本地渲染**：把 `email.ts` 的渲染函数临时导出到一个不提交的副本里，用 Playwright 分别在桌面宽度（1000px）和 375px 移动宽度截图检查了英文客户邮件、中文客户邮件、英文客户邮件的"未注册GST"变体、员工邮件共 4×2=8 张截图——全部没有横向溢出（`document.documentElement.scrollWidth` 严格等于测试宽度）、没有文字截断、长商品名正常换行、按钮在窄屏下正常堆叠可点击。同时打印了两种邮件的纯文本 fallback，人工核对内容完整、GST 行按预期出现/消失。
+2. **真实发送**：直接调用（未经修改的）真实 `sendOrderConfirmationEmail`/`sendStaffNotificationEmail`（不是模拟，走的是真实 Resend API + 真实 `claim_email_send`/`settle_email_send` RPC），收件地址用 Resend 官方的沙盒测试地址 `delivered@resend.dev`，针对一笔真实插入又立刻清理的测试订单（`status='paid'`，未走真实 Stripe 支付，只用来触发邮件渲染+发送，不涉及任何库存/结账逻辑）。两封邮件都被 Resend 接受（`accepted`），几秒后**真实的 Resend Webhook**（不是本轮新配置的，复用 Preview 已有的那个）把 `email_logs` 状态推进到 `delivered`——证明整条"发送→追踪→Webhook 回写"链路和新模板完全兼容。
+3. **admin-app 状态核对**：登录真实创建又清理掉的 admin 测试账号，打开这笔测试订单，Email 区块正确显示"Customer confirmation: Delivered"/"Staff notification: Delivered"。
+4. **finance_readonly 核对**：另建又清理掉的 finance_readonly 测试账号登录同一笔订单，确认 Fulfilment 区块显示"Read-only access"提示、看不到任何重发/退款按钮——这部分权限代码本轮完全没有改动，属于回归确认，结果符合预期。
+5. **清理**：测试订单、其 `order_items`/`email_logs`，以及两个 admin-app 测试账号（`email-verify-admin@resend.dev`/`email-verify-finance@resend.dev`）全部删除；测试订单是直接插入 DB 的（`status='paid'`，跳过了真实结账），从未触碰 `inventory`/`inventory_reservations`，所以库存本来就没被影响，不需要恢复。
+6. `storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部重新跑过（51/51 测试），通过。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥

@@ -24,6 +24,11 @@ interface OrderForEmail {
   // shown when true, never as a "GST: S$0.00" line implying tax was
   // collected when it wasn't. See 0017_gst_registration_effective_date.sql.
   gst_registered_at_checkout: boolean;
+  // Only used to render "ordered on" — never used for any business logic
+  // here. paid_at is preferred when present (this email only ever fires
+  // once payment is confirmed); created_at is the fallback.
+  created_at?: string | null;
+  paid_at?: string | null;
 }
 
 interface OrderItemForEmail {
@@ -33,6 +38,21 @@ interface OrderItemForEmail {
 }
 
 type EmailType = "customer_confirmation" | "staff_notification";
+
+/**
+ * No column on `orders` currently records which language the customer was
+ * browsing in at checkout (checked: recipient_snapshot, create-checkout-
+ * session.ts, and the Stripe Checkout Session metadata all carry no
+ * language signal). Defaulting to "en" here is the same behavior the site
+ * has always had — this parameter exists so the templates themselves are
+ * genuinely bilingual and independently testable (see the round-18 note in
+ * PROJECT_STATUS.md for the minimal follow-up needed to wire a real
+ * per-order snapshot through checkout).
+ */
+type Lang = "en" | "zh";
+const DEFAULT_LANG: Lang = "en";
+
+const WHATSAPP_URL = "https://wa.me/6598680555";
 
 /**
  * Outcome of one tracked send attempt, mirroring settle_email_send's
@@ -65,37 +85,466 @@ function fmt(cents: number): string {
   return "S$" + (cents / 100).toFixed(2);
 }
 
-function itemsHtml(items: OrderItemForEmail[]): string {
-  return items
-    .map(
-      (i) =>
-        `<tr><td style="padding:4px 12px 4px 0;">${escapeHtml(i.name_snapshot)}</td><td style="padding:4px 12px;">x${i.qty}</td><td style="padding:4px 0;text-align:right;">${fmt(i.line_total_cents)}</td></tr>`
-    )
-    .join("");
-}
-
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function fromAddress(): string {
   return process.env.RESEND_FROM_EMAIL || "orders@trinityglobe.sg";
 }
 
-// Self-collection is paused at checkout (see src/feature-flags.ts) — the
-// backend already refuses a self_collection order before this ever runs,
-// so this only exists for the "standard" case in practice today. No
-// address is hardcoded here even for self_collection: keep in sync with
-// policies/delivery.html section 3 once a real collection point exists.
-function deliveryDetailsHtml(deliveryMethod: string): string {
-  if (deliveryMethod === "self_collection") {
-    return `<p>We'll message you once your order is ready for collection — please wait for that notice.</p>`;
-  }
-  return `<p>We'll be in touch with delivery details shortly.</p>`;
+// Same fallback convention as fromAddress() above — email rendering must
+// never throw just because an env var is momentarily unset, since a thrown
+// buildHtml() would surface as a rejected promise all the way out of
+// sendOrderConfirmationEmail/sendStaffNotificationEmail (see stripe-
+// webhook.ts's Promise.allSettled, which tolerates that, but there's no
+// reason to make a cosmetic link the thing that breaks the whole email).
+function siteUrl(): string {
+  return (process.env.SITE_URL || "https://trinityglobe.sg").replace(/\/$/, "");
 }
 
-function footerHtml(): string {
-  return `<p style="color:#999;font-size:12px;margin-top:24px;">Trinity Globe Trading Pte. Ltd. &middot; UEN 202509360N</p>`;
+// Same project as ADMIN_APP_ORIGIN, already required for admin-refund-
+// order's CORS headers (see _lib/cors.ts) — reused here rather than adding
+// a new env var. Optional: if unset, the staff email simply omits the
+// "View in admin-app" button instead of linking to nothing.
+function adminAppOrigin(): string | undefined {
+  const v = process.env.ADMIN_APP_ORIGIN;
+  return v ? v.replace(/\/$/, "") : undefined;
+}
+
+function formatOrderTime(iso: string | null | undefined, lang: Lang): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(lang === "zh" ? "zh-SG" : "en-SG", {
+    timeZone: "Asia/Singapore",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(d);
+}
+
+interface EmailStrings {
+  confirmationSubject: string;
+  confirmationPreheader: string;
+  confirmationHeading: string;
+  confirmationIntro: string;
+  orderNumber: string;
+  orderedOn: string;
+  itemsHeading: string;
+  qty: string;
+  subtotal: string;
+  shipping: string;
+  free: string;
+  gst: string;
+  total: string;
+  deliveryHeading: string;
+  recipient: string;
+  phone: string;
+  deliveryStandardNotice: string;
+  deliverySelfCollectionNotice: string;
+  ageNotice: string;
+  viewOrderBtn: string;
+  whatsappBtn: string;
+  footerCompany: string;
+  staffSubjectPrefix: string;
+  staffHeading: string;
+  staffPaymentStatus: string;
+  staffPaid: string;
+  staffDeliveryMethod: string;
+  staffOrderedOn: string;
+  staffCustomer: string;
+  staffAddress: string;
+  staffNoAddress: string;
+  staffNotes: string;
+  staffAmounts: string;
+  staffViewInAdminBtn: string;
+  deliveryMethodStandard: string;
+  deliveryMethodSelfCollection: string;
+}
+
+const STR: Record<Lang, EmailStrings> = {
+  en: {
+    confirmationSubject: "Trinity Globe — Order Confirmation",
+    confirmationPreheader: "Your payment is confirmed and we're preparing your order.",
+    confirmationHeading: "Your order is confirmed",
+    confirmationIntro: "Thank you — we've received your payment and your order is now being prepared.",
+    orderNumber: "Order",
+    orderedOn: "Ordered on",
+    itemsHeading: "Items",
+    qty: "Qty",
+    subtotal: "Subtotal",
+    shipping: "Shipping",
+    free: "Free",
+    gst: "GST (included)",
+    total: "Total",
+    deliveryHeading: "Delivery details",
+    recipient: "Recipient",
+    phone: "Phone",
+    deliveryStandardNotice:
+      "Estimated delivery: 1–2 business days. Delivery times are estimates, not guarantees, and may be affected by public holidays, weather, or order volume.",
+    deliverySelfCollectionNotice:
+      "We'll message you with the collection address, hours, and pickup instructions shortly — please wait for that notice before coming down.",
+    ageNotice:
+      "As this order contains alcohol, whoever receives it at the door must be 18 or older and may be asked to show ID. We reserve the right to refuse handover if age can't be verified.",
+    viewOrderBtn: "View Order",
+    whatsappBtn: "Chat with us on WhatsApp",
+    footerCompany: "Trinity Globe Trading Pte. Ltd.",
+    staffSubjectPrefix: "New paid order／新已付款订单",
+    staffHeading: "New paid order",
+    staffPaymentStatus: "Payment status",
+    staffPaid: "Paid",
+    staffDeliveryMethod: "Delivery method",
+    staffOrderedOn: "Order time",
+    staffCustomer: "Customer",
+    staffAddress: "Delivery address",
+    staffNoAddress: "— (self collection)",
+    staffNotes: "Customer notes",
+    staffAmounts: "Amounts",
+    staffViewInAdminBtn: "View in admin-app",
+    deliveryMethodStandard: "Standard delivery",
+    deliveryMethodSelfCollection: "Self collection",
+  },
+  zh: {
+    confirmationSubject: "Trinity Globe — 订单确认",
+    confirmationPreheader: "您的付款已确认，我们正在为您准备订单。",
+    confirmationHeading: "您的订单已确认",
+    confirmationIntro: "感谢您的订购——我们已收到您的付款，订单正在准备中。",
+    orderNumber: "订单号",
+    orderedOn: "下单时间",
+    itemsHeading: "商品明细",
+    qty: "数量",
+    subtotal: "小计",
+    shipping: "运费",
+    free: "免费",
+    gst: "消费税(GST)（已含）",
+    total: "总计",
+    deliveryHeading: "配送信息",
+    recipient: "收件人",
+    phone: "电话",
+    deliveryStandardNotice: "预计配送时间：1–2 个工作日。配送时间仅为预估，不作为保证，可能因公共假期、天气或订单量较大而受到影响。",
+    deliverySelfCollectionNotice: "我们会尽快将自提地址、开放时间和取货说明发送给您，请等待通知后再前来取货。",
+    ageNotice: "由于本订单含酒类商品，在门口签收订单的人员必须年满18周岁，我们可能会要求其出示身份证件。如无法核实年龄，我们保留拒绝交付的权利。",
+    viewOrderBtn: "查看订单",
+    whatsappBtn: "通过 WhatsApp 联系我们",
+    footerCompany: "Trinity Globe Trading Pte. Ltd.",
+    staffSubjectPrefix: "New paid order／新已付款订单",
+    staffHeading: "新的已付款订单",
+    staffPaymentStatus: "付款状态",
+    staffPaid: "已付款",
+    staffDeliveryMethod: "配送方式",
+    staffOrderedOn: "下单时间",
+    staffCustomer: "客户信息",
+    staffAddress: "配送地址",
+    staffNoAddress: "— （自提）",
+    staffNotes: "客户备注",
+    staffAmounts: "金额明细",
+    staffViewInAdminBtn: "在后台查看",
+    deliveryMethodStandard: "标准配送",
+    deliveryMethodSelfCollection: "自提",
+  },
+};
+
+/**
+ * Shared bulletproof-ish email shell: fluid single-column table capped at
+ * 600px, no @media queries needed (email clients strip <style> blocks
+ * unpredictably — a liquid percentage-width table degrades to any width
+ * from 320px up without one). Black header / white body / dark-gold accent,
+ * text-based wordmark since there's no email-safe logo asset in this repo
+ * (an inline <img> would need a stable, publicly-hosted, absolute URL —
+ * introducing one is out of scope for this round; text degrades cleanly in
+ * every client instead of risking a broken-image icon).
+ */
+function emailShell(opts: { lang: Lang; preheader: string; bodyHtml: string }): string {
+  return `<!doctype html>
+<html lang="${opts.lang === "zh" ? "zh-CN" : "en"}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Trinity Globe</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f1ea;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f4f1ea;">${escapeHtml(opts.preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f1ea;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;">
+<tr>
+<td style="background:#0a0a0a;padding:28px 24px;text-align:center;">
+<span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;letter-spacing:5px;color:#c9a44c;">TRINITY GLOBE</span>
+</td>
+</tr>
+<tr>
+<td style="padding:32px 24px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+${opts.bodyHtml}
+</td>
+</tr>
+<tr>
+<td style="background:#faf9f6;padding:20px 24px;text-align:center;border-top:1px solid #ececec;font-family:Arial,Helvetica,sans-serif;">
+<p style="margin:0;color:#999999;font-size:12px;">${escapeHtml(STR[opts.lang].footerCompany)} &middot; UEN 202509360N</p>
+</td>
+</tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buttonHtml(label: string, href: string, variant: "gold" | "dark" = "gold"): string {
+  const bg = variant === "gold" ? "#c9a44c" : "#0a0a0a";
+  const color = variant === "gold" ? "#0a0a0a" : "#ffffff";
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 8px 8px 0;display:inline-block;">
+<tr><td style="background:${bg};border-radius:2px;">
+<a href="${href}" style="display:inline-block;padding:12px 22px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;letter-spacing:1px;color:${color};text-decoration:none;">${escapeHtml(label)}</a>
+</td></tr>
+</table>`;
+}
+
+function itemsTableHtml(items: OrderItemForEmail[], lang: Lang): string {
+  const rows = items
+    .map(
+      (i) => `<tr>
+<td style="padding:10px 0;border-bottom:1px solid #ececec;font-size:14px;color:#1a1a1a;">${escapeHtml(
+        i.name_snapshot
+      )}<br><span style="color:#999999;font-size:12px;">${escapeHtml(STR[lang].qty)}: ${i.qty}</span></td>
+<td style="padding:10px 0;border-bottom:1px solid #ececec;font-size:14px;color:#1a1a1a;text-align:right;white-space:nowrap;">${fmt(
+        i.line_total_cents
+      )}</td>
+</tr>`
+    )
+    .join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table>`;
+}
+
+function totalsTableHtml(order: OrderForEmail, lang: Lang): string {
+  const s = STR[lang];
+  const rows = [
+    `<tr><td style="padding:4px 0;font-size:13px;color:#666666;">${escapeHtml(s.subtotal)}</td><td style="padding:4px 0;font-size:13px;color:#666666;text-align:right;">${fmt(
+      order.subtotal_cents
+    )}</td></tr>`,
+    `<tr><td style="padding:4px 0;font-size:13px;color:#666666;">${escapeHtml(s.shipping)}</td><td style="padding:4px 0;font-size:13px;color:#666666;text-align:right;">${
+      order.shipping_fee_cents === 0 ? escapeHtml(s.free) : fmt(order.shipping_fee_cents)
+    }</td></tr>`,
+  ];
+  if (order.gst_registered_at_checkout) {
+    rows.push(
+      `<tr><td style="padding:4px 0;font-size:12px;color:#999999;">${escapeHtml(s.gst)}</td><td style="padding:4px 0;font-size:12px;color:#999999;text-align:right;">${fmt(
+        order.gst_cents
+      )}</td></tr>`
+    );
+  }
+  rows.push(
+    `<tr><td style="padding:10px 0 0;font-size:16px;font-weight:bold;color:#1a1a1a;border-top:1px solid #ececec;">${escapeHtml(
+      s.total
+    )}</td><td style="padding:10px 0 0;font-size:16px;font-weight:bold;color:#1a1a1a;text-align:right;border-top:1px solid #ececec;">${fmt(
+      order.total_cents
+    )}</td></tr>`
+  );
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows.join("")}</table>`;
+}
+
+function deliveryNoticeHtml(deliveryMethod: string, lang: Lang): string {
+  const s = STR[lang];
+  const notice = deliveryMethod === "self_collection" ? s.deliverySelfCollectionNotice : s.deliveryStandardNotice;
+  return `<p style="font-size:13px;color:#666666;line-height:1.6;margin:0 0 10px;">${escapeHtml(notice)}</p>
+<p style="font-size:12px;color:#999999;line-height:1.6;margin:0;">${escapeHtml(s.ageNotice)}</p>`;
+}
+
+function customerConfirmationHtml(order: OrderForEmail, items: OrderItemForEmail[], lang: Lang): string {
+  const s = STR[lang];
+  const r = order.recipient_snapshot;
+  const orderTime = formatOrderTime(order.paid_at ?? order.created_at, lang);
+  const deliveryMethodLabel = order.delivery_method === "self_collection" ? s.deliveryMethodSelfCollection : s.deliveryMethodStandard;
+
+  const body = `
+<h1 style="font-family:Georgia,'Times New Roman',serif;font-size:22px;margin:0 0 8px;color:#1a1a1a;">${escapeHtml(
+    s.confirmationHeading
+  )}</h1>
+<p style="font-size:14px;color:#444444;line-height:1.6;margin:0 0 20px;">${escapeHtml(s.confirmationIntro)}</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+<tr>
+<td style="font-size:13px;color:#999999;">${escapeHtml(s.orderNumber)}</td>
+<td style="font-size:13px;color:#1a1a1a;font-weight:bold;text-align:right;">#${escapeHtml(order.id.slice(0, 8))}</td>
+</tr>
+${
+  orderTime
+    ? `<tr><td style="font-size:13px;color:#999999;padding-top:4px;">${escapeHtml(s.orderedOn)}</td><td style="font-size:13px;color:#1a1a1a;text-align:right;padding-top:4px;">${escapeHtml(
+        orderTime
+      )}</td></tr>`
+    : ""
+}
+</table>
+
+<h2 style="font-size:14px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(s.itemsHeading)}</h2>
+${itemsTableHtml(items, lang)}
+<div style="height:16px;"></div>
+${totalsTableHtml(order, lang)}
+
+<div style="height:28px;"></div>
+<h2 style="font-size:14px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(s.deliveryHeading)}</h2>
+<p style="font-size:13px;color:#444444;line-height:1.7;margin:0 0 12px;">
+${escapeHtml(s.recipient)}: <strong>${escapeHtml(r.name)}</strong><br>
+${escapeHtml(s.phone)}: ${escapeHtml(r.phone)}<br>
+${
+  order.delivery_method === "self_collection"
+    ? ""
+    : `${escapeHtml(r.address)}${r.postalCode ? ", " + escapeHtml(r.postalCode) : ""}<br>`
+}
+${escapeHtml(deliveryMethodLabel)}
+</p>
+${deliveryNoticeHtml(order.delivery_method, lang)}
+
+<div style="height:28px;"></div>
+${buttonHtml(s.viewOrderBtn, `${siteUrl()}/orders.html`, "gold")}
+${buttonHtml(s.whatsappBtn, WHATSAPP_URL, "dark")}
+`;
+
+  return emailShell({ lang, preheader: s.confirmationPreheader, bodyHtml: body });
+}
+
+function customerConfirmationText(order: OrderForEmail, items: OrderItemForEmail[], lang: Lang): string {
+  const s = STR[lang];
+  const r = order.recipient_snapshot;
+  const orderTime = formatOrderTime(order.paid_at ?? order.created_at, lang);
+  const lines = [
+    s.confirmationHeading,
+    s.confirmationIntro,
+    "",
+    `${s.orderNumber}: #${order.id.slice(0, 8)}`,
+    orderTime ? `${s.orderedOn}: ${orderTime}` : "",
+    "",
+    s.itemsHeading + ":",
+    ...items.map((i) => `- ${i.name_snapshot} x${i.qty}: ${fmt(i.line_total_cents)}`),
+    "",
+    `${s.subtotal}: ${fmt(order.subtotal_cents)}`,
+    `${s.shipping}: ${order.shipping_fee_cents === 0 ? s.free : fmt(order.shipping_fee_cents)}`,
+    order.gst_registered_at_checkout ? `${s.gst}: ${fmt(order.gst_cents)}` : "",
+    `${s.total}: ${fmt(order.total_cents)}`,
+    "",
+    `${s.recipient}: ${r.name}`,
+    `${s.phone}: ${r.phone}`,
+    order.delivery_method === "self_collection" ? "" : `${r.address}${r.postalCode ? ", " + r.postalCode : ""}`,
+    "",
+    order.delivery_method === "self_collection" ? s.deliverySelfCollectionNotice : s.deliveryStandardNotice,
+    s.ageNotice,
+    "",
+    `${s.viewOrderBtn}: ${siteUrl()}/orders.html`,
+    `${s.whatsappBtn}: ${WHATSAPP_URL}`,
+    "",
+    STR[lang].footerCompany + " · UEN 202509360N",
+  ];
+  return lines.filter((l) => l !== "").join("\n");
+}
+
+function staffNotificationHtml(order: OrderForEmail, items: OrderItemForEmail[]): string {
+  // Internal ops email — kept English-only regardless of any future
+  // customer-language snapshot, per the requirement that only the subject
+  // needs the bilingual "New paid order／新已付款订单" label.
+  const lang: Lang = "en";
+  const s = STR[lang];
+  const r = order.recipient_snapshot;
+  const orderTime = formatOrderTime(order.paid_at ?? order.created_at, lang);
+  const deliveryMethodLabel = order.delivery_method === "self_collection" ? s.deliveryMethodSelfCollection : s.deliveryMethodStandard;
+  const adminOrigin = adminAppOrigin();
+
+  const body = `
+<h1 style="font-family:Georgia,'Times New Roman',serif;font-size:20px;margin:0 0 16px;color:#1a1a1a;">${escapeHtml(
+    s.staffHeading
+  )} — #${escapeHtml(order.id.slice(0, 8))}</h1>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf9f6;border:1px solid #ececec;margin-bottom:20px;">
+<tr><td style="padding:14px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="font-size:12px;color:#999999;padding:2px 0;">${escapeHtml(s.staffPaymentStatus)}</td><td style="font-size:13px;color:#1a7a1a;font-weight:bold;text-align:right;padding:2px 0;">${escapeHtml(
+    s.staffPaid
+  )}</td></tr>
+<tr><td style="font-size:12px;color:#999999;padding:2px 0;">${escapeHtml(s.total)}</td><td style="font-size:13px;color:#1a1a1a;font-weight:bold;text-align:right;padding:2px 0;">${fmt(
+    order.total_cents
+  )}</td></tr>
+<tr><td style="font-size:12px;color:#999999;padding:2px 0;">${escapeHtml(s.staffDeliveryMethod)}</td><td style="font-size:13px;color:#1a1a1a;text-align:right;padding:2px 0;">${escapeHtml(
+    deliveryMethodLabel
+  )}</td></tr>
+${
+  orderTime
+    ? `<tr><td style="font-size:12px;color:#999999;padding:2px 0;">${escapeHtml(s.staffOrderedOn)}</td><td style="font-size:13px;color:#1a1a1a;text-align:right;padding:2px 0;">${escapeHtml(
+        orderTime
+      )}</td></tr>`
+    : ""
+}
+</table>
+</td></tr>
+</table>
+
+<h2 style="font-size:13px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(s.itemsHeading)}</h2>
+${itemsTableHtml(items, lang)}
+
+<div style="height:20px;"></div>
+<h2 style="font-size:13px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(s.staffCustomer)}</h2>
+<p style="font-size:13px;color:#444444;line-height:1.7;margin:0;">
+${escapeHtml(r.name)} &middot; ${escapeHtml(r.phone)} &middot; ${escapeHtml(r.email)}<br>
+${escapeHtml(s.staffAddress)}: ${
+    order.delivery_method === "self_collection" || !r.address
+      ? escapeHtml(s.staffNoAddress)
+      : escapeHtml(r.address) + (r.postalCode ? ", " + escapeHtml(r.postalCode) : "")
+  }
+</p>
+
+${
+  r.notes
+    ? `<div style="height:16px;"></div><h2 style="font-size:13px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(
+        s.staffNotes
+      )}</h2><p style="font-size:13px;color:#444444;line-height:1.6;margin:0;">${escapeHtml(r.notes)}</p>`
+    : ""
+}
+
+<div style="height:20px;"></div>
+<h2 style="font-size:13px;color:#1a1a1a;margin:0 0 8px;letter-spacing:0.5px;">${escapeHtml(s.staffAmounts)}</h2>
+${totalsTableHtml(order, lang)}
+
+${adminOrigin ? `<div style="height:28px;"></div>${buttonHtml(s.staffViewInAdminBtn, `${adminOrigin}/orders/${order.id}`, "dark")}` : ""}
+`;
+
+  return emailShell({ lang, preheader: `${s.staffHeading} #${order.id.slice(0, 8)}`, bodyHtml: body });
+}
+
+function staffNotificationText(order: OrderForEmail, items: OrderItemForEmail[]): string {
+  const lang: Lang = "en";
+  const s = STR[lang];
+  const r = order.recipient_snapshot;
+  const orderTime = formatOrderTime(order.paid_at ?? order.created_at, lang);
+  const deliveryMethodLabel = order.delivery_method === "self_collection" ? s.deliveryMethodSelfCollection : s.deliveryMethodStandard;
+  const adminOrigin = adminAppOrigin();
+  const lines = [
+    `${s.staffHeading} — #${order.id.slice(0, 8)}`,
+    "",
+    `${s.staffPaymentStatus}: ${s.staffPaid}`,
+    `${s.total}: ${fmt(order.total_cents)}`,
+    `${s.staffDeliveryMethod}: ${deliveryMethodLabel}`,
+    orderTime ? `${s.staffOrderedOn}: ${orderTime}` : "",
+    "",
+    `${s.itemsHeading}:`,
+    ...items.map((i) => `- ${i.name_snapshot} x${i.qty}: ${fmt(i.line_total_cents)}`),
+    "",
+    `${s.staffCustomer}: ${r.name} · ${r.phone} · ${r.email}`,
+    `${s.staffAddress}: ${
+      order.delivery_method === "self_collection" || !r.address
+        ? s.staffNoAddress
+        : r.address + (r.postalCode ? ", " + r.postalCode : "")
+    }`,
+    r.notes ? `${s.staffNotes}: ${r.notes}` : "",
+    "",
+    adminOrigin ? `${s.staffViewInAdminBtn}: ${adminOrigin}/orders/${order.id}` : "",
+  ];
+  return lines.filter((l) => l !== "").join("\n");
 }
 
 /**
@@ -118,7 +567,7 @@ async function sendTrackedEmail(params: {
   recipient: string;
   createdBy?: string | null;
   forceNew?: boolean;
-  buildHtml: () => { subject: string; html: string };
+  buildEmail: () => { subject: string; html: string; text: string };
 }): Promise<{ outcome: SendOutcome; emailLogId?: string }> {
   const supabase = getSupabaseAdmin();
 
@@ -134,12 +583,12 @@ async function sendTrackedEmail(params: {
     return { outcome: "error" };
   }
 
-  const { subject, html } = params.buildHtml();
+  const { subject, html, text } = params.buildEmail();
 
   try {
     const resend = new Resend(requireEnv("RESEND_API_KEY"));
     const result = await resend.emails.send(
-      { from: fromAddress(), to: params.recipient, subject, html },
+      { from: fromAddress(), to: params.recipient, subject, html, text },
       { idempotencyKey: claimed.id }
     );
 
@@ -176,24 +625,19 @@ async function sendTrackedEmail(params: {
 }
 
 /** Failures are logged, never thrown — a flaky email provider must not fail order creation/confirmation. */
-export async function sendOrderConfirmationEmail(order: OrderForEmail, items: OrderItemForEmail[]): Promise<void> {
+export async function sendOrderConfirmationEmail(
+  order: OrderForEmail,
+  items: OrderItemForEmail[],
+  lang: Lang = DEFAULT_LANG
+): Promise<void> {
   await sendTrackedEmail({
     orderId: order.id,
     emailType: "customer_confirmation",
     recipient: order.recipient_snapshot.email,
-    buildHtml: () => ({
-      subject: `Trinity Globe — Order Confirmation #${order.id.slice(0, 8)}`,
-      html: `
-        <h1 style="font-family:serif;">Thank you for your order</h1>
-        <p>Order <strong>#${order.id.slice(0, 8)}</strong></p>
-        <table style="border-collapse:collapse;width:100%;max-width:480px;">${itemsHtml(items)}</table>
-        <p>Subtotal: ${fmt(order.subtotal_cents)}</p>
-        <p>Shipping: ${order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</p>
-        <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
-        ${order.gst_registered_at_checkout ? `<p style="color:#999;font-size:12px;">Includes GST: ${fmt(order.gst_cents)}</p>` : ""}
-        ${deliveryDetailsHtml(order.delivery_method)}
-        ${footerHtml()}
-      `,
+    buildEmail: () => ({
+      subject: `${STR[lang].confirmationSubject} #${order.id.slice(0, 8)}`,
+      html: customerConfirmationHtml(order, items, lang),
+      text: customerConfirmationText(order, items, lang),
     }),
   });
 }
@@ -205,7 +649,8 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail, items: Or
 export async function resendOrderConfirmationEmail(
   order: OrderForEmail,
   items: OrderItemForEmail[],
-  staffUserId: string
+  staffUserId: string,
+  lang: Lang = DEFAULT_LANG
 ): Promise<{ outcome: SendOutcome }> {
   return sendTrackedEmail({
     orderId: order.id,
@@ -213,19 +658,10 @@ export async function resendOrderConfirmationEmail(
     recipient: order.recipient_snapshot.email,
     createdBy: staffUserId,
     forceNew: true,
-    buildHtml: () => ({
-      subject: `Trinity Globe — Order Confirmation #${order.id.slice(0, 8)}`,
-      html: `
-        <h1 style="font-family:serif;">Thank you for your order</h1>
-        <p>Order <strong>#${order.id.slice(0, 8)}</strong></p>
-        <table style="border-collapse:collapse;width:100%;max-width:480px;">${itemsHtml(items)}</table>
-        <p>Subtotal: ${fmt(order.subtotal_cents)}</p>
-        <p>Shipping: ${order.shipping_fee_cents === 0 ? "Free" : fmt(order.shipping_fee_cents)}</p>
-        <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
-        ${order.gst_registered_at_checkout ? `<p style="color:#999;font-size:12px;">Includes GST: ${fmt(order.gst_cents)}</p>` : ""}
-        ${deliveryDetailsHtml(order.delivery_method)}
-        ${footerHtml()}
-      `,
+    buildEmail: () => ({
+      subject: `${STR[lang].confirmationSubject} #${order.id.slice(0, 8)}`,
+      html: customerConfirmationHtml(order, items, lang),
+      text: customerConfirmationText(order, items, lang),
     }),
   });
 }
@@ -285,21 +721,11 @@ export async function sendStaffNotificationEmail(order: OrderForEmail, items: Or
     orderId: order.id,
     emailType: "staff_notification",
     recipient: staffEmails.join(", "),
-    buildHtml: () => {
-      const r = order.recipient_snapshot;
-      return {
-        subject: `New order #${order.id.slice(0, 8)} — ${fmt(order.total_cents)}`,
-        html: `
-          <h1 style="font-family:serif;">New paid order</h1>
-          <p>Order <strong>#${order.id.slice(0, 8)}</strong></p>
-          <p>${escapeHtml(r.name)} &middot; ${escapeHtml(r.phone)} &middot; ${escapeHtml(r.email)}</p>
-          <p>Delivery: ${order.delivery_method}${r.address ? " — " + escapeHtml(r.address) + " " + escapeHtml(r.postalCode) : ""}</p>
-          ${r.notes ? `<p>Notes: ${escapeHtml(r.notes)}</p>` : ""}
-          <table style="border-collapse:collapse;width:100%;max-width:480px;">${itemsHtml(items)}</table>
-          <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
-        `,
-      };
-    },
+    buildEmail: () => ({
+      subject: `${STR.en.staffSubjectPrefix} #${order.id.slice(0, 8)} — ${fmt(order.total_cents)}`,
+      html: staffNotificationHtml(order, items),
+      text: staffNotificationText(order, items),
+    }),
   });
 }
 
@@ -324,20 +750,10 @@ export async function resendStaffNotificationEmail(
     recipient: staffEmails.join(", "),
     createdBy: staffUserId,
     forceNew: true,
-    buildHtml: () => {
-      const r = order.recipient_snapshot;
-      return {
-        subject: `New order #${order.id.slice(0, 8)} — ${fmt(order.total_cents)}`,
-        html: `
-          <h1 style="font-family:serif;">New paid order</h1>
-          <p>Order <strong>#${order.id.slice(0, 8)}</strong></p>
-          <p>${escapeHtml(r.name)} &middot; ${escapeHtml(r.phone)} &middot; ${escapeHtml(r.email)}</p>
-          <p>Delivery: ${order.delivery_method}${r.address ? " — " + escapeHtml(r.address) + " " + escapeHtml(r.postalCode) : ""}</p>
-          ${r.notes ? `<p>Notes: ${escapeHtml(r.notes)}</p>` : ""}
-          <table style="border-collapse:collapse;width:100%;max-width:480px;">${itemsHtml(items)}</table>
-          <p><strong>Total: ${fmt(order.total_cents)}</strong></p>
-        `,
-      };
-    },
+    buildEmail: () => ({
+      subject: `${STR.en.staffSubjectPrefix} #${order.id.slice(0, 8)} — ${fmt(order.total_cents)}`,
+      html: staffNotificationHtml(order, items),
+      text: staffNotificationText(order, items),
+    }),
   });
 }
