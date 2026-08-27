@@ -195,7 +195,8 @@ Trinity Globe Trading Pte. Ltd.（新加坡烈酒/酒类批发零售商）目前
   **2026-08-26 已核实（用户明确只要求先做这一步确认，还没要求切 live key）**：登录 Stripe 正式账号（`acct_1U66mYBAev1issbv`）→ 设置 → 商家 →"账户状态"，右侧"功能"栏确认 **支付（Charges）和 Payouts 都是"活跃"状态**（唯一"已暂停"的是 Cartes Bancaires，法国本地卡组织，跟新加坡业务无关，不影响）；"银行账户和货币"页确认已经关联了默认 SGD 收款账户（DBS Bank/POSB）。**结论：账户已经具备实际收款+提现能力，不是只过了身份验证。** 真正切 live key 时还有个真实风险要注意：现在 Netlify 的环境变量是"All scopes / 全部5个部署环境同一个值"，包括公开的 `dev--trinity-globe.netlify.app` 预览站——直接把 `STRIPE_SECRET_KEY` 全局换成 live 会让那个公开预览站也开始跑真实扣款。更安全的做法是用 Netlify"按部署环境设不同值"这个功能（不需要升级付费版），只给 Production 配 `sk_live_`，其余环境继续留 `sk_test_`。
 - [x] ~~前端环境变量 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` 还没加进 Netlify 生产站点~~——**2026-08-26 已完成**：登录 Netlify 后台（`trinity-globe` 项目 → Project configuration → Environment variables），两个变量都已添加（All scopes，Same value in all deploy contexts，跟其他现有变量的配置方式一致），值取自本地 `.env`。这两个是客户端匿名key，本身就会被打进浏览器构建产物，不算敏感信息。
 - [ ] **GST 注册信息确认**——2026-08-26 已把数据库设计从一个手动 boolean 改成基于生效日期（详见下面"GST 生效日期设计"一节），代码已经按"未注册期间绝不显示/收取 GST"的规则实现并上线，**但目前 `store_settings.gst_registration_effective_at` 仍是 `null`（即当前网站对所有订单都不收 GST）**。公司年营收已超 S$1M，按 IRAS 规定这已经触发强制注册 GST 的义务（超门槛后 30 天内需注册）。需要向老板/会计确认的不是简单的"是否注册"，而是两个具体信息：**(1) 公司的 GST Registration Number；(2) IRAS 批准信上注明的 GST Registration Effective Date**。拿到这两项后，只需要在 `store_settings` 表里填入这两个字段，新订单会从生效日期当天起自动开始按 9/109 计算并显示 GST，不需要再改代码。
-- [x] ~~邮件发送失败追踪账本~~——**2026-08-27 已完成**，详见下面"第十一轮"。**唯一还没做、也做不了的一步**：`.env` 里的 `RESEND_WEBHOOK_SECRET` 目前是本机自己生成的测试值，Resend 后台还没有注册真实的 webhook 地址（本地 `netlify dev` 没有公网 URL，Resend 的 webhook 送不到）——**必须等这个分支推到 Deploy Preview、有了公网地址之后**，去 Resend 后台的 Webhooks 页面注册真实 endpoint（`https://<deploy-preview-url>/.netlify/functions/resend-webhook`），拿到真实签名密钥后替换 `.env`/Netlify 环境变量里的这个值，再用官方测试地址真实收一次 Resend 主动推送的 webhook 确认端到端打通。这也是用户自己安排的顺序（先完成这轮邮件账本，下一步才是开发分支完整回归+push生成Deploy Preview），不是遗漏。
+- [x] ~~邮件发送失败追踪账本~~——**2026-08-27 已完成并在 Deploy Preview 上真实端到端验证通过**，详见下面"第十一轮"和"第十三轮"。真实 Resend webhook（不是自签模拟）已经确认能推到 `https://deploy-preview-1--trinity-globe.netlify.app/.netlify/functions/resend-webhook`，签名验证通过，`email_logs` 状态正确从 `accepted` 推进到 `delivered`/`bounced`。**合并 main、切到生产 Resend webhook 之前还要做**：去 Resend 后台给正式生产域名再注册一个 webhook endpoint（现在这个是专门指向 Deploy Preview 的，域名不一样），拿到那一份的签名密钥配到 Netlify 的 Production 环境。
+- [ ] **Node 版本：仓库 `.nvmrc` 之前一直写死 `20`，已经不满足现在的依赖要求，2026-08-27 才发现并修复**——`@supabase/supabase-js`（`realtime-js` 子依赖）和 `svix` 现在都要求 Node 22 原生 WebSocket；Deploy Preview 上真实调用任何一个用到 `getSupabaseAdmin()` 的 Function（也就是几乎全部 Function）都会报 `Node.js detected but native WebSocket not found` 直接崩溃。已经把 `.nvmrc` 改成 `22`（commit `befb13c`）并在 Netlify 的 **Deploy Previews** 环境额外加了 `AWS_LAMBDA_JS_RUNTIME=nodejs22.x`，在 Deploy Preview 上真实验证过修复生效。**合并 main 之前必须单独确认 Production 环境的 Functions 也运行在 Node 22**——Production 目前没有配 `AWS_LAMBDA_JS_RUNTIME`（这个变量目前只加在 Deploy Previews 一个环境），虽然 `.nvmrc` 现在是 22 理论上 Production 构建也会用这个版本，但没有像 Deploy Preview 那样真实验证过，不能想当然地认为一定没问题。
 - [ ] 把已写好的购物车/结账代码**部署到真正的生产 Netlify 站点**（目前只在本地 `netlify dev` 测试过）——需要合并 `dev` 到 `main`
 - [ ] **确认 `release-expired-reservations` 这个定时释放库存的 Function 真的在 Netlify 生产环境跑着**——2026-08-26 admin-app 回归测试时发现好几条库存预留早就过了 `expires_at` 但状态还停在 `pending`，说明这个任务大概率从来没在生产环境真正成功执行过。Netlify Scheduled Functions **只在正式 Published Deploy 上运行，Deploy Preview/branch deploy 不会自动跑**，所以本地 `netlify dev` 测试正常不代表生产环境真的在跑。上线前必须手动确认：(1) Netlify 后台 Functions 列表里能看到这个函数、cron 时间对；(2) 它需要的环境变量对 Functions 可用，且改动环境变量后已经重新部署过；(3) 手动点一次"Run now"；(4) 建一笔到期时间很短的测试预留，等它到期后确认订单状态/预留状态/库存三者都正确变化；(5) 再跑一次，确认不会对同一笔预留重复加库存。代码这边已经加了心跳记录（见下面 2026-08-26 admin-app 回归那一轮）：admin-app 订单列表页顶部会在这个任务超过15分钟没成功执行时显示醒目警告，可以直接用它来判断生产环境是否正常。
 
@@ -714,6 +715,39 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 测试产生的所有订单、地址、`email_logs`、`refund_requests`、Supabase 测试账号（客户、admin、finance_readonly 各一个）全部清理，库存确认回到基线 50，`checkout_rate_limits` 测试噪音清空，心跳记录复位为 `null`。`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部通过。
 
 **结论：34/34 全部通过，没有发现回归。** 按用户的要求，本轮只做验证，不push、不改动任何产品代码，等待用户确认后再推送 `dev` 并生成 Deploy Preview。
+
+## 2026-08-27（第十三轮）：push dev、创建 PR #1、Deploy Preview 验证、发现并修复 Node 版本致命问题、Resend Webhook 真实端到端验证
+
+**PR 与 Deploy Preview**：`dev` 已推送到 GitHub（`https://github.com/MikeQih/TrinityGlobe`），创建了 `dev → main` 的 [PR #1](https://github.com/MikeQih/TrinityGlobe/pull/1)（标题"Pre-launch hardening: payments, GST, RLS and email tracking"），**没有合并、没有开自动合并**。PR 本身因为 `products.json` 有冲突显示"不能自动合并"——这个冲突**没有处理**，按用户要求留到真正准备合并的时候再说。Netlify 自动为这个 PR 生成了 Deploy Preview：`https://deploy-preview-1--trinity-globe.netlify.app`。
+
+**这一轮发现的严重问题（不是邮件功能本身的问题，是能让整个后端瘫痪的部署阻塞项）**：用部署好的 Function 真实调用 `admin-resend-order-email` 时，返回的不是邮件相关错误，而是 `Error: Node.js detected but native WebSocket not found... Ensure you are running Node.js 22+`，报错栈精确指向 `getSupabaseAdmin()` 内部创建 Supabase 客户端时初始化 Realtime 客户端的那一步。**这不是这一轮新写代码的问题——`getSupabaseAdmin()` 是几乎每个 Netlify Function 的第一行代码**，所以真正部署后，`create-checkout-session`、`stripe-webhook`、`cancel-my-order`、`admin-refund-order` 等等全部会用同样的方式崩溃。之所以这么多轮本地测试完全没发现，是因为本地一直用 `netlify dev`，跑的是这台电脑自己装的 Node（22.22.1），从来没真正用过 Netlify 自己构建镜像里的 Node 版本。
+
+按用户要求，没有直接在 `netlify.toml` 里笼统加 `NODE_VERSION` 了事，而是先核实了真实原因：查看这次 Deploy Preview 的完整构建日志，看到 `Attempting Node.js version '20' from .nvmrc`——**仓库根目录一直有一个 `.nvmrc` 文件写死了 `20`**，是最早那次"Add Phase 1 e-commerce scaffold"（`09f4936`）留下的，早于 `@supabase/supabase-js`（的 `realtime-js` 子依赖）和 `svix` 开始要求 Node 22 原生 WebSocket 之前。同一份构建日志里一大串 `npm warn EBADENGINE` 也印证了这一点：`@netlify/build`、`svix`、`netlify-cli` 等好几个包都写着 `required: {node: '>=22...'}` 但 `current: {node: 'v20.20.2'}`。查过 Netlify 后台的环境变量列表，确认之前**没有**任何 `NODE_VERSION`/`AWS_LAMBDA_JS_RUNTIME` 覆盖项——问题的唯一来源就是这个过时的 `.nvmrc`。
+
+修复分两部分，都验证过真实生效，不是只看"构建成功"：
+1. 把 `.nvmrc` 内容从 `20` 改成 `22`（commit `befb13c`，已 push），构建日志确认新一次构建变成 `Attempting Node.js version '22' from .nvmrc` → `Now using node v22.23.2`，之前那一长串 EBADENGINE 警告全部消失。
+2. 额外在 Netlify 后台新增了 `AWS_LAMBDA_JS_RUNTIME=nodejs22.x`，专门用"每个部署环境不同值"只设到 **Deploy Previews** 一个环境，Production 那一栏留空没有动。
+3. 用真实调用重新验证：`.nvmrc` 改完后 Netlify 自动重新构建了一次 Deploy Preview，再手动 "Retry without cache" 了一次让新加的 `AWS_LAMBDA_JS_RUNTIME` 也生效，然后真实调用 `admin-resend-order-email`——WebSocket 报错完全消失，返回正常的 `{ok:true, outcome:"accepted"}`。
+
+**这条留给上线前必须做的清单**：现在只确认了 Deploy Preview 环境正常，**合并 main 之前必须确认 Production 站点的 Functions 同样运行在 Node 22**——Production 目前既没有配 `.nvmrc`（会用仓库根目录那份，现在已经是 22 了，理论上没问题）也没有配 `AWS_LAMBDA_JS_RUNTIME`（目前只加在 Deploy Previews 一个环境），如果 Production 环境的 Lambda 运行时解析逻辑跟 Deploy Preview 不完全一样，需要单独用 Production 真实验证一次，不能想当然。
+
+**Resend Webhook 真实端到端验证（不是自签模拟，是 Resend 真的把事件推过来）**：
+- 在 Resend 后台创建了一个真实的 webhook endpoint，地址 `https://deploy-preview-1--trinity-globe.netlify.app/.netlify/functions/resend-webhook`，订阅了代码实际处理的全部六个事件。**Resend 后台这个功能本身没有"命名"这一栏**——webhook 只以 URL 标识，没法叫"Trinity Globe Deploy Preview #1"这样的自定义名字，这点如实告知，没有勉强凑一个。
+- 真实 Signing Secret 复制后直接写入 Netlify 的 `RESEND_WEBHOOK_SECRET`，同样用"每个部署环境不同值"只设到 Deploy Previews，Production 的这一项保持不存在（没有覆盖，因为之前也不存在）。**密钥本身没有出现在本轮任何一次对话文本、截图描述或 commit 里**——唯一一次意外用截图工具截到了明文（Netlify 表单默认原样显示这个字段），当场发现后立刻点了隐藏按钮把这个字段切回 `type="password"` 掩码显示，后续所有操作都基于 JS 读取前缀/长度而不是完整值来做验证。
+- 修完 Node 版本问题后，用真实 admin 测试账号通过部署好的 `admin-resend-order-email` 触发了 4 次真实发送（`delivered@resend.dev`/`bounced@resend.dev` 各自的客户确认信和员工通知信），Resend 后台的 Events 列表显示全部 8 个真实事件（4 个 `email.sent` + 3 个 `email.delivered` + 1 个 `email.bounced`）都标着 "Success"——**这是 Resend 真的把 webhook 推到了 `resend-webhook.ts`，签名验证真的通过了**。查数据库确认：投给 `delivered@resend.dev` 的客户确认信和员工通知信都自动从 `accepted` 推进到了 `delivered`；投给 `bounced@resend.dev` 的客户确认信自动推进到了 `bounced`，并且**真实提取出了 Resend 原话的退信原因**（"Permanent: The recipient's email provider sent a hard bounce message..."）——上一轮报告里"没拿到真实 payload 核对过 `data.bounce.message` 这个字段路径猜得对不对"这个疑问，这一轮用真实数据确认猜对了。同一笔订单的两种邮件类型（`customer_confirmation`/`staff_notification`）全程各自独立成行，`resend_email_id` 各不相同，互相没有覆盖。
+- `finance_readonly` 测试账号对**部署好的**（不是本地）`admin-resend-order-email` 发起请求，确认依然被拒绝（403）。
+- 全程确认订单的 `status`/`refunded_cents` 没有被这些邮件操作动过。
+- 用真实浏览器登录一个真实创建的 admin 账号，打开退信那笔订单：客户确认信显示"Bounced"+完整退信原因+"Resend"按钮，员工通知信显示"Delivered"且**没有**重发按钮；订单列表页正确显示"⚠ Email"标记，且只标了这一笔（已送达的那笔没有被误标）。
+- 去重（Svix `svix-id` 幂等）：在预先用自签事件重复投递的直接代码测试里已经确凿验证过（第一次正常处理、第二次返回 `deduped:true`，状态不重复不回退）。这一轮额外尝试了 Resend 后台自带的"Replay"按钮，点击后台面板上的 Attempts 计数和响应内容都没有变化，数据库里对应的去重记录、`email_logs.updated_at` 也都没有变化——不能百分之百确定 Resend 的 Replay 按钮这次是否真的重新发起了一次 HTTP 投递（这个 UI 交互本身没有给出明确的"已重放"反馈），但底层去重机制本身已经用更直接、无歧义的方式验证过，不依赖这个按钮的结果。
+
+**测试数据清理**：本轮涉及的 2 个测试订单（含各自的 `email_logs`）、3 个测试账号（1 个 admin、1 个 finance_readonly、1 个专门用来看 admin-app 界面的）全部删除，`resend_webhook_events` 里本轮产生的记录清空，`inventory.website_stock` 确认回到基线 50（这几笔测试订单都是直接插入的 `paid` 状态，没有走真实预留流程，所以本来就不影响库存，之前顺手检查过一遍确认没有意外改动）。
+
+**没有做的事，如实记录**：没有 merge PR，没有碰 `products.json` 的冲突，没有改任何 Stripe 相关配置（key、webhook 等一律没碰），没有把任何完整密钥写进代码、commit 或本文件。
+
+**仍需人工确认的事项**：
+1. **合并 main 之前必须单独验证 Production 环境的 Functions 也运行在 Node 22**——上面已经解释过原因，这一轮的验证范围只覆盖了 Deploy Preview。
+2. Resend 后台这个 webhook endpoint **暂时保留着**（按用户要求没有删除），等这一轮 Deploy Preview 的其余回归项都做完、确认不再需要之后再决定是否清理；`RESEND_WEBHOOK_SECRET`/`AWS_LAMBDA_JS_RUNTIME` 这两个环境变量目前也还留在 Netlify 的 Deploy Preview 作用域里。
+3. Resend 后台的 Webhooks 功能本身不支持自定义名称，如果确实需要用名字管理多个 endpoint，只能自己在别处（比如这份文档）另外记录 URL 对应关系。
 
 ---
 
