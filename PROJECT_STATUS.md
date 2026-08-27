@@ -690,6 +690,31 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 本轮改动（`supabase/migrations/0019_email_delivery_tracking.sql`、`netlify/functions/_lib/email.ts`、`netlify/functions/resend-webhook.ts`、`netlify/functions/admin-resend-order-email.ts`、`admin-app/src/lib/types.ts`、`admin-app/src/pages/OrderDetail.tsx`、`admin-app/src/pages/OrdersList.tsx`、`admin-app/src/admin.css`、`package.json`/`package-lock.json`新增 `svix` 依赖、`.env` 新增 `RESEND_WEBHOOK_SECRET`、本文件）已经commit到本地`dev`分支，没有push、没有merge main。
 
+## 2026-08-27（第十二轮）：推送前完整回归
+
+用户要求在 push `dev` 分支、生成 Deploy Preview 之前，先在本地对目前累积的所有 commit（含RLS收权、GST、邮件账本三轮）做一次完整回归，并专门补测两个此前一直没真正执行过的场景：定时任务"从未产生心跳记录"时的告警、以及 Stripe 退款成功但进程在 `settle_refund_request` 之前中断后重试的恢复行为。
+
+**方法**：一条脚本走完整个客户生命周期，全程真实调用（真实 HTTP 打本地 `netlify dev`、真实 Stripe test-mode API、真实 Resend 发信），不用任何 mock。共 34 项断言，全部通过；过程中还真实踩到并纠正了两个测试脚本自身的问题（不是产品代码问题，但记录下来避免下次重复踩坑）：
+
+**踩坑记录**：
+1. 直接 `curl`/`fetch` 打 `release-expired-reservations` 这个 `config.schedule` 函数在本地会被 `netlify dev` 拦截，返回一句提示"这是定时函数，本地这样调用/生产环境都不会真的触发"——必须改用 `netlify functions:invoke <name> --port 8888`，这才是 CLI 官方提供的"本地模拟一次定时触发"方式。
+2. 短时间内反复用同一台机器发起多次真实结账，触发了 `0008_checkout_hardening.sql` 自带的"每个 IP 10 分钟内最多 5 次结账"限流——这是限流功能本身工作正常的证据，不是 bug，测试时手动清空 `checkout_rate_limits` 表即可继续（生产环境这张表本来就靠 `release-expired-reservations.ts` 每次运行顺手清理一天前的旧记录，不需要人工干预）。
+
+**场景一：从未产生心跳记录时的告警**——`scheduled_job_runs` 表当前确实是 `last_success_at = null`（这本来就是事实：这个函数至今没有在任何真正的生产环境跑过），验证 admin-app 里 `StaleJobWarning` 组件的判断逻辑 `!lastSuccessAt || 距今超过15分钟` 在 `lastSuccessAt` 为 `null` 时正确判定为"需要告警"。随后真实调用 `netlify functions:invoke release-expired-reservations` 触发一次真实执行，确认心跳被正确写入（`last_success_at` 变成刚才的真实时间戳，`last_error` 为空），告警条件正确解除。测试结束后已经把 `scheduled_job_runs` **重新改回 `null`**——这次是本地测试触发的，不是生产环境真的在跑，留一个"看起来正常"的假时间戳在共享的 Supabase 项目里会误导之后任何人看这张表的判断。
+
+**场景二：Stripe 退款成功但结算前中断，重试恢复**——完整复现了 `admin-refund-order.ts` 自己的前两步（`claim_refund_request` 拿到一条持久记录、用这条记录自己的 `id` 当 Stripe 幂等键真实调用 `stripe.refunds.create`，这一步 Stripe 那边已经真实退款成功），然后**故意不调用 `settle_refund_request`**，模拟"进程在这一步之前就挂了"。此时数据库里 `refund_requests` 还停在 `pending`，订单 `status` 还是 `paid`、`refunded_cents` 还是 0——这就是崩溃后的真实状态。随后对**未经任何修改的真实 `admin-refund-order.ts` 端点**发起"重试"请求（模拟员工再点一次退款按钮）：确认它复用了同一条 `refund_requests` 记录（同一个 `id`），用同一个幂等键再次调用 Stripe，Stripe 因为幂等键匹配直接返回了**第一次那笔真实退款**（而不是创建第二笔）——`stripe.refunds.list()` 直接查 Stripe 自己的记录确认这个 PaymentIntent 上始终只有一笔退款，不是只有我们数据库这边"看起来"没重复。最终 `refund_requests` 正确结算为 `succeeded`，`stripe_refund_id` 正确补写为崩溃前那次真实生成的退款 ID，订单 `refunded_cents` 精确等于 `total_cents`（没有退多也没有退少），全程只退了一次。
+
+**其余端到端场景**（同一条脚本、同一批真实订单里顺带验证，确认互相之间没有污染）：
+- 匿名浏览 `products-live.ts` 正常拿到真实库存（`get_available_stock` 收权后前台查询依然畅通，呼应上一轮"仍需人工确认"里的第2条）。
+- 客户注册、设默认地址、下单（`create-checkout-session.ts`）、续单（`resume-checkout-session.ts`）全部走通；用真实签名的 `checkout.session.completed` Stripe事件（本地自签，跟测 Resend webhook时的方法论一致：验证的是代码逻辑本身，不是"Stripe真的把事件送到本地"这件事）真实打 `stripe-webhook.ts`，确认订单转 `paid`、库存正确扣减、**客户确认信和员工通知信两条 `email_logs` 记录都被自动创建并且 Resend 真实接收**——这是邮件账本第一次在"自动触发"（而不是 admin-app 手动重发）路径上被验证，补上了上一轮遗留的一个真实覆盖缺口。
+- 客户取消自己的待付款订单（`cancel-my-order.ts`）、一笔预留到期后用真实 `release-expired-reservations` 定时函数处理（预留状态、Stripe Checkout Session 都真实过期）、再用真实签名的 `checkout.session.expired` 事件打通订单状态转 `expired`（这一步同样发现了"订单状态转 `expired`依赖 Stripe 真的把 webhook 送回本地"这个跟 Resend 完全同类的本地测试局限，处理方式也完全一致：自签事件验证代码逻辑，真正的"Stripe 主动送达"要等 Deploy Preview 才能验证）。
+- `finance_readonly` 再次确认无法直接改订单、无法调用邮件重发接口——跟 RLS 审计轮的结论一致，没有因为后续两轮改动而回归。
+- 三笔订单（付款退款 / 取消 / 过期）各自停在正确的终态，互不影响；最终库存账目对得上（付款后退款的那一单按政策不自动回库存，其余两单净变化为零）。
+
+测试产生的所有订单、地址、`email_logs`、`refund_requests`、Supabase 测试账号（客户、admin、finance_readonly 各一个）全部清理，库存确认回到基线 50，`checkout_rate_limits` 测试噪音清空，心跳记录复位为 `null`。`storefront`/`admin-app` 的 `typecheck`/`test`/`build` 全部通过。
+
+**结论：34/34 全部通过，没有发现回归。** 按用户的要求，本轮只做验证，不push、不改动任何产品代码，等待用户确认后再推送 `dev` 并生成 Deploy Preview。
+
 ---
 
 ## 重要的操作纪律（继续遵守）
