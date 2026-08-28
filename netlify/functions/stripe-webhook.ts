@@ -1,10 +1,15 @@
 import type Stripe from "stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getStripe } from "./_lib/stripe";
+import { getStripe, refundFailureReason } from "./_lib/stripe";
 import { getSupabaseAdmin } from "./_lib/supabase";
 import { requireEnv } from "./_lib/env";
 import { errorResponse, jsonResponse } from "./_lib/responses";
-import { sendOrderConfirmationEmail, sendStaffNotificationEmail, sendPaymentReviewAlertEmail } from "./_lib/email";
+import {
+  sendOrderConfirmationEmail,
+  sendStaffNotificationEmail,
+  sendPaymentReviewAlertEmail,
+  sendRefundReviewAlertEmail,
+} from "./_lib/email";
 
 interface OrderRow {
   id: string;
@@ -84,6 +89,19 @@ export default async (req: Request): Promise<Response> => {
         // "付款失败" distinction on the My Orders page (src/orders-page.ts):
         // one means "try a different card", the other means "buy again".
         await handlePaymentFailed(supabase, event.data.object as Stripe.Checkout.Session, "expired");
+        break;
+      }
+      case "refund.updated":
+      case "refund.failed": {
+        // Both event types report the same underlying object shape (a
+        // Stripe.Refund) and are handled identically here — refund.failed
+        // fires specifically for the failed transition, refund.updated
+        // fires for *any* status change including that same transition, so
+        // the two can legitimately both arrive for one real-world failure.
+        // handleRefundEvent's idempotency (via apply_refund_status's
+        // terminal-state protection) is what makes that safe rather than a
+        // double-application.
+        await handleRefundEvent(supabase, event.data.object as Stripe.Refund);
         break;
       }
       default:
@@ -208,5 +226,120 @@ async function handlePaymentFailed(
   });
   if (rpcError) {
     console.error("stripe-webhook: mark_order_failed_from_webhook failed", orderId, rpcError);
+  }
+}
+
+interface RefundRequestForReconciliation {
+  id: string;
+  order_id: string;
+  amount_cents: number;
+}
+
+/**
+ * Handles refund.updated and refund.failed — the events PayNow (and any
+ * other async payment method) refunds actually resolve through, since
+ * refunds.create() returning without throwing only means Stripe *accepted*
+ * the request, not that money has moved. See
+ * supabase/migrations/0022_refund_webhook_reconciliation.sql for the
+ * apply_refund_status state machine this hands off to, and
+ * admin-refund-order.ts for the synchronous half of the same flow.
+ *
+ * Matching a refund event back to *our* refund_requests row is done two
+ * ways, in order:
+ *   1. `refund.metadata.refund_request_id` — set by admin-refund-order.ts
+ *      when it calls refunds.create(), and protected by Stripe's own
+ *      webhook signature the same way the rest of this payload is; nothing
+ *      about metadata is attacker-controlled once it's inside a
+ *      signature-verified event.
+ *   2. `refund_requests.stripe_refund_id` — a fallback for the (currently
+ *      hypothetical, since every refund this codebase creates sets the
+ *      metadata) case where a Refund object reaches here without it.
+ * Whichever row is found, its own order_id/amount_cents/currency are then
+ * cross-checked against the Refund object's payment_intent/amount/currency
+ * before anything is applied — a mismatch here means our records and
+ * Stripe's disagree about what this event is even about, which is exactly
+ * the kind of thing that must never silently move an order's refunded
+ * amount. See sendRefundReviewAlertEmail.
+ */
+export async function handleRefundEvent(supabase: SupabaseClient, refund: Stripe.Refund): Promise<void> {
+  const metaRefundRequestId =
+    typeof refund.metadata?.refund_request_id === "string" ? refund.metadata.refund_request_id : null;
+  const metaOrderId = typeof refund.metadata?.order_id === "string" ? refund.metadata.order_id : null;
+
+  let requestRow: RefundRequestForReconciliation | null = null;
+
+  if (metaRefundRequestId) {
+    const { data } = await supabase
+      .from("refund_requests")
+      .select("id, order_id, amount_cents")
+      .eq("id", metaRefundRequestId)
+      .maybeSingle<RefundRequestForReconciliation>();
+    requestRow = data ?? null;
+  }
+  if (!requestRow) {
+    const { data } = await supabase
+      .from("refund_requests")
+      .select("id, order_id, amount_cents")
+      .eq("stripe_refund_id", refund.id)
+      .maybeSingle<RefundRequestForReconciliation>();
+    requestRow = data ?? null;
+  }
+
+  if (!requestRow) {
+    // Nothing in our own ledger claims this refund at all — not this
+    // webhook's job to create one (that only ever happens through
+    // claim_refund_request, staff-initiated). Recorded in stripe_events as
+    // handled either way; a redelivery would hit this same dead end again.
+    console.error("stripe-webhook: refund event has no matching refund_requests row", refund.id, refund.metadata);
+    return;
+  }
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("stripe_payment_intent_id, currency")
+    .eq("id", requestRow.order_id)
+    .maybeSingle<{ stripe_payment_intent_id: string | null; currency: string }>();
+
+  const refundPaymentIntentId =
+    typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id ?? null;
+
+  const mismatches: string[] = [];
+  if (metaOrderId && metaOrderId !== requestRow.order_id) {
+    mismatches.push(`metadata.order_id=${metaOrderId} but refund_requests.order_id=${requestRow.order_id}`);
+  }
+  if (!order) {
+    mismatches.push(`order ${requestRow.order_id} not found`);
+  } else {
+    if (order.stripe_payment_intent_id && refundPaymentIntentId && refundPaymentIntentId !== order.stripe_payment_intent_id) {
+      mismatches.push(`refund.payment_intent=${refundPaymentIntentId} but order.stripe_payment_intent_id=${order.stripe_payment_intent_id}`);
+    }
+    if (refund.currency && order.currency && refund.currency.toLowerCase() !== order.currency.toLowerCase()) {
+      mismatches.push(`refund.currency=${refund.currency} but order.currency=${order.currency}`);
+    }
+  }
+  if (refund.amount !== requestRow.amount_cents) {
+    mismatches.push(`refund.amount=${refund.amount} but refund_requests.amount_cents=${requestRow.amount_cents}`);
+  }
+
+  if (mismatches.length > 0) {
+    console.error("stripe-webhook: refund event mismatch, order left untouched", refund.id, requestRow.id, mismatches);
+    await sendRefundReviewAlertEmail(requestRow.order_id, refund.id, mismatches.join("; "));
+    return;
+  }
+
+  const { error: rpcError } = await supabase.rpc("apply_refund_status", {
+    p_refund_request_id: requestRow.id,
+    p_stripe_status: refund.status,
+    p_stripe_refund_id: refund.id,
+    p_failure_reason: refundFailureReason(refund),
+    p_expected_order_id: requestRow.order_id,
+    p_expected_amount_cents: requestRow.amount_cents,
+  });
+  if (rpcError) {
+    // A real (presumably transient) DB error, not a data mismatch — let the
+    // caller's try/catch turn this into a 500 so Stripe retries, same as
+    // every other handler in this file.
+    console.error("stripe-webhook: apply_refund_status failed", refund.id, requestRow.id, rpcError);
+    throw rpcError;
   }
 }
