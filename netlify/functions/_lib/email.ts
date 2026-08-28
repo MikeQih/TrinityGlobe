@@ -718,6 +718,41 @@ export async function sendPaymentReviewAlertEmail(orderId: string, reason: strin
   }
 }
 
+/**
+ * Same shape as sendPaymentReviewAlertEmail, for the refund-webhook side of
+ * the same "Stripe told us something that doesn't line up with our own
+ * records, and a human needs to look before anything else happens"
+ * pattern — see stripe-webhook.ts's refund.updated/refund.failed handling.
+ * Deliberately never touches orders.refunded_cents itself; that's the
+ * whole point of routing a mismatch here instead of into apply_refund_status.
+ */
+export async function sendRefundReviewAlertEmail(orderId: string, refundId: string, reason: string): Promise<void> {
+  const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (staffEmails.length === 0) return;
+
+  try {
+    const resend = new Resend(requireEnv("RESEND_API_KEY"));
+    await resend.emails.send({
+      from: fromAddress(),
+      to: staffEmails,
+      subject: `⚠️ Order #${orderId.slice(0, 8)} needs manual review — refund event mismatch`,
+      html: `
+        <h1 style="font-family:serif;color:#b00;">Refund review needed</h1>
+        <p>Order <strong>#${orderId.slice(0, 8)}</strong> — a Stripe refund webhook (<code>${escapeHtml(refundId)}</code>)
+        arrived with details that didn't match our own records, so it was deliberately left unapplied.</p>
+        <p><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+        <p>Check Stripe's dashboard for this refund and this order's <code>refund_requests</code> rows before
+        deciding how to reconcile it — nothing on this order's refunded amount or status was changed by this event.</p>
+      `,
+    });
+  } catch (err) {
+    console.error("sendRefundReviewAlertEmail failed", orderId, refundId, err);
+  }
+}
+
 export async function sendStaffNotificationEmail(order: OrderForEmail, items: OrderItemForEmail[]): Promise<void> {
   const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
     .split(",")

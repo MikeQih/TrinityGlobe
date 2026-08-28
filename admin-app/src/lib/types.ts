@@ -65,6 +65,25 @@ export interface OrderItem {
   line_total_cents: number;
 }
 
+export type RefundRequestStatus = "pending" | "requires_action" | "succeeded" | "failed";
+
+// See supabase/migrations/0022_refund_webhook_reconciliation.sql. 'pending'
+// and 'requires_action' are both "still in flight at Stripe" — surfaced as
+// two labels here only because a customer-facing "needs additional action"
+// state is worth calling out differently from an ordinary async wait, not
+// because admin-app treats them differently otherwise (both block a new
+// refund attempt on this order the same way).
+export interface RefundRequest {
+  id: string;
+  order_id: string;
+  amount_cents: number;
+  status: RefundRequestStatus;
+  stripe_refund_id: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface OrderStatusHistoryEntry {
   id: number;
   order_id: string;

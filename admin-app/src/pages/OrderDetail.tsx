@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
-import type { EmailLog, EmailType, Order, OrderItem, OrderStatus, OrderStatusHistoryEntry } from "../lib/types";
+import type { EmailLog, EmailType, Order, OrderItem, OrderStatus, OrderStatusHistoryEntry, RefundRequest } from "../lib/types";
 
 const EMAIL_TYPE_LABEL: Record<EmailType, string> = {
   customer_confirmation: "Customer confirmation",
@@ -77,10 +77,12 @@ export function OrderDetail() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [history, setHistory] = useState<OrderStatusHistoryEntry[]>([]);
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [refundMessage, setRefundMessage] = useState<string | null>(null);
   const [refunding, setRefunding] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [resendingEmailType, setResendingEmailType] = useState<EmailType | null>(null);
@@ -89,7 +91,7 @@ export function OrderDetail() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const [orderRes, itemsRes, historyRes, emailLogsRes] = await Promise.all([
+    const [orderRes, itemsRes, historyRes, emailLogsRes, refundRequestsRes] = await Promise.all([
       supabase.from("orders").select("*").eq("id", id).single<Order>(),
       supabase.from("order_items").select("*").eq("order_id", id).returns<OrderItem[]>(),
       supabase
@@ -104,6 +106,12 @@ export function OrderDetail() {
         .eq("order_id", id)
         .order("created_at", { ascending: false })
         .returns<EmailLog[]>(),
+      supabase
+        .from("refund_requests")
+        .select("*")
+        .eq("order_id", id)
+        .order("created_at", { ascending: false })
+        .returns<RefundRequest[]>(),
     ]);
 
     if (orderRes.error) setError(orderRes.error.message);
@@ -114,6 +122,7 @@ export function OrderDetail() {
     if (itemsRes.data) setItems(itemsRes.data);
     if (historyRes.data) setHistory(historyRes.data);
     if (emailLogsRes.data) setEmailLogs(emailLogsRes.data);
+    if (refundRequestsRes.data) setRefundRequests(refundRequestsRes.data);
     setLoading(false);
   }, [id]);
 
@@ -221,6 +230,7 @@ export function OrderDetail() {
 
     setRefunding(true);
     setActionError(null);
+    setRefundMessage(null);
     try {
       const res = await fetch(`${import.meta.env.VITE_STOREFRONT_FUNCTIONS_URL}/.netlify/functions/admin-refund-order`, {
         method: "POST",
@@ -230,20 +240,46 @@ export function OrderDetail() {
         },
         // No client-generated idempotency key — admin-refund-order.ts's
         // claim_refund_request RPC hands back a durable server-side
-        // request row (or resumes an existing pending one for this order)
-        // and uses *that* row's own id as the Stripe idempotency key. See
-        // supabase/migrations/0014_refund_request_ledger.sql for why a
-        // fresh per-click key wasn't enough — it did nothing for a
-        // network timeout, a page refresh, a second tab, or two staff
+        // request row (or resumes an existing pending/requires_action one
+        // for this order) and uses *that* row's own id as the Stripe
+        // idempotency key. See supabase/migrations/0014_refund_request_ledger.sql
+        // for why a fresh per-click key wasn't enough — it did nothing for
+        // a network timeout, a page refresh, a second tab, or two staff
         // members refunding the same order at once.
         body: JSON.stringify({ orderId: order.id, amountCents }),
       });
+      // `res.ok` only ever means "the request to *start or continue* the
+      // refund succeeded" — it is never a stand-in for "the refund is
+      // done". That's exactly the bug this whole fix exists to close: a
+      // PayNow refund routinely comes back here with status "pending" on a
+      // 200 response, and must never be read as "succeeded". Only
+      // `body.status === "succeeded"` means the money has actually moved,
+      // and even that is Stripe's word via apply_refund_status, not an
+      // assumption made here.
       const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? "Refund failed");
-      await load();
+      if (body?.status === "succeeded") {
+        setRefundMessage("Refund succeeded.");
+      } else if (body?.status === "pending" || body?.status === "requires_action") {
+        setRefundMessage(
+          body.status === "requires_action"
+            ? "Refund processing — Stripe needs an additional step before this can complete."
+            : "Refund processing — Stripe hasn't confirmed the outcome yet. This page will reflect it as soon as the webhook (or a retry) settles it."
+        );
+      } else if (body?.status === "failed") {
+        setActionError(body.failureReason ?? body.error ?? "Refund failed at the payment provider.");
+      } else if (!res.ok) {
+        throw new Error(body?.error ?? "Refund failed");
+      }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Refund failed");
     } finally {
+      // Always reload, even after a network-level failure: the request may
+      // still have reached admin-refund-order.ts and created a pending
+      // refund_requests row before the response was lost — reloading is
+      // what turns the action buttons into the "processing" notice below
+      // in that case, rather than leaving the page implying nothing
+      // happened when a retry would actually resume that same row.
+      await load();
       setRefunding(false);
     }
   }
@@ -282,6 +318,12 @@ export function OrderDetail() {
   if (!order) return <p className="muted">Order not found.</p>;
 
   const remainingRefundCents = order.total_cents - order.refunded_cents;
+  // refundRequests is loaded newest-first; at most one row is ever pending
+  // or requires_action at a time for a given order (claim_refund_request
+  // resumes rather than duplicating), so the first match is *the* in-flight
+  // attempt, not just the most recent one.
+  const inFlightRefund = refundRequests.find((rr) => rr.status === "pending" || rr.status === "requires_action") ?? null;
+  const lastFailedRefund = refundRequests.find((rr) => rr.status === "failed") ?? null;
   const r = order.recipient_snapshot;
   const nextOptions = NEXT_STATUS_OPTIONS[order.status] ?? [];
 
@@ -407,14 +449,32 @@ export function OrderDetail() {
         <section className="order-section">
           <h2>Refund</h2>
           <p className="muted">Remaining refundable: {fmt(remainingRefundCents)}</p>
-          <div className="refund-actions">
-            <button disabled={refunding} onClick={() => void handleRefund(true)}>
-              {refunding ? "Processing…" : "Refund in full"}
-            </button>
-            <button disabled={refunding} onClick={() => void handleRefund(false)}>
-              Refund partial amount…
-            </button>
-          </div>
+          {refundMessage && <p className="muted">{refundMessage}</p>}
+          {inFlightRefund ? (
+            <div className="warning-banner">
+              <strong>Refund processing</strong>
+              <p>
+                {fmt(inFlightRefund.amount_cents)} requested {new Date(inFlightRefund.created_at).toLocaleString()}
+                {inFlightRefund.status === "requires_action" ? " — needs an additional step at Stripe" : ""}. A new
+                refund can't be started on this order until this one resolves.
+              </p>
+            </div>
+          ) : (
+            <div className="refund-actions">
+              <button disabled={refunding} onClick={() => void handleRefund(true)}>
+                {refunding ? "Processing…" : "Refund in full"}
+              </button>
+              <button disabled={refunding} onClick={() => void handleRefund(false)}>
+                Refund partial amount…
+              </button>
+            </div>
+          )}
+          {lastFailedRefund && !inFlightRefund && (
+            <p className="error-banner">
+              Last refund attempt ({fmt(lastFailedRefund.amount_cents)}, {new Date(lastFailedRefund.created_at).toLocaleString()})
+              failed: {lastFailedRefund.failure_reason ?? "no reason recorded"}. You can start a new attempt above.
+            </p>
+          )}
         </section>
       )}
 

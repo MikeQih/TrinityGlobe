@@ -1,7 +1,7 @@
 # Trinity Globe 商城项目 — 当前状态清单
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
-> 最后更新：2026-08-26
+> 最后更新：2026-08-28
 > **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：功能开发已完成，用户明确说"现在还没准备好"，先不合并 `dev` 到 `main`——不要主动催。
 
 ## 项目背景
@@ -967,6 +967,27 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-28（第二十一轮）：PayNow 异步退款修复（PR #2）——Restricted Key 真实退款验证收尾 + 全部测试数据清理
+
+背景：PR #2（`Fix PayNow async refund gap: track real Stripe refund status instead...`）要解决的问题是——PayNow 退款在 Stripe 那边不是同步完成的（不像卡退款那样调用 `refunds.create` 就立刻拿到 `succeeded`），`admin-refund-order.ts` 之前只按"调用成功"就把订单标记退款完成，没有真正跟踪 Stripe 那边异步给出的最终状态（`pending`/`succeeded`/`failed`/`requires_action`）。这一轮（跨越一次 context compaction）新增了 `apply_refund_status`/`bind_refund_stripe_id` 两个 RPC 把状态机做成显式的、可重复应用的（终态保护，`succeeded`/`failed` 之后任何旧状态的重复投递都是no-op，不会二次结算），并让 `stripe-webhook.ts` 订阅 `refund.updated`/`refund.failed` 事件来推进这个状态机，同时给 Stripe Test-mode Restricted Key 补上此前**从未真正验证过**的 `refunds.create` 调用路径。
+
+**本轮（compaction 之后这部分）具体做的事**：
+
+1. **补齐 Restricted Key 的退款验证**（此前唯一的验证缺口）：
+   - 诊断出 admin-app Deploy Preview 调用 storefront Deploy Preview 的 `admin-refund-order` 时报 503/"Failed to fetch"，根因是 storefront 项目 `ADMIN_APP_ORIGIN` 环境变量的**"Branch deploys"** 这个部署环境的值还停留在旧值（正式站地址），跟"Deploy Previews"环境的值不一致，导致实际服务这条 URL 的 Function 读到的 CORS 白名单是错的。
+   - **征得用户明确授权**（用户拒绝了"跳过这项验证"或"手动操作"的备选方案）后，临时把 `ADMIN_APP_ORIGIN` 的 **"Branch deploys"**（不是 Production）改成精确的 `https://deploy-preview-2--trinity-globe-admin.netlify.app`（无路径、无末尾斜杠、无通配符），全程截图/取值确认 **Production 值全程未变**（`https://trinity-globe-admin.netlify.app`）；改完重新构建 Deploy Preview #2 让 Function 读到新值，用 `curl` 直接验证 OPTIONS 预检的 `Access-Control-Allow-Origin` 头确实变成了目标地址后才继续。
+   - 从 admin-app Preview 对一笔真实的 S$21 测试卡订单发起退款：admin-app 显示"Refunded"，Stripe 自己的 Workbench 请求日志里能看到 `POST /v1/refunds → 200`，发起方明确标注为**受限密钥**（`storefront-preview-restricted-test`, `rk_test_...qxSb05`），返回 `re_3U9KnIBAev1issbv1ZKTV3E0`——**这是 `refunds.create` 第一次在 Restricted Key 下被真实验证跑通**，此前只验证过 `checkout.sessions.create`。
+   - **用脚本遍历该 Restricted Key 编辑页全部 159 行权限**（逐一取按钮的文字颜色区分选中态，而非人工逐屏核对，避免漏看），确认非 None 的权限**精确只有两项**：`Charges and Refunds: Write`、`Checkout Sessions: Write`，其余全部是 `None`——完全符合最初设定这把 key 时的最小权限设计意图。
+   - SQL 直接查库确认五项正确性：①`refund_requests.stripe_refund_id` 正确绑定为 `re_3U9KnIBAev1issbv1ZKTV3E0`；②该订单只有一条 `refund_requests` 记录、状态 `succeeded`，没有重复结算；③`orders.refunded_cents`(2100)=`total_cents`(2100)、`status='refunded'`；④对应的 `inventory_reservations` 行仍是 `confirmed`（没有被退款自动释放/回补库存，符合 PRD §7.6 的既定设计）；⑤`stripe_events` 表里这笔退款只有一条 `refund.updated` 记录（说明 webhook 幂等/去重机制生效，不是重复入账）。
+   - **收尾复原**（用户明确要求）：`ADMIN_APP_ORIGIN` 的 "Branch deploys" 改回原值 `https://trinity-globe-admin.netlify.app`，与 Production 值再次确认一致；清理全部测试数据——两笔测试订单（一笔 PayNow 卡在 `pending` 状态、一笔已用于本轮退款验证）连同各自的 `order_items`/`order_status_history`/`inventory_reservations`/`inventory_movements`/`email_logs`/`refund_requests` 全部删除；临时管理员测试账号 `refund-preview-rehearsal@resend.dev`（连同 `admin_profiles` 那一行）在 Supabase Auth 里删除，**删除前专门用直接 URL 定位到这个账号的详情面板、确认弹窗里逐字核对邮箱字符串**，避免误删旁边两个真实账号（`davidmjib@gmail.com`、`qihengchang1014@gmail.com`）——过程中发生过一次误点开了真实账号 `qihengchang1014@gmail.com` 的详情面板（只是查看，没有任何写操作），发现后立即关闭改用精确 URL 重新定位。
+   - **未处理、留给下次决定的一项**：Stripe test-mode webhook endpoint（`we_1U97MGBAev1issbvlHVH9Ius`）的 URL 目前指向 `deploy-preview-2--trinity-globe.netlify.app`（本轮之前就已经从 deploy-preview-1 改过来），本轮**没有再改动它**——它是否要在下一个 PR 开新的 Deploy Preview 编号时手动更新，还是保留现状等下次测试再改，需要用户决定（不影响 Production，Production 的 webhook 配置本轮完全没碰）。
+
+2. **本轮全程没有触碰的边界（跟之前所有轮次的操作纪律一致）**：没有改动 Production 的任何 Stripe/Netlify 配置；没有创建 Live Stripe Endpoint 或 Live Restricted Key；没有用真实资金；`main` 分支没有被合并；Production 的结账入口（`CHECKOUT_ENABLED`）保持关闭。
+
+**结论**：PR #2 里此前唯一悬而未决的验证缺口（Restricted Key 下 `refunds.create` 从未被真实调用过）已经闭环，且权限范围、幂等性、库存不回补、webhook 去重四项关键正确性都用真实数据（不是 mock）验证过。测试数据、临时账号、临时环境变量改动均已清理复原。**PR #2 是否/何时合并 `main`，仍按用户此前的一贯要求——由用户主动提出，不要主动催**。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -990,6 +1011,7 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 6. 请老板/会计确认公司的 **GST Registration Number**，以及 **IRAS 批准信中注明的 GST Registration Effective Date**（不是简单的"是否注册"——年营收已超S$1M，按 IRAS 规定已触发强制注册义务；拿到这两项后填进 `store_settings` 表即可，见下面 GST 章节，不需要再改代码）
 7. 问用户：Terms/Privacy 页面各自的"内部草稿，还没过律师"提示块要不要也去掉（age-restriction 那条已经按要求删了，这两份目前还留着，见上面第二轮记录）
 8. **合并 main 前的只读审计（第二十轮）已完成，结账总开关（`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED`，默认关闭）也已实现并在 Production/Deploy Previews 配好了正确的值**——PR #1 现在应该已经是 Git 层面无冲突、可以合并的状态，但**仍然不要主动 merge main**，除非用户明确说要合并；真正切到 Stripe live key、给 Production 补上 `STRIPE_WEBHOOK_SECRET`/`RESEND_WEBHOOK_SECRET` 之前，就算合并了 main，`CHECKOUT_ENABLED=false` 也会让 Production 的结账入口保持关闭（购物车按钮会显示"暂未开放"+ WhatsApp 联系方式），所以合并本身的风险已经大幅降低。真正要开放付款时按"Stripe 还在 test mode"条目里的方案切 key，同时把 Production 的这两个开关一起改回 `true` 并重新部署。
+9. **PR #2（PayNow 异步退款修复）的 Restricted Key 验证缺口已在第二十一轮闭环**（详见上面对应章节）——`refunds.create` 在 Restricted Key 下的真实调用、权限范围（精确只有 Charges and Refunds: Write + Checkout Sessions: Write）、幂等性/库存不回补/webhook 去重五项正确性全部用真实数据验证过；测试数据和临时环境变量改动均已清理复原。**同样不要主动提合并**——是否/何时合并 PR #2，等用户主动说。留了一个待用户决定的小尾巴：Stripe test-mode webhook endpoint 目前仍指向 `deploy-preview-2`，下次开新 PR 编号时要不要手动更新它，需要用户决定（不影响 Production）。
 
 **已解决，不用再问**：
 - ~~Wang Lei 的 Stripe 身份验证~~——2026-08-26 用户截图确认"已完成"任务里身份验证+账户代表信息/文件全部通过，"已激活"（待处理）已清空，阻塞解除
