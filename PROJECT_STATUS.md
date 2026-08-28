@@ -988,6 +988,22 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-29：PR #3——独立实施 S$0.50 隐藏上线验证通道（Deploy Preview 阶段）
+
+**背景**：Stripe Live 基础设施（Live Restricted Key、Live Webhook Endpoint、Production 环境变量）已在更早的会话轮次里配置并验证完毕（Restricted Key 权限精确为 Checkout Sessions: Write + Charges and Refunds: Write，Live Endpoint 6 个事件订阅正确，`STRIPE_WEBHOOK_SECRET` 因内部工具截图的低风险敞口已轮换一次），但**从未有过一笔真实的 Stripe Live 付款**跑通过整条链路（webhook 签名、订单落库、库存扣减、邮件、退款状态机）。真金实弹地用一件正常商品测试代价太高，所以设计了一个默认休眠、条件极严格的"S$0.50 隐藏测试 SKU 运费豁免"机制，只在下一轮 Production 真实付款验证时临时启用。
+
+**本轮范围**：只在 dev 分支实现代码 + 自动化测试 + Stripe **测试模式** Deploy Preview 端到端验证，**不涉及 Production、不使用真实资金、不 merge main**。
+
+**代码改动**：
+- 新增 `netlify/functions/_lib/golive-test-shipping.ts`：纯函数 `isGoLiveTestShippingExempt`，读取 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 两个仅服务端环境变量（未加 `VITE_` 前缀，不会被打进前端 bundle）。任意一个环境变量未设置时恒返回 `false`；两者都设置时，还必须同时满足：购物车只有一个 SKU、SKU 精确匹配、数量精确等于 1、Supabase 里该 variant 为 active、数据库读取的 `unit_price_cents` 精确等于 50、收件邮箱标准化（trim+小写）后精确匹配、配送方式为 `standard`、订单小计精确等于 50 分——任何一项不满足都返回 `false`，不报错、不默认免运。
+- `netlify/functions/create-checkout-session.ts`：在计算 `subtotalCents` 之后、调用 `computeShippingFeeCents` 之前插入这个判断；命中时 `shippingFeeCents` 直接设为 0，否则完全走原有 `computeShippingFeeCents`（S$15 flat / S$120 免运门槛的 `src/pricing.ts` 逻辑完全没动）。`CHECKOUT_ENABLED` 总开关检查在函数最开头，此判断在其之后才会被执行到，无法绕过。
+- 两个新测试文件：`tests/golive-test-shipping.test.ts`（纯函数单元测试，覆盖环境变量缺失/单个缺失/错误 SKU/混入其他商品/数量>1/邮箱不符/数据库价格不符/inactive/自提方式/小计不符等全部反向场景）、`tests/create-checkout-session.test.ts`（对完整 handler 的集成测试，mock supabase/stripe，覆盖：`CHECKOUT_ENABLED=false` 时隐藏 SKU 依然 503、inactive 测试 SKU 依然 409、命中豁免时运费 0/总额 S$0.50 且 Stripe line items 里没有单独的 Shipping 行、真实商品 S$6 单价仍是 S$15 运费/S$21 总额、真实商品单件超过 S$120 门槛时仍正常免运、客户端塞入的价格字段被服务端忽略）。
+- 全部改动为 additive：`GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 未配置时，构建产物和运行结果与当前 Production 行为完全一致（storefront/admin-app 的 typecheck、test、build 全部通过，`git diff --check` 无空白字符问题）。
+
+**⚠️ 待办（下一轮 Production 真实付款验证完成后必须处理）**：这个豁免机制是**临时上线验证专用**代码，一次性用途。真实 Live 付款测试跑通、Part 五收尾清理确认之后，**必须再开一个后续 PR 把 `netlify/functions/_lib/golive-test-shipping.ts`、`create-checkout-session.ts` 里对它的调用、以及这两个测试文件整体删除**，不要长期保留在代码库里。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
