@@ -480,3 +480,141 @@ test("mobile menu: no horizontal overflow with the menu open", async ({ page }) 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
+
+// ── Header breakpoint regression matrix ──────────────────────────────────
+//
+// Regression covered here: a PR #8 follow-up commit moved `.nav-actions`'s
+// `margin-left: auto` out of the mobile media query and made it unconditional
+// while also stripping `.nav-links`' own `margin-left: auto`. On desktop this
+// meant TWO auto-margins competed for the header's free space (`.nav-links`
+// got none, `.nav-actions` took all of it), opening a large gap between
+// "ENGLISH" and "SIGN IN"/cart that never existed on `main`. The fix restores
+// `.nav-links { margin: 0 0 0 auto }` for desktop and re-scopes
+// `.nav-actions`'s `margin-left: auto` to inside `@media (max-width: 960px)`
+// only, so mobile still groups account/cart/hamburger flush right while
+// desktop's original single-auto-margin layout is untouched.
+//
+// This suite asserts the full visibility contract at every breakpoint named
+// in that follow-up, plus the exact 959/960/961px boundary trio, to catch any
+// future regression of either side (a "hamburger vanishes" mobile bug or a
+// "desktop layout shifts" bug) before merge.
+
+const MOBILE_BREAKPOINTS = [375, 390, 412, 430, 768, 959];
+const DESKTOP_BREAKPOINTS = [961, 1024, 1280, 1440];
+
+interface HeaderVisibility {
+  navLinksDisplay: string;
+  navAccountDisplay: string;
+  cartDisplay: string;
+  hamburgerDisplay: string;
+}
+
+async function headerVisibility(page: Page): Promise<HeaderVisibility> {
+  return page.evaluate(() => ({
+    navLinksDisplay: getComputedStyle(document.querySelector(".nav-links")!).display,
+    navAccountDisplay: getComputedStyle(document.querySelector("#navbar .nav-account")!).display,
+    cartDisplay: getComputedStyle(document.getElementById("cartToggle")!).display,
+    hamburgerDisplay: getComputedStyle(document.getElementById("navHamburger")!).display,
+  }));
+}
+
+for (const width of MOBILE_BREAKPOINTS) {
+  test(`breakpoint matrix @ ${width}px: mobile header contract (nav links hidden, hamburger+cart visible and grouped right)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(base() + "/");
+    await page.waitForTimeout(200);
+
+    const v = await headerVisibility(page);
+    expect(v.navLinksDisplay, `nav-links must be hidden @ ${width}px`).toBe("none");
+    expect(v.navAccountDisplay, `nav-account text must be hidden @ ${width}px`).toBe("none");
+    expect(v.cartDisplay, `cart must be visible @ ${width}px`).not.toBe("none");
+    expect(v.hamburgerDisplay, `hamburger must be visible @ ${width}px`).not.toBe("none");
+
+    // cart + hamburger form one group flush against the header's right edge.
+    const evidence = await page.evaluate(() => {
+      const header = document.getElementById("navbar")!;
+      const cart = document.getElementById("cartToggle")!.getBoundingClientRect();
+      const hamburger = document.getElementById("navHamburger")!.getBoundingClientRect();
+      return {
+        headerRight: header.getBoundingClientRect().right,
+        headerPaddingRight: parseFloat(getComputedStyle(header).paddingRight),
+        cartRight: cart.right,
+        hamburgerRight: hamburger.right,
+        gapBetween: hamburger.left - cart.right,
+      };
+    });
+    const rightGap = evidence.headerRight - evidence.hamburgerRight;
+    expect(rightGap, `hamburger flush to header's right padding @ ${width}px: ${JSON.stringify(evidence)}`).toBeGreaterThanOrEqual(
+      evidence.headerPaddingRight - 2
+    );
+    expect(rightGap).toBeLessThanOrEqual(evidence.headerPaddingRight + 2);
+    expect(evidence.gapBetween, `cart→hamburger gap positive (no overlap) @ ${width}px`).toBeGreaterThan(0);
+  });
+}
+
+for (const width of DESKTOP_BREAKPOINTS) {
+  test(`breakpoint matrix @ ${width}px: desktop header contract (nav links + account visible, hamburger hidden)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(base() + "/");
+    await page.waitForTimeout(200);
+
+    const v = await headerVisibility(page);
+    expect(v.navLinksDisplay, `nav-links must be visible @ ${width}px`).not.toBe("none");
+    expect(v.navAccountDisplay, `SIGN IN/ACCOUNT must be visible @ ${width}px`).not.toBe("none");
+    expect(v.cartDisplay, `cart must be visible @ ${width}px`).not.toBe("none");
+    expect(v.hamburgerDisplay, `hamburger must be hidden @ ${width}px`).toBe("none");
+  });
+}
+
+test("breakpoint boundary: 959/960/961px flip cleanly with no double-visible or double-hidden state", async ({ page }) => {
+  for (const width of [959, 960, 961]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(base() + "/");
+    await page.waitForTimeout(200);
+    const v = await headerVisibility(page);
+    const isMobile = width <= 960;
+    expect(v.hamburgerDisplay === "none", `hamburger visible-state flip @ ${width}px: ${JSON.stringify(v)}`).toBe(!isMobile);
+    expect(v.navLinksDisplay === "none", `nav-links visible-state flip @ ${width}px: ${JSON.stringify(v)}`).toBe(isMobile);
+    // Never both hidden and never both visible at once.
+    const hamburgerVisible = v.hamburgerDisplay !== "none";
+    const navLinksVisible = v.navLinksDisplay !== "none";
+    expect(hamburgerVisible).not.toBe(navLinksVisible);
+  }
+});
+
+test("desktop header layout (1024/1280/1440px) matches the pre-PR#8 main baseline exactly", async ({ page }) => {
+  // Regression-locks the fix: .nav-links keeps its own margin-left:auto, and
+  // .nav-actions' margin-left:auto is scoped to mobile only, so account/cart
+  // land at the same absolute pixel positions they had before .nav-actions
+  // existed (confirmed against `git show main:style.css` during this fix).
+  for (const width of [1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(base() + "/");
+    await page.waitForTimeout(200);
+
+    const evidence = await page.evaluate(() => {
+      const r = (el: Element | null) => {
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        return { x: Math.round(b.x), right: Math.round(b.right) };
+      };
+      return {
+        links: r(document.querySelector(".nav-links")),
+        account: r(document.querySelector("#navbar .nav-account")),
+        cart: r(document.getElementById("cartToggle")),
+      };
+    });
+
+    // cart is pinned to the header's right padding regardless of the
+    // .nav-actions gap, so its absolute position is the most sensitive
+    // canary for the header's padding/box-sizing staying untouched.
+    const expectedCartRight = { 1024: 992, 1280: 1248, 1440: 1408 }[width]!;
+    expect(evidence.cart?.right, `cart.right @ ${width}px: ${JSON.stringify(evidence)}`).toBe(expectedCartRight);
+
+    const expectedAccountX = { 1024: 868, 1280: 1124, 1440: 1284 }[width]!;
+    expect(evidence.account?.x, `nav-account.x @ ${width}px: ${JSON.stringify(evidence)}`).toBe(expectedAccountX);
+
+    const expectedLinksX = { 1024: 377, 1280: 633, 1440: 793 }[width]!;
+    expect(evidence.links?.x, `nav-links.x @ ${width}px: ${JSON.stringify(evidence)}`).toBe(expectedLinksX);
+  }
+});

@@ -92,20 +92,26 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   list-style: none;
   gap: 2rem;
-  margin: 0;
+  margin: 0 0 0 auto;
   padding: 0;
 }
 
-/* Wraps account/cart/hamburger as a single unit so it reaches the header's
-   right edge on its own `margin-left: auto` — previously that auto-margin
-   lived on .nav-links, which is `display: none` below 960px, so on mobile
-   nothing was left to push the remaining items away from the logo and
-   they sat flush against it instead of at the right edge. */
+/* Wraps account/cart/hamburger as a single unit. Its own `margin-left: auto`
+   (mobile-only, see the @media block below) is what reaches the header's
+   right edge on mobile — `.nav-links` is `display: none` there, so without
+   this the remaining items would sit flush against the logo instead of the
+   right edge. `.nav-links` keeps its OWN `margin-left: auto` for desktop, so
+   this rule must stay unconditional-margin-free: giving both elements an
+   auto-margin at once (a past regression) makes them compete for the same
+   free space and blows a gap open between them on desktop.
+   `gap` matches `.nav-inner`'s own 2rem so wrapping account/cart/hamburger
+   in this container doesn't shrink the account-to-cart spacing that used to
+   come from `.nav-inner`'s gap when they were its direct children — the
+   mobile media query below overrides this to a tighter 0.75rem. */
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  margin-left: auto;
+  gap: 2rem;
   flex-shrink: 0;
 }
 
@@ -989,7 +995,12 @@ footer .container {
      in source order wins regardless of which one sits inside a matching
      media query, and the base `.cart-toggle { width: 34px }` rule is
      defined after this block. */
-  .nav-actions { gap: 0.75rem; }
+  /* margin-left: auto is scoped here (mobile-only), not on the base
+     .nav-actions rule — .nav-links carries its own auto-margin for
+     desktop, and giving .nav-actions an unconditional auto-margin too
+     made it swallow all remaining space *in addition to* .nav-links',
+     splitting the header with a large gap on desktop. */
+  .nav-actions { gap: 0.75rem; margin-left: auto; }
   #navbar {
     padding: 1rem 1.25rem;
     padding-top: calc(1rem + env(safe-area-inset-top));
