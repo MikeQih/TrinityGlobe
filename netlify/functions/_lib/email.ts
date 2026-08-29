@@ -89,6 +89,29 @@ const PERMANENT_FAILURE_ERROR_NAMES = new Set([
   "invalid_access",
 ]);
 
+/**
+ * Parses a STAFF_NOTIFICATION_EMAILS-style comma-separated env value into a
+ * clean recipient list for Resend's `to` field: split on comma, trim
+ * whitespace, drop empty segments, and de-duplicate case-insensitively
+ * (the local part of an email address is case-sensitive per spec, but no
+ * real mailbox provider treats it that way in practice, and two staff
+ * entries differing only by case are always a config typo, not two
+ * distinct people) — keeping the first-seen casing for the surviving entry.
+ */
+function parseStaffEmails(raw: string | undefined): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const part of (raw ?? "").split(",")) {
+    const email = part.trim();
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(email);
+  }
+  return result;
+}
+
 function fmt(cents: number): string {
   return "S$" + (cents / 100).toFixed(2);
 }
@@ -572,7 +595,18 @@ function staffNotificationText(order: OrderForEmail, items: OrderItemForEmail[])
 async function sendTrackedEmail(params: {
   orderId: string;
   emailType: EmailType;
+  // Stored as-is in email_logs.recipient (a plain `text` column — see
+  // 0019_email_delivery_tracking.sql) purely as a human-readable record of
+  // who this attempt was addressed to. Never sent to Resend directly — see
+  // `to` below, which is what determines actual delivery.
   recipient: string;
+  // What's actually passed as Resend's `to` field. Resend's documented
+  // contract only supports a plain string for a single address or a
+  // `string[]` for multiple — never a single string containing several
+  // comma-separated addresses (see sendStaffNotificationEmail's history:
+  // that used to be a `recipient.join(", ")` string here, which is not a
+  // documented-supported multi-recipient format).
+  to: string | string[];
   createdBy?: string | null;
   forceNew?: boolean;
   buildEmail: () => { subject: string; html: string; text: string };
@@ -596,7 +630,7 @@ async function sendTrackedEmail(params: {
   try {
     const resend = new Resend(requireEnv("RESEND_API_KEY"));
     const result = await resend.emails.send(
-      { from: fromAddress(), to: params.recipient, subject, html, text },
+      { from: fromAddress(), to: params.to, subject, html, text },
       { idempotencyKey: claimed.id }
     );
 
@@ -639,6 +673,7 @@ export async function sendOrderConfirmationEmail(order: OrderForEmail, items: Or
     orderId: order.id,
     emailType: "customer_confirmation",
     recipient: order.recipient_snapshot.email,
+    to: order.recipient_snapshot.email,
     buildEmail: () => ({
       subject: `${STR[lang].confirmationSubject} #${order.id.slice(0, 8)}`,
       html: customerConfirmationHtml(order, items, lang),
@@ -664,6 +699,7 @@ export async function resendOrderConfirmationEmail(
     orderId: order.id,
     emailType: "customer_confirmation",
     recipient: order.recipient_snapshot.email,
+    to: order.recipient_snapshot.email,
     createdBy: staffUserId,
     forceNew: true,
     buildEmail: () => ({
@@ -754,16 +790,14 @@ export async function sendRefundReviewAlertEmail(orderId: string, refundId: stri
 }
 
 export async function sendStaffNotificationEmail(order: OrderForEmail, items: OrderItemForEmail[]): Promise<void> {
-  const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const staffEmails = parseStaffEmails(process.env.STAFF_NOTIFICATION_EMAILS);
   if (staffEmails.length === 0) return;
 
   await sendTrackedEmail({
     orderId: order.id,
     emailType: "staff_notification",
     recipient: staffEmails.join(", "),
+    to: staffEmails,
     buildEmail: () => ({
       subject: `${STR.en.staffSubjectPrefix} #${order.id.slice(0, 8)} — ${fmt(order.total_cents)}`,
       html: staffNotificationHtml(order, items),
@@ -781,16 +815,14 @@ export async function resendStaffNotificationEmail(
   items: OrderItemForEmail[],
   staffUserId: string
 ): Promise<{ outcome: SendOutcome } | null> {
-  const staffEmails = (process.env.STAFF_NOTIFICATION_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const staffEmails = parseStaffEmails(process.env.STAFF_NOTIFICATION_EMAILS);
   if (staffEmails.length === 0) return null;
 
   return sendTrackedEmail({
     orderId: order.id,
     emailType: "staff_notification",
     recipient: staffEmails.join(", "),
+    to: staffEmails,
     createdBy: staffUserId,
     forceNew: true,
     buildEmail: () => ({
