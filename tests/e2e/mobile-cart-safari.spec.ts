@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, statSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -617,4 +617,161 @@ test("desktop header layout (1024/1280/1440px) matches the pre-PR#8 main baselin
     const expectedLinksX = { 1024: 377, 1280: 633, 1440: 793 }[width]!;
     expect(evidence.links?.x, `nav-links.x @ ${width}px: ${JSON.stringify(evidence)}`).toBe(expectedLinksX);
   }
+});
+
+// ── Account nav fail-safe (real build bundle, real Supabase client) ──────
+//
+// Regression covered here: a real iPhone Safari screenshot on the Deploy
+// Preview showed the mobile menu with Home/About/Collection/Contact/中文 but
+// NO Sign In row. Root cause: initAccountNav() (src/cart.ts) only ever
+// appended the account row from inside `initAuth().then(render)` — nothing
+// rendered synchronously, so the row's existence depended entirely on
+// Supabase's getSession() round trip completing first. That round trip's
+// timing is completely outside this app's control (network conditions,
+// Supabase cold starts, GoTrueClient's internal lock acquisition), and nothing
+// about the mobile menu's own visibility (a pure CSS `.open` class toggle)
+// ever waited for it — so a user opening the hamburger before that promise
+// settled would see a real, reproducible gap where Sign In should be.
+//
+// Fix: `render()` (the same function `initAuth().then()` already called) is
+// now *also* called synchronously, immediately, before `initAuth()` is even
+// invoked. `getSession()` reads a module-level variable that starts `null`,
+// so this first call always paints the signed-out Sign In state — with zero
+// dependency on any promise, network call, or timing. The async path still
+// runs afterward and repaints to the signed-in view once a real session is
+// confirmed, and a rejected/hung initAuth() promise now has an explicit
+// `.catch()` that leaves the already-rendered Sign In row exactly as is.
+//
+// These tests exercise the REAL `assets/storefront.js` bundle built via
+// `npm run build` from this repo's real .env (see the "must include one
+// test against the real build" requirement) — not a hand-authored inline
+// DOM fixture — against a real @supabase/supabase-js GoTrueClient, using
+// `page.route()` to control its network calls and `localStorage` seeding
+// (in the exact `sb-<project-ref>-auth-token` shape GoTrueClient itself
+// writes — see node_modules/@supabase/supabase-js's `defaultStorageKey`)
+// to drive it through the signed-out / slow / erroring / signed-in cases.
+
+const ENV_TEXT = readFileSync(path.resolve(__dirname, "../../.env"), "utf8");
+const SUPABASE_URL = ENV_TEXT.match(/^VITE_SUPABASE_URL=(.+)$/m)?.[1]?.trim();
+if (!SUPABASE_URL) throw new Error("VITE_SUPABASE_URL not found in .env — required to derive the auth storage key these tests seed");
+const SUPABASE_HOSTNAME = new URL(SUPABASE_URL).hostname;
+const SUPABASE_STORAGE_KEY = `sb-${SUPABASE_HOSTNAME.split(".")[0]}-auth-token`;
+
+function fakeSession(expiresInSeconds: number): Record<string, unknown> {
+  return {
+    access_token: "fake-access-token",
+    refresh_token: "fake-refresh-token",
+    token_type: "bearer",
+    expires_in: expiresInSeconds,
+    expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+    user: { id: "11111111-1111-1111-1111-111111111111", email: "test@example.com", app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: new Date().toISOString() },
+  };
+}
+
+async function seedExpiredSession(page: Page): Promise<void> {
+  // expires_at in the past forces GoTrueClient's getSession() to attempt a
+  // POST .../auth/v1/token?grant_type=refresh_token — the network call these
+  // tests intercept to simulate "slow" and "erroring".
+  await page.addInitScript(
+    ({ key, session }) => window.localStorage.setItem(key, JSON.stringify(session)),
+    { key: SUPABASE_STORAGE_KEY, session: fakeSession(-3600) }
+  );
+}
+
+async function seedValidSession(page: Page): Promise<void> {
+  await page.addInitScript(
+    ({ key, session }) => window.localStorage.setItem(key, JSON.stringify(session)),
+    { key: SUPABASE_STORAGE_KEY, session: fakeSession(3600) }
+  );
+}
+
+function mobileSignInVisible(page: Page) {
+  return page.evaluate(() => {
+    const list = document.getElementById("mobileLinksList");
+    return !!list?.querySelector('[data-nav-account-action="signin"]');
+  });
+}
+
+function desktopSignInVisible(page: Page) {
+  return page.evaluate(() => {
+    const container = document.querySelector("#navbar .nav-account");
+    return !!container?.querySelector('[data-nav-account-action="signin"]');
+  });
+}
+
+test("account nav: getSession resolves immediately with no session — SIGN IN visible right away", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base() + "/");
+  // No artificial wait — this is the guarantee: SIGN IN exists synchronously,
+  // not "eventually once the network call finishes".
+  expect(await mobileSignInVisible(page)).toBe(true);
+  expect(await desktopSignInVisible(page)).toBe(true);
+});
+
+test("account nav: getSession delayed several seconds — SIGN IN stays visible the whole time", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedExpiredSession(page);
+  await page.route("**/auth/v1/token**", async (route) => {
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(fakeSession(3600)) });
+  });
+  await page.goto(base() + "/");
+
+  expect(await mobileSignInVisible(page), "SIGN IN must be visible immediately, before the delayed response").toBe(true);
+  await page.waitForTimeout(1500); // mid-flight — the 3s response hasn't landed yet
+  expect(await mobileSignInVisible(page), "SIGN IN must still be visible mid-wait").toBe(true);
+});
+
+test("account nav: getSession network failure — SIGN IN stays visible, no unhandled rejection", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedExpiredSession(page);
+  await page.route("**/auth/v1/token**", (route) => route.abort("failed"));
+
+  const pageErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+
+  await page.goto(base() + "/");
+  expect(await mobileSignInVisible(page)).toBe(true);
+  await page.waitForTimeout(1000);
+  expect(await mobileSignInVisible(page), "SIGN IN must still be visible after the failed refresh settles").toBe(true);
+  expect(pageErrors, `no unhandled promise rejection reaches the page: ${JSON.stringify(pageErrors)}`).toEqual([]);
+});
+
+test("account nav: getSession returns a valid session — replaced with My Orders/My Addresses/Sign Out", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedValidSession(page);
+  await page.goto(base() + "/");
+  await page.waitForTimeout(300);
+
+  const evidence = await page.evaluate(() => {
+    const list = document.getElementById("mobileLinksList");
+    const rows = list ? Array.from(list.querySelectorAll(".mobile-account-row")).map((el) => el.textContent?.trim()) : [];
+    const container = document.querySelector("#navbar .nav-account");
+    return { mobileRows: rows, desktopHasSignOut: !!container?.querySelector('[data-nav-account-action="signout"]') };
+  });
+  expect(await mobileSignInVisible(page), `SIGN IN must be gone once signed in: ${JSON.stringify(evidence)}`).toBe(false);
+  expect(evidence.mobileRows.length, `expected 3 signed-in rows: ${JSON.stringify(evidence)}`).toBe(3);
+  expect(evidence.desktopHasSignOut).toBe(true);
+});
+
+test("account nav: hamburger opened before the auth request finishes — SIGN IN visible in the actual open menu", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedExpiredSession(page);
+  await page.route("**/auth/v1/token**", async (route) => {
+    await new Promise((r) => setTimeout(r, 5000));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(fakeSession(3600)) });
+  });
+  await page.goto(base() + "/");
+  await page.waitForSelector("#navHamburger", { state: "attached" });
+  await page.click("#navHamburger");
+  await expect(page.locator("#mobileMenu")).toHaveClass(/open/);
+
+  const signInRow = page.locator('#mobileLinksList [data-nav-account-action="signin"]');
+  await expect(signInRow, "Sign In must be visible in the actually-opened menu, not just present in the DOM").toBeVisible();
+});
+
+test("account nav: desktop SIGN IN renders normally (guest, real bundle)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(base() + "/");
+  await expect(page.locator('#navbar .nav-account [data-nav-account-action="signin"]')).toBeVisible();
 });

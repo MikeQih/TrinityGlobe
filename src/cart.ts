@@ -394,7 +394,30 @@ export function initAccountNav(): void {
     if (e.key === "Escape") closeMenu();
   });
 
-  void initAuth().then(render);
+  // Renders the signed-out (SIGN IN) state immediately, synchronously, so
+  // the account entry never depends on getSession()'s network round trip
+  // completing first. This isn't just a "usually fast enough" mitigation:
+  // this function runs from main.ts's DOMContentLoaded handler, and
+  // script.js's own DOMContentLoaded handler (which wires the hamburger's
+  // click-to-open behaviour) is a synchronous listener on that same event —
+  // the browser dispatches DOMContentLoaded's listeners back-to-back with
+  // no room for a user click to be processed in between. So by the time the
+  // hamburger can physically respond to a tap, this synchronous call has
+  // already run, and SIGN IN is already in the DOM regardless of how slow
+  // or unreliable the Supabase round trip turns out to be on the visitor's
+  // network. getSession() reads a plain module-level variable (see
+  // auth.ts), so this is always the signed-out view at this point — never
+  // a stale/wrong signed-in flash.
+  render();
+  initAuth()
+    .then(render)
+    .catch((err: unknown) => {
+      // Leave the signed-out SIGN IN row already rendered above in place —
+      // a failed/offline session check should degrade to guest checkout,
+      // not an empty account slot.
+      // eslint-disable-next-line no-console
+      console.error("initAuth failed — nav stays in signed-out state", err);
+    });
   onAuthChange(render);
   onLangChange(render);
 }
