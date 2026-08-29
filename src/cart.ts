@@ -289,15 +289,42 @@ export function openAccountDrawer(): void {
 
 export function initAccountNav(): void {
   const container = document.getElementById("navAccount");
-  if (!container) return;
+  // #mobileAccountLinks only exists on pages with a hamburger menu of their
+  // own (currently just index.html) — orders.html/addresses.html render
+  // #navAccount directly inside a nav that has no mobile menu, so there's
+  // nothing to mirror it into there, and that's fine.
+  const mobileContainer = document.getElementById("mobileAccountLinks");
+  if (!container && !mobileContainer) return;
   const hasDrawer = document.getElementById("cartRoot") != null;
   let menuOpen = false;
 
   const closeMenu = (): void => {
     if (!menuOpen) return;
     menuOpen = false;
-    container.querySelector<HTMLElement>(".nav-account-dropdown")?.setAttribute("hidden", "");
-    container.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
+    container?.querySelector<HTMLElement>(".nav-account-dropdown")?.setAttribute("hidden", "");
+    container?.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
+  };
+
+  const wireActions = (root: HTMLElement, closesMobileMenu: boolean): void => {
+    root.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (closesMobileMenu) {
+          (window as unknown as { closeMobileMenu?: () => void }).closeMobileMenu?.();
+        }
+        const action = el.dataset.navAccountAction;
+        if (action === "signin") {
+          if (hasDrawer) openAccountDrawer();
+          else window.location.href = "/?signin=1";
+        } else if (action === "signout") {
+          void signOut();
+        } else if (action === "toggle-menu") {
+          menuOpen = !menuOpen;
+          container?.querySelector(".nav-account-dropdown")?.toggleAttribute("hidden", !menuOpen);
+          el.setAttribute("aria-expanded", String(menuOpen));
+        }
+      });
+    });
   };
 
   // Signed-in state is a single text trigger ("ACCOUNT") + dropdown (My
@@ -308,45 +335,47 @@ export function initAccountNav(): void {
   const render = (): void => {
     menuOpen = false;
     const session = getSession();
-    container.innerHTML = session
-      ? // An <a>, not a <button> — a <button>'s box height is computed from
-        // line-height rather than font metrics the way a plain inline
-        // element's is, which (even after resetting every other box-model
-        // property to match) left it a few pixels taller than .nav-links'
-        // <a> siblings and made it sit off their shared baseline. Matching
-        // the element type sidesteps that entirely instead of fighting it.
-        `<a href="#" class="nav-account-trigger" role="button" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
-          t("nav-account")
-        )}</a>
-         <div class="nav-account-dropdown" hidden>
-           <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
-           <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
-           <button type="button" class="nav-account-dropdown-link" data-nav-account-action="signout">${escapeHtml(
-             t("nav-sign-out")
-           )}</button>
-         </div>`
-      : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
 
-    container.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        e.preventDefault();
-        const action = el.dataset.navAccountAction;
-        if (action === "signin") {
-          if (hasDrawer) openAccountDrawer();
-          else window.location.href = "/?signin=1";
-        } else if (action === "signout") {
-          void signOut();
-        } else if (action === "toggle-menu") {
-          menuOpen = !menuOpen;
-          container.querySelector(".nav-account-dropdown")?.toggleAttribute("hidden", !menuOpen);
-          el.setAttribute("aria-expanded", String(menuOpen));
-        }
-      });
-    });
+    if (container) {
+      container.innerHTML = session
+        ? // An <a>, not a <button> — a <button>'s box height is computed from
+          // line-height rather than font metrics the way a plain inline
+          // element's is, which (even after resetting every other box-model
+          // property to match) left it a few pixels taller than .nav-links'
+          // <a> siblings and made it sit off their shared baseline. Matching
+          // the element type sidesteps that entirely instead of fighting it.
+          `<a href="#" class="nav-account-trigger" role="button" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
+            t("nav-account")
+          )}</a>
+           <div class="nav-account-dropdown" hidden>
+             <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
+             <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
+             <button type="button" class="nav-account-dropdown-link" data-nav-account-action="signout">${escapeHtml(
+               t("nav-sign-out")
+             )}</button>
+           </div>`
+        : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
+      wireActions(container, false);
+    }
+
+    if (mobileContainer) {
+      // Flat <li> list, not a dropdown — it's already inside a menu the
+      // visitor opened on purpose, so there's no need for a second
+      // expand/collapse step around these items the way the desktop trigger
+      // needs one to stay out of the nav's way.
+      mobileContainer.innerHTML = session
+        ? `<li><a href="/orders.html" class="mobile-account-link">${escapeHtml(t("nav-my-orders"))}</a></li>
+           <li><a href="/addresses.html" class="mobile-account-link">${escapeHtml(t("nav-my-address"))}</a></li>
+           <li><button type="button" class="mobile-lang-btn" data-nav-account-action="signout">${escapeHtml(
+             t("nav-sign-out")
+           )}</button></li>`
+        : `<li><a href="#" class="mobile-account-link" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a></li>`;
+      wireActions(mobileContainer, true);
+    }
   };
 
   document.addEventListener("click", (e) => {
-    if (!container.contains(e.target as Node)) closeMenu();
+    if (container && !container.contains(e.target as Node)) closeMenu();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenu();
