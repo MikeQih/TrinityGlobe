@@ -36,6 +36,20 @@ test.describe("Payment Element regression", () => {
     if (!SKU) throw new Error("Set E2E_TEST_SKU to a real, in-stock product SKU before running this suite.");
   });
 
+  // Netlify injects its own "Deploy Preview" inspector toolbar (a fixed-
+  // position div wrapping an iframe to app.netlify.com) into every Deploy
+  // Preview page — real customers on the eventual Production domain never
+  // see this. At narrow viewport widths it can overlap and intercept clicks
+  // on our own footer buttons. Hiding it is a Deploy-Preview-only test
+  // concession, not a workaround for a real layout bug.
+  async function hideNetlifyDeployPreviewToolbar(page: Page): Promise<void> {
+    await page.evaluate(() => {
+      document.querySelectorAll<HTMLElement>("[data-netlify-deploy-id]").forEach((el) => {
+        el.style.display = "none";
+      });
+    });
+  }
+
   /** Clicks the checkout form's submit button and returns create-checkout-session's parsed JSON body. */
   async function submitCheckoutFormAndCapture(page: Page): Promise<{ orderId: string; mode: string }> {
     const [response] = await Promise.all([
@@ -63,6 +77,7 @@ test.describe("Payment Element regression", () => {
     // own deliberately narrow widths, since it never expands that accordion.
     await page.setViewportSize(viewport);
     await page.goto("/");
+    await hideNetlifyDeployPreviewToolbar(page);
     const addToCartButton = page.locator(`.add-cart-btn[data-sku="${SKU}"]`);
     await addToCartButton.scrollIntoViewIfNeeded();
     await addToCartButton.click();

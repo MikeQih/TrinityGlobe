@@ -13,5 +13,13 @@ export default defineConfig({
     baseURL: process.env.SITE_URL ?? "http://localhost:8888",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Real Chrome Stable, headed — needed for tests/e2e/payment-element.spec.ts's
+    // 3DS case specifically: the "actions.confirm() never resolves" bug this
+    // suite guards against was only confirmed (twice) against real Chrome, not
+    // bundled Chromium, so that regression test should keep running here too.
+    // Run with `npx playwright test --project=chrome-real`.
+    { name: "chrome-real", use: { ...devices["Desktop Chrome"], channel: "chrome", headless: false } },
+  ],
 });
