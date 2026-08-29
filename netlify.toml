@@ -10,14 +10,8 @@
   # actual secrets (STRIPE_SECRET_KEY, SUPABASE_SERVICE_ROLE_KEY, the OAuth
   # client secrets, RESEND_API_KEY) are deliberately left off this list so
   # the scanner still catches those.
-  #
-  # GOLIVE_TEST_EMAIL is part of the temporary go-live shipping-exemption
-  # mechanism (see netlify/functions/_lib/golive-test-shipping.ts) — its
-  # value is Resend's public test address, already checked into
-  # PROJECT_STATUS.md and the test suite, so it isn't a real secret. Remove
-  # this entry in the same follow-up PR that deletes that mechanism.
   [build.environment]
-    SECRETS_SCAN_OMIT_KEYS = "FREE_SHIPPING_THRESHOLD_CENTS,STANDARD_SHIPPING_FEE_CENTS,RESEND_FROM_EMAIL,STAFF_NOTIFICATION_EMAILS,SITE_URL,SUPABASE_URL,GOLIVE_TEST_EMAIL"
+    SECRETS_SCAN_OMIT_KEYS = "FREE_SHIPPING_THRESHOLD_CENTS,STANDARD_SHIPPING_FEE_CENTS,RESEND_FROM_EMAIL,STAFF_NOTIFICATION_EMAILS,SITE_URL,SUPABASE_URL"
 
 [functions]
   directory = "netlify/functions"
