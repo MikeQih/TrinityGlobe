@@ -289,12 +289,17 @@ export function openAccountDrawer(): void {
 
 export function initAccountNav(): void {
   const container = document.getElementById("navAccount");
-  // #mobileAccountLinks only exists on pages with a hamburger menu of their
-  // own (currently just index.html) — orders.html/addresses.html render
+  // #mobileLinksList only exists on pages with a hamburger menu of their own
+  // (currently just index.html) — orders.html/addresses.html render
   // #navAccount directly inside a nav that has no mobile menu, so there's
-  // nothing to mirror it into there, and that's fine.
-  const mobileContainer = document.getElementById("mobileAccountLinks");
-  if (!container && !mobileContainer) return;
+  // nothing to append into there, and that's fine. The account rows are
+  // appended directly into this *shared* list (not a separate container)
+  // and marked .mobile-account-row purely so a re-render can find and
+  // replace just those — everything else about them (styling, the
+  // divider, tap area) comes from being plain <li> children of the exact
+  // same <ul> as Home/About/Collection/Contact/language.
+  const mobileList = document.getElementById("mobileLinksList");
+  if (!container && !mobileList) return;
   const hasDrawer = document.getElementById("cartRoot") != null;
   let menuOpen = false;
 
@@ -358,19 +363,27 @@ export function initAccountNav(): void {
       wireActions(container, false);
     }
 
-    if (mobileContainer) {
-      // Flat <li> list, not a dropdown — it's already inside a menu the
-      // visitor opened on purpose, so there's no need for a second
-      // expand/collapse step around these items the way the desktop trigger
-      // needs one to stay out of the nav's way.
-      mobileContainer.innerHTML = session
-        ? `<li><a href="/orders.html" class="mobile-account-link">${escapeHtml(t("nav-my-orders"))}</a></li>
-           <li><a href="/addresses.html" class="mobile-account-link">${escapeHtml(t("nav-my-address"))}</a></li>
-           <li><button type="button" class="mobile-lang-btn" data-nav-account-action="signout">${escapeHtml(
+    if (mobileList) {
+      // Remove only the rows this function owns, then re-append fresh
+      // ones at the end — the static Home/About/Collection/Contact/
+      // language <li>s above are never touched. Flat <li>s, not a
+      // dropdown: the mobile menu is already an explicit "I opened this"
+      // action, so there's no need for a second expand/collapse step the
+      // way the desktop trigger needs one to stay out of the nav's way.
+      mobileList.querySelectorAll(".mobile-account-row").forEach((el) => el.remove());
+      const rowsHtml = session
+        ? `<li class="mobile-account-row"><a href="/orders.html">${escapeHtml(t("nav-my-orders"))}</a></li>
+           <li class="mobile-account-row"><a href="/addresses.html">${escapeHtml(t("nav-my-address"))}</a></li>
+           <li class="mobile-account-row"><button type="button" data-nav-account-action="signout">${escapeHtml(
              t("nav-sign-out")
            )}</button></li>`
-        : `<li><a href="#" class="mobile-account-link" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a></li>`;
-      wireActions(mobileContainer, true);
+        : `<li class="mobile-account-row"><a href="#" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a></li>`;
+      mobileList.insertAdjacentHTML("beforeend", rowsHtml);
+      // Scoped to the whole list, not just the new rows — harmless, since
+      // the static Home/About/etc. items never carry
+      // [data-nav-account-action] and so are never matched here; this
+      // just avoids needing to track which nodes are "new" separately.
+      wireActions(mobileList, true);
     }
   };
 

@@ -86,7 +86,7 @@ async function seedCart(page: Page, items: Array<{ sku: string; name: string; qt
     const cart = seedItems.map((i) => ({
       sku: i.sku,
       name: i.name,
-      image: "干邑白兰地 - Hennessy VSOP.png",
+      image: "images/干邑白兰地 - Hennessy VSOP.png", // real TG_PRODUCTS entries are 'images/' + filename (see script.js), not the bare filename
       priceTiers: { bottlePriceCents: 8500, caseSize: null, casePriceCents: null, fiveCaseSize: null, fiveCasePriceCents: null },
       qty: i.qty,
     }));
@@ -255,35 +255,89 @@ test("body scroll is restored after closing the drawer", async ({ page }) => {
 
 // ── Header (mobile nav) ──────────────────────────────────────────────────
 
-test("mobile header: only cart + hamburger on the right, no ACCOUNT/SIGN IN text, brand doesn't wrap", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 667 });
-  await page.goto(base() + "/");
-  // #navAccount is deliberately display:none at this width (moved into the
-  // hamburger menu) — wait for it to exist in the DOM, not to be visible.
-  await page.waitForSelector("#navAccount", { state: "attached" });
-  await page.waitForTimeout(200); // let initAccountNav's initAuth().then(render) settle
+for (const width of [375, 390, 412, 430]) {
+  test(`mobile header: actions group flush right, no overlap with brand @ ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(base() + "/");
+    await page.waitForSelector("#navAccount", { state: "attached" });
+    await page.waitForTimeout(200); // let initAccountNav's initAuth().then(render) settle
 
-  await expect(page.locator("#navAccount")).toBeHidden();
-  await expect(page.locator("#cartToggle")).toBeVisible();
-  await expect(page.locator("#navHamburger")).toBeVisible();
+    await expect(page.locator("#navAccount")).toBeHidden();
+    await expect(page.locator("#cartToggle")).toBeVisible();
+    await expect(page.locator("#navHamburger")).toBeVisible();
 
-  const logoBox = await page.locator(".nav-logo").boundingBox();
-  const navInnerBox = await page.locator(".nav-inner").boundingBox();
-  expect(logoBox).not.toBeNull();
-  expect(navInnerBox).not.toBeNull();
-  // Brand must stay on a single line and fully inside the nav row.
-  expect(logoBox!.height).toBeLessThan(60);
-  expect(logoBox!.x).toBeGreaterThanOrEqual(navInnerBox!.x - 1);
+    const evidence = await page.evaluate(() => {
+      const header = document.getElementById("navbar")!;
+      const brand = document.querySelector(".nav-logo")!;
+      const actions = document.querySelector(".nav-actions")!;
+      const cart = document.getElementById("cartToggle")!;
+      const hamburger = document.getElementById("navHamburger")!;
+      const r = (el: Element) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, right: b.right, bottom: b.bottom, left: b.left, width: b.width, height: b.height };
+      };
+      return {
+        headerRect: r(header),
+        brandRect: r(brand),
+        actionsGroupRect: r(actions),
+        cartRect: r(cart),
+        hamburgerRect: r(hamburger),
+        headerPaddingRight: parseFloat(getComputedStyle(header).paddingRight),
+      };
+    });
 
-  const cartBox = await page.locator("#cartToggle").boundingBox();
-  const hamburgerBox = await page.locator("#navHamburger").boundingBox();
-  expect(cartBox!.width).toBeGreaterThanOrEqual(44);
-  expect(cartBox!.height).toBeGreaterThanOrEqual(44);
-  expect(hamburgerBox!.width).toBeGreaterThanOrEqual(44);
-  expect(hamburgerBox!.height).toBeGreaterThanOrEqual(44);
+    // actionsGroup sits at the header's right edge, offset by exactly the
+    // header's own right padding (its `env(safe-area-inset-right)` term is
+    // 0 in this non-notched test environment) — not some other hardcoded
+    // number, and not flush against the edge with no padding at all.
+    const rightGap = evidence.headerRect.right - evidence.actionsGroupRect.right;
+    expect(rightGap, `rightGap vs header padding-right @ ${width}px: ${JSON.stringify(evidence)}`).toBeGreaterThanOrEqual(
+      evidence.headerPaddingRight - 2
+    );
+    expect(rightGap).toBeLessThanOrEqual(evidence.headerPaddingRight + 2);
 
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  expect(scrollWidth).toBeLessThanOrEqual(375);
+    // No overlap, and a real gap — not just touching — between brand and actions.
+    expect(evidence.actionsGroupRect.left, `overlap @ ${width}px: ${JSON.stringify(evidence)}`).toBeGreaterThan(
+      evidence.brandRect.right + 8
+    );
+
+    expect(evidence.cartRect.width).toBeGreaterThanOrEqual(44);
+    expect(evidence.cartRect.height).toBeGreaterThanOrEqual(44);
+    expect(evidence.hamburgerRect.width).toBeGreaterThanOrEqual(44);
+    expect(evidence.hamburgerRect.height).toBeGreaterThanOrEqual(44);
+
+    // Brand single line, fully inside the header row.
+    expect(evidence.brandRect.height).toBeLessThan(60);
+    expect(evidence.brandRect.left).toBeGreaterThanOrEqual(evidence.headerRect.left - 1);
+
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth, `horizontal overflow @ ${width}px`).toBeLessThanOrEqual(width);
+
+    console.log(`[header evidence @ ${width}px]`, JSON.stringify(evidence));
+  });
+}
+
+test("header, cart, and close button stay aligned while the cart drawer is open", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedCart(page, [{ sku: SKU, name: "Hennessy VSOP", qty: 1 }]);
+  await openCartDrawer(page);
+  const evidence = await page.evaluate(() => {
+    const r = (el: Element | null) => (el ? el.getBoundingClientRect() : null);
+    return {
+      navbar: r(document.getElementById("navbar")),
+      cartToggle: r(document.getElementById("cartToggle")),
+      drawerClose: r(document.querySelector(".cart-drawer-close")),
+    };
+  });
+  expect(evidence.navbar).not.toBeNull();
+  expect(evidence.cartToggle).not.toBeNull();
+  // The drawer's own close button sits inside the drawer header, independent
+  // of #navbar's cart icon — both must still be genuinely on-screen with the
+  // drawer open, not pushed off or overlapping each other unreadably.
+  expect(evidence.drawerClose).not.toBeNull();
+  expect(evidence.navbar!.top).toBeGreaterThanOrEqual(-1);
+  expect(evidence.cartToggle!.top).toBeGreaterThanOrEqual(0);
+  expect(evidence.drawerClose!.top).toBeGreaterThanOrEqual(0);
 });
 
 test("mobile header: hamburger menu shows Sign In when signed out", async ({ page }) => {
@@ -303,4 +357,126 @@ test("cart badge shows 0/1/two-digit counts pinned to the cart icon", async ({ p
   const count = await page.locator("#cartCount").textContent();
   expect(count).toBe("12");
   await expect(page.locator("#cartCount")).toBeVisible();
+});
+
+interface RowGeometry {
+  height: number;
+  top: number;
+  textLeft: number;
+  color: string;
+}
+
+async function measureMobileMenuRows(page: Page): Promise<RowGeometry[]> {
+  return page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLLIElement>("#mobileLinksList > li"));
+    return rows.map((li) => {
+      const child = li.querySelector<HTMLElement>("a, button")!;
+      const liRect = li.getBoundingClientRect();
+      const childRect = child.getBoundingClientRect();
+      return {
+        height: liRect.height,
+        top: liRect.top,
+        textLeft: childRect.left,
+        color: getComputedStyle(child).color,
+      };
+    });
+  });
+}
+
+test("mobile menu: every row (signed out) shares identical height/padding/left-edge, uniform spacing", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.goto(base() + "/");
+  await page.waitForTimeout(200);
+  await page.click("#navHamburger");
+  await expect(page.locator("#mobileMenu")).toHaveClass(/open/);
+  await page.waitForTimeout(300);
+
+  const rows = await measureMobileMenuRows(page);
+  // Home, About, Collection, Contact, language, Sign In.
+  expect(rows.length).toBe(6);
+
+  const heights = rows.map((r) => r.height);
+  const lefts = rows.map((r) => r.textLeft);
+  const maxHeightDiff = Math.max(...heights) - Math.min(...heights);
+  const maxLeftDiff = Math.max(...lefts) - Math.min(...lefts);
+  expect(maxHeightDiff, `row heights: ${JSON.stringify(heights)}`).toBeLessThanOrEqual(1);
+  expect(maxLeftDiff, `row text left edges: ${JSON.stringify(lefts)}`).toBeLessThanOrEqual(1);
+
+  // Row-to-row spacing (top-to-top) must be uniform across every adjacent
+  // pair — in particular Sign In (last) vs language (second-to-last) must
+  // match every other adjacent pair, not carry its own extra margin/border.
+  const gaps: number[] = [];
+  for (let i = 1; i < rows.length; i++) gaps.push(rows[i]!.top - rows[i - 1]!.top);
+  const maxGapDiff = Math.max(...gaps) - Math.min(...gaps);
+  expect(maxGapDiff, `row-to-row gaps: ${JSON.stringify(gaps)}`).toBeLessThanOrEqual(1);
+
+  // The language toggle is allowed to be gold (by design); every other row
+  // must share one plain color.
+  const nonLangColors = new Set(rows.slice(0, 4).concat(rows[5]!).map((r) => r.color));
+  expect(nonLangColors.size, `non-language row colors should all match: ${JSON.stringify([...nonLangColors])}`).toBe(1);
+  // The language toggle is allowed to differ *in color only* — but it must
+  // actually be gold, not silently fall back to the same muted color as
+  // everything else (a `.mobile-links button` shared-rule specificity of
+  // 0,1,1 previously beat `.mobile-lang-btn`'s 0,1,0 and did exactly that).
+  expect(rows[4]!.color, "language toggle should be gold, not the shared muted color").not.toBe([...nonLangColors][0]);
+
+  console.log("[mobile menu rows, signed out]", JSON.stringify(rows));
+});
+
+test("mobile menu: signed-in account rows (My Orders/My Addresses/Sign Out) share the same row styling", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.goto(base() + "/");
+  await page.waitForTimeout(200);
+
+  // Exercises the exact markup src/cart.ts#initAccountNav() renders for a
+  // signed-in session (same .mobile-account-row wrapper, same plain <a>/
+  // <button> children, appended into the same #mobileLinksList) without
+  // driving a real Supabase sign-in round trip, which needs a live backend
+  // this suite deliberately has none of. Confirmed by code review that both
+  // the signed-in and signed-out branches share this identical structure.
+  await page.evaluate(() => {
+    const list = document.getElementById("mobileLinksList")!;
+    list.querySelectorAll(".mobile-account-row").forEach((el) => el.remove());
+    list.insertAdjacentHTML(
+      "beforeend",
+      `<li class="mobile-account-row"><a href="/orders.html">My Orders</a></li>
+       <li class="mobile-account-row"><a href="/addresses.html">My Addresses</a></li>
+       <li class="mobile-account-row"><button type="button">Sign Out</button></li>`
+    );
+  });
+  await page.click("#navHamburger");
+  await expect(page.locator("#mobileMenu")).toHaveClass(/open/);
+  await page.waitForTimeout(300);
+
+  const rows = await measureMobileMenuRows(page);
+  // Home, About, Collection, Contact, language, + My Orders/My Addresses/Sign Out.
+  expect(rows.length).toBe(8);
+
+  const heights = rows.map((r) => r.height);
+  const lefts = rows.map((r) => r.textLeft);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+  expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThanOrEqual(1);
+
+  const gaps: number[] = [];
+  for (let i = 1; i < rows.length; i++) gaps.push(rows[i]!.top - rows[i - 1]!.top);
+  expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(1);
+
+  // My Orders / My Addresses / Sign Out are plain rows, same color as Home/
+  // About/etc — not gold like the language toggle.
+  const accountRowColors = new Set(rows.slice(-3).map((r) => r.color));
+  expect(accountRowColors.size).toBe(1);
+  const langColor = rows[4]!.color;
+  expect([...accountRowColors][0]).not.toBe(langColor);
+
+  console.log("[mobile menu rows, signed-in simulation]", JSON.stringify(rows));
+});
+
+test("mobile menu: no horizontal overflow with the menu open", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto(base() + "/");
+  await page.waitForTimeout(200);
+  await page.click("#navHamburger");
+  await expect(page.locator("#mobileMenu")).toHaveClass(/open/);
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth).toBeLessThanOrEqual(320);
 });

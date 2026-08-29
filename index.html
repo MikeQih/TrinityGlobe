@@ -25,31 +25,39 @@
         <li><a href="#contact" data-i18n="nav-contact">Contact</a></li>
         <li><a class="nav-lang" id="langToggle" href="#" onclick="toggleLanguage(); return false;">English</a></li>
       </ul>
-      <!-- Populated by src/cart.ts#initAccountNav() — empty until then, so it renders nothing if the bundle fails to load rather than a broken placeholder. -->
-      <div class="nav-account" id="navAccount"></div>
-      <button class="cart-toggle" id="cartToggle" type="button" aria-label="Cart" aria-haspopup="dialog" aria-expanded="false">
-        <span class="cart-icon-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
-          <span class="cart-count" id="cartCount" hidden>0</span>
-        </span>
-      </button>
-      <button class="nav-hamburger" id="navHamburger" aria-label="Menu">
-        <span></span><span></span><span></span>
-      </button>
+      <!-- Grouped so the whole cluster reaches the header's right edge via
+           its own margin-left:auto — see .nav-actions in style.css for why
+           this can't just live on .nav-links anymore. -->
+      <div class="nav-actions">
+        <!-- Populated by src/cart.ts#initAccountNav() — empty until then, so it renders nothing if the bundle fails to load rather than a broken placeholder. -->
+        <div class="nav-account" id="navAccount"></div>
+        <button class="cart-toggle" id="cartToggle" type="button" aria-label="Cart" aria-haspopup="dialog" aria-expanded="false">
+          <span class="cart-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+            <span class="cart-count" id="cartCount" hidden>0</span>
+          </span>
+        </button>
+        <button class="nav-hamburger" id="navHamburger" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
   </nav>
 
   <!-- Mobile Menu Overlay -->
   <div class="mobile-menu" id="mobileMenu">
-    <ul class="mobile-links">
+    <!-- Sign In / My Orders / My Addresses / Sign Out (appended here by
+         src/cart.ts#initAccountNav(), marked .mobile-account-row so a
+         re-render can remove and replace just those rows) share this same
+         <ul> — and therefore the exact same row styling and divider — as
+         Home/About/Collection/Contact/language, on purpose. -->
+    <ul class="mobile-links" id="mobileLinksList">
       <li><a href="#hero" onclick="closeMobileMenu()" data-i18n="nav-home">Home</a></li>
       <li><a href="#about" onclick="closeMobileMenu()" data-i18n="nav-about">About</a></li>
       <li><a href="#products" onclick="closeMobileMenu()" data-i18n="nav-collection">Collection</a></li>
       <li><a href="#contact" onclick="closeMobileMenu()" data-i18n="nav-contact">Contact</a></li>
       <li><button class="mobile-lang-btn" id="mobileLangToggle" onclick="toggleLanguage(); closeMobileMenu()">中文</button></li>
     </ul>
-    <!-- Sign In / My Orders / My Addresses / Sign Out — populated by src/cart.ts#initAccountNav() -->
-    <ul class="mobile-links mobile-account-links" id="mobileAccountLinks"></ul>
   </div>
 
   <!-- Cart / checkout drawer — markup is injected by assets/storefront.js (src/cart.ts) -->

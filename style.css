@@ -92,8 +92,21 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   list-style: none;
   gap: 2rem;
-  margin: 0 0 0 auto;
+  margin: 0;
   padding: 0;
+}
+
+/* Wraps account/cart/hamburger as a single unit so it reaches the header's
+   right edge on its own `margin-left: auto` — previously that auto-margin
+   lived on .nav-links, which is `display: none` below 960px, so on mobile
+   nothing was left to push the remaining items away from the logo and
+   they sat flush against it instead of at the right edge. */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .nav-links a {
@@ -163,7 +176,8 @@ a { text-decoration: none; color: inherit; }
   border: none;
   cursor: pointer;
   padding: 4px;
-  margin-left: 0.5rem;
+  /* Spacing from the cart icon now comes from .nav-actions' own `gap`,
+     not a margin here — keeps the two in step regardless of context. */
 }
 
 .nav-hamburger span {
@@ -226,42 +240,50 @@ a { text-decoration: none; color: inherit; }
   border-bottom: none;
 }
 
-.mobile-links a {
+/* One shared rule for every row's box model (padding/min-height/font/
+   letter-spacing) regardless of whether it's a static nav link, the
+   language toggle, or one of the account rows src/cart.ts#initAccountNav()
+   appends (Sign In, or My Orders/My Addresses/Sign Out once signed in) —
+   deliberately not split per-class, so there's no way for one of them to
+   drift out of sync with the others. Only `color` differs, and only for
+   the language toggle (.mobile-lang-btn), by design. */
+.mobile-links a,
+.mobile-links button {
   display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
   padding: 0.9rem 0;
+  text-align: left;
+  background: none;
+  border: none;
+  /* `font: inherit` first — a <button>'s UA stylesheet gives it its own
+     line-height (and sometimes font-family) that an <a> never has to
+     override, since an <a> already inherits body's line-height:1.7 by
+     default. Without this reset, .mobile-lang-btn/Sign Out measured a
+     visibly shorter row than every <a> row despite identical padding and
+     font-size. The properties below re-apply on top of the reset. */
+  font: inherit;
+  font-family: 'Inter', sans-serif;
   font-size: 0.78rem;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-muted);
+  cursor: pointer;
   transition: color 0.2s;
 }
 
-.mobile-links a:hover { color: var(--gold); }
-
-.mobile-lang-btn {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.9rem 0;
-  background: none;
-  border: none;
-  font-size: 0.78rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+.mobile-links a:hover,
+.mobile-links button:hover {
   color: var(--gold);
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
 }
 
-/* Sign In / My Orders / My Addresses / Sign Out — populated by
-   src/cart.ts#initAccountNav() into #mobileAccountLinks. Shares
-   .mobile-links a/li styling (it's the same list class); this just adds
-   the divider from the nav links above it. */
-.mobile-account-links {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
-}
+/* `.mobile-links .mobile-lang-btn`, not just `.mobile-lang-btn` — the
+   shared `.mobile-links button` rule above is a class+type selector
+   (specificity 0,1,1), which beats a single-class `.mobile-lang-btn`
+   (0,1,0) regardless of source order and silently overrode this back to
+   text-muted. */
+.mobile-links .mobile-lang-btn { color: var(--gold); }
 
 /* ── HERO ── */
 #hero {
@@ -958,7 +980,6 @@ footer .container {
   .nav-hamburger {
     display: flex;
     align-items: center;
-    margin-left: 0;
     width: 44px;
     height: 44px;
   }
@@ -968,6 +989,7 @@ footer .container {
      in source order wins regardless of which one sits inside a matching
      media query, and the base `.cart-toggle { width: 34px }` rule is
      defined after this block. */
+  .nav-actions { gap: 0.75rem; }
   #navbar {
     padding: 1rem 1.25rem;
     padding-top: calc(1rem + env(safe-area-inset-top));
