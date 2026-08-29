@@ -289,15 +289,47 @@ export function openAccountDrawer(): void {
 
 export function initAccountNav(): void {
   const container = document.getElementById("navAccount");
-  if (!container) return;
+  // #mobileLinksList only exists on pages with a hamburger menu of their own
+  // (currently just index.html) — orders.html/addresses.html render
+  // #navAccount directly inside a nav that has no mobile menu, so there's
+  // nothing to append into there, and that's fine. The account rows are
+  // appended directly into this *shared* list (not a separate container)
+  // and marked .mobile-account-row purely so a re-render can find and
+  // replace just those — everything else about them (styling, the
+  // divider, tap area) comes from being plain <li> children of the exact
+  // same <ul> as Home/About/Collection/Contact/language.
+  const mobileList = document.getElementById("mobileLinksList");
+  if (!container && !mobileList) return;
   const hasDrawer = document.getElementById("cartRoot") != null;
   let menuOpen = false;
 
   const closeMenu = (): void => {
     if (!menuOpen) return;
     menuOpen = false;
-    container.querySelector<HTMLElement>(".nav-account-dropdown")?.setAttribute("hidden", "");
-    container.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
+    container?.querySelector<HTMLElement>(".nav-account-dropdown")?.setAttribute("hidden", "");
+    container?.querySelector<HTMLElement>(".nav-account-trigger")?.setAttribute("aria-expanded", "false");
+  };
+
+  const wireActions = (root: HTMLElement, closesMobileMenu: boolean): void => {
+    root.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (closesMobileMenu) {
+          (window as unknown as { closeMobileMenu?: () => void }).closeMobileMenu?.();
+        }
+        const action = el.dataset.navAccountAction;
+        if (action === "signin") {
+          if (hasDrawer) openAccountDrawer();
+          else window.location.href = "/?signin=1";
+        } else if (action === "signout") {
+          void signOut();
+        } else if (action === "toggle-menu") {
+          menuOpen = !menuOpen;
+          container?.querySelector(".nav-account-dropdown")?.toggleAttribute("hidden", !menuOpen);
+          el.setAttribute("aria-expanded", String(menuOpen));
+        }
+      });
+    });
   };
 
   // Signed-in state is a single text trigger ("ACCOUNT") + dropdown (My
@@ -308,51 +340,84 @@ export function initAccountNav(): void {
   const render = (): void => {
     menuOpen = false;
     const session = getSession();
-    container.innerHTML = session
-      ? // An <a>, not a <button> — a <button>'s box height is computed from
-        // line-height rather than font metrics the way a plain inline
-        // element's is, which (even after resetting every other box-model
-        // property to match) left it a few pixels taller than .nav-links'
-        // <a> siblings and made it sit off their shared baseline. Matching
-        // the element type sidesteps that entirely instead of fighting it.
-        `<a href="#" class="nav-account-trigger" role="button" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
-          t("nav-account")
-        )}</a>
-         <div class="nav-account-dropdown" hidden>
-           <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
-           <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
-           <button type="button" class="nav-account-dropdown-link" data-nav-account-action="signout">${escapeHtml(
-             t("nav-sign-out")
-           )}</button>
-         </div>`
-      : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
 
-    container.querySelectorAll<HTMLElement>("[data-nav-account-action]").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        e.preventDefault();
-        const action = el.dataset.navAccountAction;
-        if (action === "signin") {
-          if (hasDrawer) openAccountDrawer();
-          else window.location.href = "/?signin=1";
-        } else if (action === "signout") {
-          void signOut();
-        } else if (action === "toggle-menu") {
-          menuOpen = !menuOpen;
-          container.querySelector(".nav-account-dropdown")?.toggleAttribute("hidden", !menuOpen);
-          el.setAttribute("aria-expanded", String(menuOpen));
-        }
-      });
-    });
+    if (container) {
+      container.innerHTML = session
+        ? // An <a>, not a <button> — a <button>'s box height is computed from
+          // line-height rather than font metrics the way a plain inline
+          // element's is, which (even after resetting every other box-model
+          // property to match) left it a few pixels taller than .nav-links'
+          // <a> siblings and made it sit off their shared baseline. Matching
+          // the element type sidesteps that entirely instead of fighting it.
+          `<a href="#" class="nav-account-trigger" role="button" data-nav-account-action="toggle-menu" aria-haspopup="true" aria-expanded="false">${escapeHtml(
+            t("nav-account")
+          )}</a>
+           <div class="nav-account-dropdown" hidden>
+             <a href="/orders.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-orders"))}</a>
+             <a href="/addresses.html" class="nav-account-dropdown-link">${escapeHtml(t("nav-my-address"))}</a>
+             <button type="button" class="nav-account-dropdown-link" data-nav-account-action="signout">${escapeHtml(
+               t("nav-sign-out")
+             )}</button>
+           </div>`
+        : `<a href="#" class="nav-account-signin" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a>`;
+      wireActions(container, false);
+    }
+
+    if (mobileList) {
+      // Remove only the rows this function owns, then re-append fresh
+      // ones at the end — the static Home/About/Collection/Contact/
+      // language <li>s above are never touched. Flat <li>s, not a
+      // dropdown: the mobile menu is already an explicit "I opened this"
+      // action, so there's no need for a second expand/collapse step the
+      // way the desktop trigger needs one to stay out of the nav's way.
+      mobileList.querySelectorAll(".mobile-account-row").forEach((el) => el.remove());
+      const rowsHtml = session
+        ? `<li class="mobile-account-row"><a href="/orders.html">${escapeHtml(t("nav-my-orders"))}</a></li>
+           <li class="mobile-account-row"><a href="/addresses.html">${escapeHtml(t("nav-my-address"))}</a></li>
+           <li class="mobile-account-row"><button type="button" data-nav-account-action="signout">${escapeHtml(
+             t("nav-sign-out")
+           )}</button></li>`
+        : `<li class="mobile-account-row"><a href="#" data-nav-account-action="signin">${escapeHtml(t("nav-sign-in"))}</a></li>`;
+      mobileList.insertAdjacentHTML("beforeend", rowsHtml);
+      // Scoped to the whole list, not just the new rows — harmless, since
+      // the static Home/About/etc. items never carry
+      // [data-nav-account-action] and so are never matched here; this
+      // just avoids needing to track which nodes are "new" separately.
+      wireActions(mobileList, true);
+    }
   };
 
   document.addEventListener("click", (e) => {
-    if (!container.contains(e.target as Node)) closeMenu();
+    if (container && !container.contains(e.target as Node)) closeMenu();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenu();
   });
 
-  void initAuth().then(render);
+  // Renders the signed-out (SIGN IN) state immediately, synchronously, so
+  // the account entry never depends on getSession()'s network round trip
+  // completing first. This isn't just a "usually fast enough" mitigation:
+  // this function runs from main.ts's DOMContentLoaded handler, and
+  // script.js's own DOMContentLoaded handler (which wires the hamburger's
+  // click-to-open behaviour) is a synchronous listener on that same event —
+  // the browser dispatches DOMContentLoaded's listeners back-to-back with
+  // no room for a user click to be processed in between. So by the time the
+  // hamburger can physically respond to a tap, this synchronous call has
+  // already run, and SIGN IN is already in the DOM regardless of how slow
+  // or unreliable the Supabase round trip turns out to be on the visitor's
+  // network. getSession() reads a plain module-level variable (see
+  // auth.ts), so this is always the signed-out view at this point — never
+  // a stale/wrong signed-in flash.
+  render();
+  initAuth()
+    .then(render)
+    .catch((err: unknown) => {
+      // Leave the signed-out SIGN IN row already rendered above in place —
+      // a failed/offline session check should degrade to guest checkout,
+      // not an empty account slot.
+      // eslint-disable-next-line no-console
+      console.error("initAuth failed — nav stays in signed-out state", err);
+    });
   onAuthChange(render);
   onLangChange(render);
 }
