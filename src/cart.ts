@@ -5,6 +5,7 @@ import { computeShippingFeeCents, computeRemainingForFreeShippingCents, effectiv
 import { SELF_COLLECTION_ENABLED } from "./feature-flags";
 import { CHECKOUT_ENABLED } from "./checkout-availability";
 import { getStripeClient } from "./lib/stripe-elements";
+import { confirmPaymentWithStatusFallback } from "./lib/payment-confirmation";
 import type { StripeCheckoutElementsSdk } from "@stripe/stripe-js";
 import {
   getSession,
@@ -145,8 +146,20 @@ let ageConfirmed = false;
 // innerHTML while these point at a live Stripe iframe would orphan it.
 let checkoutSdk: StripeCheckoutElementsSdk | null = null;
 let paymentOrderId: string | null = null;
+let paymentSessionId: string | null = null;
 let paymentErrorMessage: string | null = null;
 let paymentConfirming = false;
+// Set when confirmPaymentWithStatusFallback() times out with neither
+// confirm() nor the Checkout Session status poll having resolved — see
+// handleConfirmPayment(). Distinct from paymentErrorMessage: this is not a
+// failure, the payment may well have actually gone through, so the UI shows
+// reassurance (My Orders / WhatsApp) rather than an error or a retry button.
+let paymentUncertain = false;
+// Bumped on every "back" from the payment stage and every fresh mount, so a
+// confirmPaymentWithStatusFallback() call that's still racing in the
+// background from a *previous* attempt can tell it's stale and must not
+// touch module state (or a DOM the user has since navigated away from).
+let paymentConfirmGeneration = 0;
 
 // Generated once per "cart -> checkout" transition (goToCheckout()) and
 // reused across every submit attempt within that same visit — a double-
@@ -627,8 +640,11 @@ function handleBack(): void {
 function resetPaymentState(): void {
   checkoutSdk = null;
   paymentOrderId = null;
+  paymentSessionId = null;
   paymentErrorMessage = null;
   paymentConfirming = false;
+  paymentUncertain = false;
+  paymentConfirmGeneration += 1;
 }
 
 // ── Cart view ──
@@ -1060,9 +1076,22 @@ function paymentViewHtml(): string {
     </div>
     <div class="cart-drawer-body">
       ${paymentErrorMessage ? `<div class="checkout-error">${escapeHtml(paymentErrorMessage)}</div>` : ""}
+      ${paymentUncertain ? paymentUncertainHtml() : ""}
       <div id="ck-payment-element" class="checkout-payment-element"></div>
     </div>
     ${paymentFooterHtml()}
+  `;
+}
+
+function paymentUncertainHtml(): string {
+  return `
+    <div class="checkout-payment-uncertain">
+      <p>${t("checkout-payment-uncertain-msg")}</p>
+      <a class="btn-dark cart-whatsapp-btn" href="${escapeAttr(WHATSAPP_URL)}" target="_blank" rel="noopener">${t(
+    "cart-checkout-disabled-whatsapp"
+  )}</a>
+      ${isAuthAvailable() && getSession() ? `<a class="btn-dark" href="/orders.html">${t("nav-my-orders")}</a>` : ""}
+    </div>
   `;
 }
 
@@ -1071,7 +1100,7 @@ function paymentFooterHtml(): string {
     <div class="cart-drawer-footer">
       ${checkoutSummaryHtml()}
       <button type="button" class="btn-gold" data-action="confirm-payment" ${paymentConfirming ? "disabled" : ""}>
-        ${paymentConfirming ? t("checkout-submitting") : t("checkout-pay-now")}
+        ${paymentUncertain ? t("checkout-payment-uncertain-btn") : paymentConfirming ? t("checkout-submitting") : t("checkout-pay-now")}
       </button>
     </div>
   `;
@@ -1120,6 +1149,12 @@ async function mountPaymentElement(clientSecret: string): Promise<void> {
     return;
   }
 
+  // The Checkout Session id is always the part before "_secret_" in its
+  // client secret (Stripe's own convention) — needed separately from
+  // checkoutSdk so handleConfirmPayment() can poll the session's status
+  // directly via get-checkout-session-status.ts as a fallback to confirm().
+  paymentSessionId = clientSecret.split("_secret_")[0] ?? null;
+
   checkoutSdk = stripe.initCheckoutElementsSdk({
     clientSecret,
     elementsOptions: { appearance: paymentElementAppearance() },
@@ -1132,16 +1167,30 @@ async function mountPaymentElement(clientSecret: string): Promise<void> {
   if (document.getElementById("ck-payment-element")) paymentElement.mount("#ck-payment-element");
 }
 
+// How long "PROCESSING…" stays up before switching to the "still
+// confirming, here's how to reach us" reassurance UI, and the total bound
+// after which polling gives up for good — see confirmPaymentWithStatusFallback()
+// and its doc comment for why this race exists at all (a real, twice-
+// reproduced case of actions.confirm() never settling after a completed 3DS
+// challenge, even though the Checkout Session itself had genuinely paid).
+const CONFIRM_UNCERTAIN_AFTER_MS = 40_000;
+const CONFIRM_GIVE_UP_AFTER_MS = 210_000;
+const CONFIRM_POLL_INTERVAL_MS = 3_000;
+
 async function handleConfirmPayment(): Promise<void> {
-  if (!checkoutSdk || paymentConfirming) return;
+  if (!checkoutSdk || paymentConfirming || !paymentSessionId) return;
+  const sessionId = paymentSessionId;
+  const generation = paymentConfirmGeneration;
 
   paymentConfirming = true;
+  paymentUncertain = false;
   paymentErrorMessage = null;
   updatePaymentFooter();
   const errorEl = drawerEl.querySelector(".checkout-error");
   errorEl?.remove();
 
   const loadResult = await checkoutSdk.loadActions();
+  if (generation !== paymentConfirmGeneration) return; // stale — "back" was clicked meanwhile
   if (loadResult.type === "error") {
     paymentConfirming = false;
     paymentErrorMessage = loadResult.error.message;
@@ -1149,21 +1198,58 @@ async function handleConfirmPayment(): Promise<void> {
     return;
   }
 
-  const result = await loadResult.actions.confirm({ redirect: "if_required" });
-  paymentConfirming = false;
+  const outcome = await confirmPaymentWithStatusFallback({
+    confirm: () => loadResult.actions.confirm({ redirect: "if_required" }),
+    checkPaid: async () => {
+      const status = await getCheckoutSessionStatus(sessionId);
+      return status.paymentStatus === "paid";
+    },
+    pollIntervalMs: CONFIRM_POLL_INTERVAL_MS,
+    uncertainAfterMs: CONFIRM_UNCERTAIN_AFTER_MS,
+    giveUpAfterMs: CONFIRM_GIVE_UP_AFTER_MS,
+    onUncertain: () => {
+      if (generation !== paymentConfirmGeneration) return;
+      paymentUncertain = true;
+      renderPaymentUncertain();
+    },
+  });
+  if (generation !== paymentConfirmGeneration) return; // stale — ignore, another attempt is live
 
-  if (result.type === "success") {
-    // Genuinely paid without needing to leave the page (e.g. a card with no
-    // 3DS challenge) — the webhook will confirm inventory/send emails on its
-    // own schedule, same as it always has; this is just the customer-facing
-    // "you're done" moment, mirroring the ?checkout=success redirect path.
+  if (outcome.type === "success") {
+    // Genuinely paid — either confirm() itself resolved that way (e.g. a
+    // card with no 3DS challenge), or the Checkout Session status poll
+    // caught it first while confirm() was still hung. Either way, the
+    // webhook confirms inventory/sends emails on its own schedule, same as
+    // it always has; this is just the customer-facing "you're done" moment.
+    paymentConfirming = false;
     closeDrawer();
     applyCheckoutSuccess();
     return;
   }
 
-  paymentErrorMessage = result.error.message;
+  if (outcome.type === "uncertain") {
+    // Already showing the reassurance UI via onUncertain() above — nothing
+    // left to do. paymentConfirming stays true so "PAY NOW" stays disabled;
+    // re-confirming an already-in-flight PaymentIntent is not something to
+    // invite the customer into, and the order/session/reservation must not
+    // be duplicated by starting a fresh checkout attempt from here either.
+    return;
+  }
+
+  paymentConfirming = false;
+  paymentErrorMessage = outcome.error.message;
   renderPaymentError();
+}
+
+function renderPaymentUncertain(): void {
+  updatePaymentFooter();
+  const body = drawerEl.querySelector(".cart-drawer-body");
+  if (!body || body.querySelector(".checkout-payment-uncertain")) return;
+  body.querySelector(".checkout-error")?.remove();
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = paymentUncertainHtml();
+  const div = wrapper.firstElementChild;
+  if (div) body.prepend(div);
 }
 
 function renderPaymentError(): void {

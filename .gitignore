@@ -8,3 +8,5 @@ admin-app/node_modules/
 admin-app/dist/
 *.log
 deno.lock
+test-results/
+playwright-report/

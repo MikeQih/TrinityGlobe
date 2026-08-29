@@ -1539,6 +1539,35 @@ footer .container {
   margin-bottom: 1rem;
 }
 
+/* Shown when confirmPaymentWithStatusFallback() times out with neither
+   confirm() nor the Checkout Session status poll resolved (src/cart.ts) —
+   reassurance, not an error, so it's styled distinct from .checkout-error. */
+.checkout-payment-uncertain {
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  padding: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.checkout-payment-uncertain p {
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.checkout-payment-uncertain .btn-dark {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  border: none;
+  font-family: 'Inter', sans-serif;
+}
+
+.checkout-payment-uncertain .btn-dark + .btn-dark {
+  margin-top: 0.5rem;
+}
+
 /* Guest-vs-Google choice screen (accountChoiceHtml in src/cart.ts) */
 
 .checkout-account-choice {
