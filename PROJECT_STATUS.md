@@ -2,7 +2,7 @@
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
 > 最后更新：2026-08-29
-> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：**唯一一次真实 Live S$0.50 PayNow 付款+全额退款测试已完成并闭环**（详见下面"Live S$0.50 PayNow 付款+退款闭环"一节），临时豁免机制清理 PR 已在 `dev` 提交、新 `dev→main` PR 已开，**尚未合并**，Production 结账仍保持关闭。正式向公众开放 Card 支付前，仍欠一次非自动化的真实 Chrome 3DS 人工测试（不阻塞已完成的 PayNow 验证）。
+> **Production 结账已正式开放**（`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 均为 `true`）。真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并进 `main`（当前 Production 部署自 `main@1968603`），开放前只读核查、开放后服务端/UI 验证、一次无支付烟雾测试均已通过，详见下面"2026-08-29（续四）"一节。
 
 ## 项目背景
 
@@ -1074,6 +1074,27 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-29（续四）：真人 3DS 验证通过，PR #5/#6 已合并，Production 结账正式开放
+
+**PR #5：Deploy Preview 真人 3DS 验证**——用户本人在 PR #5 Deploy Preview（`https://deploy-preview-5--trinity-globe.netlify.app`）上用 Stripe 官方 3DS 测试卡（`4000002500003155`）手动完成了一笔 test-mode 订单（Hennessy VSOP，S$85+S$15 运费=S$100），全程由用户本人输入卡号、点击 PAY NOW、完成 3DS 挑战，未使用任何自动化脚本操作支付字段。验证结果：支付最终显示成功（未卡在 PROCESSING）；订单/Checkout Session/PaymentIntent/库存预留均恰好一次，无重复；webhook 恰好处理一次；库存扣减一次后已手动恢复至 50；支付已在 Stripe 后台全额退款（因是后台直接退款而非走 admin-app 流程，订单状态/`refunded_cents` 已手动同步为 `refunded`/10000，与 Stripe 侧一致）。**一处已知偏差**：结账时客户邮箱填的是 `3ds-test@example.com`，不是 Resend 沙盒地址——`example.com` 是 IANA 保留域名收不到信，不构成隐私风险，但下次同类验证客户邮箱也应统一用 `delivered@resend.dev`。验证通过后，PR #5 用 **Create a merge commit** 合并进 `main`（合并提交 `9997a12`），未删除 `dev` 分支。
+
+**PR #6：清理 PR #5 遗漏的 GOLIVE 引用**——合并后发现 `netlify.toml` 的 `SECRETS_SCAN_OMIT_KEYS` 列表和一段说明注释仍残留 `GOLIVE_TEST_EMAIL` 字样及对已删除文件的引用。开了一个只改这一处的最小 PR（`dev@4074e5a`），确认全仓库大小写不敏感搜索 `GOLIVE`/`golive-test`/`GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 之后只命中本文件的历史记录，checks 通过后用 **Create a merge commit** 合并（合并提交 `1968603`），同样未删除 `dev`。
+
+**Production 正式开放在线结账**——开放前只读核查全部通过（Production 部署确认来自 `main@1968603`；76 个真实 SKU `website_stock` 全部为 50；`pending_payment`/`paid`/`payment_review` 订单数=0，`pending` 库存预留数=0，`pending` 退款请求数=0；Live Stripe Restricted Key、Live Snapshot Webhook（0% 错误率）、Resend Webhook 均状态正常；admin-app 正常可访问）。只改了 storefront Netlify **Production** 作用域的 `CHECKOUT_ENABLED=true`/`VITE_CHECKOUT_ENABLED=true`（Deploy Previews/Branch deploys/Stripe/Resend/Supabase/`SITE_URL`/`CHECKOUT_UI_MODE` 均未改动，代码/commit/push 均未涉及），随后从当前 `main@1968603` 触发一次 Production no-cache 部署（12 个 Functions 全部成功部署）。部署后验证：`create-checkout-session`/`resume-checkout-session` 均不再返回 503；不存在的 SKU 返回 `409 insufficient_stock` 且未创建订单；无登录调用 `resume-checkout-session` 返回 `401`（不是 503）；正式网站购物车按钮从 "CHECKOUT UNAVAILABLE" 变为可点击的 "CHECKOUT"；真实 Payment Element 显示银行卡+PayNow，币种 SGD。
+
+**无支付烟雾测试**——用 `delivered@resend.dev` + Hennessy VSOP 在 Production 创建了一笔真实待付款订单 `#7536fac7`（`cs_live_b1pxACqSwLKxPS69Lr...`），确认 Payment Element 正常出现、金额 S$85+S$15=S$100 规则正确，全程未输入卡号/未扫描 PayNow/未点击 PAY NOW。随后通过 admin-app 的 "Cancel order" 正常员工取消入口（`admin-cancel-order.ts`：先 `stripe.checkout.sessions.expire()`，再调用 `cancel_pending_order_as_staff` RPC）完成取消，订单状态变为 `cancelled`，对应库存预留状态变为 `released`。
+
+**库存表述澄清（用户发现报告措辞有误，已只读核查更正，未改任何数据）**：初版报告把这笔烟雾测试的库存变化写成"`website_stock` 49→50"，是错误表述，混淆了 `website_stock` 和 `get_available_stock()`。按 `0001_init.sql` 里的既定模型（`reserve_inventory` 不动 `website_stock`；只有 `confirm_inventory_reservation`——即 webhook 确认付款成功——才会真的扣减 `website_stock` 并写一条 `inventory_movements`；`release_inventory_reservation` 对一条还是 `pending` 状态的预留只是状态翻转，不产生任何库存移动），只读核查确认：
+- `inventory_movements` 表里**没有任何一条**引用订单 `7536fac7`（该 SKU 最近一条 `inventory_movements` 是更早那笔 3DS 测试订单 `e524df1e` 的 `reservation_confirmed`，与本次烟雾测试无关）；
+- `inventory.website_stock` 全程保持 **50 → 50 → 50**，从未变成 49；
+- 变成 49 的是 `get_available_stock()`（可售库存 = `website_stock` − 未过期 `pending` 预留之和）：下单时预留生效 → 可售库存 50→49；取消后预留变 `released` → 可售库存 49→50；
+- 该订单的 `inventory_reservations` 行状态只经历了 `pending → released`，从未变成过 `confirmed`，因此完全没有库存扣减/恢复的 `inventory_movements` 记录，与代码逻辑（第 554-555 行早前记录的同一模型）完全一致。
+正确表述应为：**`website_stock` 50→50→50，`available stock`（`get_available_stock()`）50→49→50**。本次澄清纯只读，未创建新订单、未修改任何数据，两个 Production 结账开关无需回退。
+
+**最终状态**：`CHECKOUT_ENABLED`（Production）= `true`，`VITE_CHECKOUT_ENABLED`（Production）= `true`，Trinity Globe 官网结账正式对公众开放。已取消的烟雾测试订单 `#7536fac7` 完整保留、未物理删除。全程未发生第二笔真实付款，未产生任何邮件/退款/库存扣减。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -1087,8 +1108,7 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-0. **【最新，2026-08-29】清理 PR 待合并**：唯一一次真实 Live S$0.50 PayNow 付款+全额退款已经完整跑通并闭环（详见上面"Live S$0.50 PayNow 付款+退款闭环"一节），临时豁免机制（`golive-test-shipping.ts` 及其调用/测试）已在 `dev` 删除，`dev→main` 的新 PR 已开、Deploy Preview 和 checks 通过，**但按要求尚未合并**——需要用户明确授权后才合并，合并前 Production 结账继续保持关闭。
-0.5 **3DS 疑点仍未处理**：Payment Element 官方 3DS 测试卡（`4000002500003155`）在本地回归中点击 Stripe"Complete"后前端一直卡在"PROCESSING…"，但 Stripe 后端其实已真实支付成功（已用测试模式退款关闭）——用真实 Chrome 手动走一遍同样路径确认是否复现，复现的话是真实客户可见 bug，需要在 `dev` 开新 PR 修。**这件事不阻塞已完成的 PayNow 验证**，但正式向公众开放 Card 支付前必须先排完。
+0. **【最新，2026-08-29】Production 结账已正式开放**：真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并（详见上面"2026-08-29（续四）"一节），`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 在 Production 均为 `true`，官网可以正常接受真实客户付款。**库存基线仍是临时统一的 50**（见上面"上线前检查清单"里"库存统一为 50 只是临时测试基线"这一条）——这是当前唯一仍未解决的真实运营风险：如果实际库存不足 50，客户下单后可能缺货，需要老板尽快确认每款酒的真实可售数量。
 1. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
 2. **政策页面法律分工已经和用户对齐**（2026-08-26）：Terms & Conditions、Privacy Policy 这两份要发给老板找律师看（合同责任限制条款 + PDPA 都是真实法律/监管风险）；Delivery Policy、Refund Policy 剩下的占位符是业务事实（配送时效/范围/派送失败流程、退款窗口天数），用户自己填数字就行，不需要律师；Age Restriction 页建议搭 Terms 的顺风车让律师扫一眼年龄核实流程是否符合《酒类管制法》，不用单独立项。**这几份文件本身目前还没人去发给老板/律师**，只是分好了类。
 
