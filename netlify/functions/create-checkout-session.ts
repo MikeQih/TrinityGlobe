@@ -8,7 +8,6 @@ import { isCheckoutEnabled, checkoutDisabledResponse } from "./_lib/checkout-gat
 import { createCheckoutSessionRequestSchema } from "./_lib/schemas";
 import { computeShippingFeeCents, computeInclusiveGstCents, effectiveUnitPriceCents } from "../../src/pricing";
 import { SELF_COLLECTION_ENABLED } from "../../src/feature-flags";
-import { isGoLiveTestShippingExempt } from "./_lib/golive-test-shipping";
 
 // Kept identical to the reservation TTL passed into create_pending_order, and
 // used again below as the Stripe Checkout Session's own `expires_at`. Without
@@ -252,32 +251,12 @@ export default async (req: Request, context: Context): Promise<Response> => {
 
   const subtotalCents = lineItems.reduce((sum, li) => sum + li.lineTotalCents, 0);
 
-  // See _lib/golive-test-shipping.ts — dormant (always false) unless both
-  // GOLIVE_TEST_SKU and GOLIVE_TEST_EMAIL are configured, in which case it
-  // still requires the exact single-item/qty/price/email match described
-  // there. Deliberately checked against the raw `unit_price_cents` DB
-  // column (not the tiered `effectiveUnitPriceCents` used for lineItems),
-  // per its own contract.
-  const soleItem = items.length === 1 ? items[0] : undefined;
-  const soleVariant = soleItem ? variantBySku.get(soleItem.sku) : undefined;
-  const goLiveTestShippingExempt = isGoLiveTestShippingExempt({
-    items: items.map((i) => ({ sku: i.sku, qty: i.qty })),
-    deliveryMethod,
-    recipientEmail: recipient.email,
+  const shippingFeeCents = computeShippingFeeCents({
     subtotalCents,
-    variant: soleVariant ? { isActive: soleVariant.is_active, unitPriceCents: soleVariant.unit_price_cents } : undefined,
-    testSku: process.env.GOLIVE_TEST_SKU,
-    testEmail: process.env.GOLIVE_TEST_EMAIL,
+    freeShippingThresholdCents: settings.free_shipping_threshold_cents,
+    standardShippingFeeCents: settings.standard_shipping_fee_cents,
+    deliveryMethod,
   });
-
-  const shippingFeeCents = goLiveTestShippingExempt
-    ? 0
-    : computeShippingFeeCents({
-        subtotalCents,
-        freeShippingThresholdCents: settings.free_shipping_threshold_cents,
-        standardShippingFeeCents: settings.standard_shipping_fee_cents,
-        deliveryMethod,
-      });
   const totalCents = subtotalCents + shippingFeeCents;
   // Per IRAS rules a business may only charge GST from its registration's
   // effective date onward — checked here as a plain timestamp comparison,

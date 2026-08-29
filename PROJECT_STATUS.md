@@ -2,7 +2,7 @@
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
 > 最后更新：2026-08-29
-> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：PR #3 已合并 `main`（merge commit `ba97d71`），Production 隐藏测试 SKU 已就位但结账仍关闭，等用户明确说"可以开始真实 S$0.50 测试"才继续下一阶段——不要主动催。
+> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：**唯一一次真实 Live S$0.50 PayNow 付款+全额退款测试已完成并闭环**（详见下面"Live S$0.50 PayNow 付款+退款闭环"一节），临时豁免机制清理 PR 已在 `dev` 提交、新 `dev→main` PR 已开，**尚未合并**，Production 结账仍保持关闭。正式向公众开放 Card 支付前，仍欠一次非自动化的真实 Chrome 3DS 人工测试（不阻塞已完成的 PayNow 验证）。
 
 ## 项目背景
 
@@ -1033,6 +1033,47 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-29（续三）：唯一一次 Live S$0.50 PayNow 付款+全额退款闭环，临时豁免机制已清理
+
+**用户授权并本人完成扫码付款**：2026-08-29 18:05（SGT）通过 DBS PayNow 扫码支付 S$0.50，Stripe 后台确认交易"已成功"。这是本项目第一笔、也是唯一一笔真实 Live 资金交易。
+
+**付款链路（全部通过，数据来自 Stripe 后台 + Supabase 只读查询，非人工假设）**：
+- 唯一一笔 Live 订单 `b591bb60-1030-41cb-a42b-e7f6f3cef3e3`：`stripe_checkout_session_id=cs_live_a1rOSysuFUO7dq2DtTsu6W2oPj8NaRHZUG9ncKGUb0EOjTXHj24raLgOWb`，`stripe_payment_intent_id=pi_3U9iu6BAev1issbv04SXCR8L`，金额精确为 S$0.50（`subtotal_cents=50, shipping_fee_cents=0, total_cents=50`）——命中的是"隐藏测试 SKU 免运"这个服务端专属机制（只在购物车恰好 1 件、SKU/邮箱/价格/配送方式全部精确匹配时生效），前端结账抽屉当时显示的"S$15.50"只是没有刷新的客户端旧汇总文字，不是真实扣款金额。
+- Webhook：`checkout.session.completed`（`evt_1U9j8fBAev1issbv25jKJKH3`）只处理了一次，时间戳 10:05:34 UTC = 18:05:34 SGT，与用户报告的付款时间吻合。
+- 订单状态 `pending_payment → paid`，隐藏 SKU 库存 `website_stock` 1→0（只扣减一次），对应 `inventory_reservations` 变为 `confirmed`。
+- 客户确认邮件送达 `delivered@resend.dev`；员工通知邮件按设计发到了真实员工邮箱（预期行为，不是泄漏）。
+- admin-app 订单详情页显示完全正确（金额、Stripe IDs、Paid 状态、Remaining refundable）。
+
+**退款链路（全部通过）**：
+- 通过 admin-app 正式"Refund in full"入口提交**且只提交了一次**，从未重复点击、从未绕开该入口。
+- PayNow 退款是异步的：`refund_requests` 表恰好 1 条记录，`amount_cents=50`，最终状态由 Stripe 的 `refund.updated` webhook（`evt_1U9jK4BAev1issbv9yNJpGNn`，同样只处理一次）确认为 `succeeded` 后才写入，全程没有提前手动标记成功。
+- 订单最终状态 `refunded`，`refunded_cents=50`，`stripe_refund_id=pyr_1U9jJsBAev1issbvtdBM5jJ2`。
+- 隐藏 SKU 库存和对应 `inventory_reservations` 均未被退款自动回补/回滚（库存仍是 0，预留仍是 `confirmed`）——退款只影响资金状态，不影响库存审计轨迹。
+
+**资金净影响（准确表述，不要简化成"双方均无净影响"）**：
+- **客户侧**：支付 S$0.50 → 退回 S$0.50，净额 **S$0**。
+- **商户侧**：承担了这笔 Live PayNow 交易约 **S$0.01** 的 Stripe 手续费（退款不退回手续费，是 Stripe PayNow 的标准规则），Stripe 账户余额净变化约 **−S$0.01**。这是本次验证的真实、极小成本，不应被抹去。
+
+**只读收尾核查（付款+退款全部确认之后单独做的一轮，纯 SELECT，无任何写操作）**：
+- 隐藏测试 variant：`is_active=false`，对应 `inventory.website_stock=0`，行本身均未删除。
+- 排除隐藏 variant 后，`inventory` 恰好 76 行，全部 `website_stock=50`，没有任何偏离基线的真实 SKU。
+- Live 订单 `status=refunded, refunded_cents=50`；`refund_requests` 恰好 1 条 `status=succeeded, amount_cents=50`。
+- 全库 `pending_payment`/`paid`/`payment_review` 订单数 = 0；`pending` 库存预留数 = 0；`pending` 退款请求数 = 0。
+- Netlify Production：`GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 已删除；`CHECKOUT_ENABLED=false`、`VITE_CHECKOUT_ENABLED=false`；`create-checkout-session`/`resume-checkout-session` 均返回 503 `checkout_disabled`；前台购物车显示"Checkout Unavailable"+ WhatsApp 兜底。全程未触碰 Live Stripe/Webhook/Resend/Supabase 任何配置。
+
+**永久保留、未删除的真实审计记录**：这笔 Live 订单本身及其 `order_items`、`order_status_history`、`inventory_reservations`（confirmed 那条）、对应的 `inventory_movements`、`email_logs`、`refund_requests`、`stripe_events`（两条 webhook 去重记录）全部原样保留在 Supabase，没有像历史上每一轮 Stripe 测试模式数据那样清空。
+
+**临时豁免机制清理（独立 PR，在 `dev` 分支）**：验证完成后，按之前立的规矩彻底删除了这套一次性代码：
+- 删除 `netlify/functions/_lib/golive-test-shipping.ts`（整个文件）
+- `netlify/functions/create-checkout-session.ts` 里对它的 import 和调用全部移除，运费计算恢复成直接调用 `computeShippingFeeCents`，没有任何隐藏 SKU 判断分支
+- 删除 `tests/golive-test-shipping.test.ts`（整个文件，纯针对该机制的单元测试）
+- `tests/create-checkout-session.test.ts` 重写：去掉所有 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 相关场景，改成通用商品的正常性回归（`CHECKOUT_ENABLED=false` 优先返回 503、S$85 商品+S$15 运费=S$100、订阅小计满 S$120 免运、客户端塞入的价格字段被服务端忽略、inactive SKU 返回 409）——保留的是对 `create-checkout-session.ts` 核心逻辑本身的覆盖，不是临时机制的覆盖
+- 保留不动：Payment Element、3DS 确认兜底（`payment-confirmation.ts`）、结账总开关 `CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED`、正常 S$15 运费/S$120 免运门槛逻辑、Stripe 退款 webhook 状态机及其测试
+- 全部改动后 storefront/admin-app 的 typecheck、test（91 个测试全部通过）、build 均通过；已扫描确认改动本身不含任何密钥
+- 这次不再是"暂停等待"，而是主动清理完成，文档里不再保留任何暗示"这条通道可以再次启用"的说法——它已经被物理删除，不是被禁用
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -1046,7 +1087,8 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-0. **【最新，2026-08-29】3DS 疑点排查**：Payment Element 官方 3DS 测试卡（`4000002500003155`）在本地回归中点击 Stripe"Complete"后前端一直卡在"PROCESSING…"，但 Stripe 后端其实已真实支付成功（已用测试模式退款关闭）——用真实 Chrome 手动走一遍同样路径确认是否复现，复现的话是真实客户可见 bug，需要在 `dev` 开新 PR 修（详见上面"Playwright 真实回归"章节）。这件事排完/决定忽略之后，才继续下一步唯一一次真实 Live S$0.50 PayNow 测试。
+0. **【最新，2026-08-29】清理 PR 待合并**：唯一一次真实 Live S$0.50 PayNow 付款+全额退款已经完整跑通并闭环（详见上面"Live S$0.50 PayNow 付款+退款闭环"一节），临时豁免机制（`golive-test-shipping.ts` 及其调用/测试）已在 `dev` 删除，`dev→main` 的新 PR 已开、Deploy Preview 和 checks 通过，**但按要求尚未合并**——需要用户明确授权后才合并，合并前 Production 结账继续保持关闭。
+0.5 **3DS 疑点仍未处理**：Payment Element 官方 3DS 测试卡（`4000002500003155`）在本地回归中点击 Stripe"Complete"后前端一直卡在"PROCESSING…"，但 Stripe 后端其实已真实支付成功（已用测试模式退款关闭）——用真实 Chrome 手动走一遍同样路径确认是否复现，复现的话是真实客户可见 bug，需要在 `dev` 开新 PR 修。**这件事不阻塞已完成的 PayNow 验证**，但正式向公众开放 Card 支付前必须先排完。
 1. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
 2. **政策页面法律分工已经和用户对齐**（2026-08-26）：Terms & Conditions、Privacy Policy 这两份要发给老板找律师看（合同责任限制条款 + PDPA 都是真实法律/监管风险）；Delivery Policy、Refund Policy 剩下的占位符是业务事实（配送时效/范围/派送失败流程、退款窗口天数），用户自己填数字就行，不需要律师；Age Restriction 页建议搭 Terms 的顺风车让律师扫一眼年龄核实流程是否符合《酒类管制法》，不用单独立项。**这几份文件本身目前还没人去发给老板/律师**，只是分好了类。
 
