@@ -1,8 +1,8 @@
 # Trinity Globe 商城项目 — 当前状态清单
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
-> 最后更新：2026-08-28
-> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：功能开发已完成，用户明确说"现在还没准备好"，先不合并 `dev` 到 `main`——不要主动催。
+> 最后更新：2026-08-29
+> **上线前还差什么，直接看"上线前检查清单"这一节**（在"三方账号进度"后面）。当前状态：PR #3 已合并 `main`（merge commit `ba97d71`），Production 隐藏测试 SKU 已就位但结账仍关闭，等用户明确说"可以开始真实 S$0.50 测试"才继续下一阶段——不要主动催。
 
 ## 项目背景
 
@@ -1004,6 +1004,35 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-29（续）：PR #3 已合并 main，Production 隐藏 SKU 已就位，结账仍关闭
+
+**合并**：用户明确确认后，用 "Create a merge commit"（非 squash/rebase）把 PR #3（`dev`→`main`）合并，merge commit `ba97d71`；`dev` 分支按要求**未删除**。storefront（trinity-globe）与 admin-app（trinity-globe-admin）Production 均已自动部署到 `main@ba97d71` 并 Published。
+
+**合并后休眠验证（全部通过）**：Production 环境变量里 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 均不存在；`CHECKOUT_ENABLED=false`、`VITE_CHECKOUT_ENABLED=false`；`create-checkout-session`/`resume-checkout-session` 直连测试均返回 503 `checkout_disabled`；前台购物车抽屉显示"Checkout Unavailable"+ WhatsApp 兜底按钮；正常商品 S$85 购物车仍显示"再加 S$35 免运"（S$120 门槛/S$15 运费逻辑未受影响）；`netlify/functions/` 下 12 个 Function 源文件确认齐全且均已在 Production 构建日志里打包成功；Supabase 数据库 `orders=0 reservations=0 refunds=0`，76 个真实 SKU 库存全部仍是 50；Stripe Live Webhook Endpoint（`https://trinityglobe.sg/.netlify/functions/stripe-webhook`）状态"使用中"；Resend 的 `trinityglobe.sg` 域名仍为 Verified。
+
+**隐藏测试 SKU 已创建（Production，结账仍关闭，未公开）**：生成了一个新的随机、不与任何现有 SKU 冲突的测试 SKU（值本身不写进这份文件、不出现在对话或截图里，只标注"已配置"），通过 Supabase SQL Editor 直接在事务里插入了对应的 `product_variants` 行（`unit_price_cents=50`，`case_price_cents`/`case_size`/`five_case_size`/`five_case_price_cents` 均为 `null`，`is_active=true`，`allow_self_collection=false`）和 `inventory` 行（`website_stock=1`），**没有写进 `products.json`**，因此不会出现在前台目录/搜索/collection 或任何公开页面（已用 `products-live` Function 的公开响应确认）。随后在 Netlify storefront 项目里新增了 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL`（`delivered@resend.dev`）两个环境变量，**只配置了 Production 这一个 deploy context**（Deploy Previews/Branch deploys/Preview Server 均留空），并触发了一次 Production 的 no-cache 全新构建以确保这两个值真正生效（Netlify Functions 的环境变量是构建时固化的，仪表盘改值不会让已部署的 Function 立即感知）。重新部署后再次确认 `CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 依然是 `false`，`create-checkout-session`/`resume-checkout-session` 依然 503。
+
+**准备后最终状态**：`orders=0 reservations=0 refunds=0`；`inventory`/`product_variants` 从 76 行变成 77 行（76 个真实 SKU 库存原封不动 + 1 个隐藏测试 SKU 库存=1）；Live Restricted Key、Live Webhook、Resend 配置均未触碰；**全程没有调用任何真实 Stripe API 创建 Checkout Session，没有发生任何真实资金操作**。按用户指示，在此暂停，等待用户明确说"可以开始真实 S$0.50 测试"后才继续下一阶段（且到时在 PayNow 二维码出现的那一步就停下来，交给用户本人扫码）。
+
+**⚠️ 重要区别（务必记住）**：等真正跑通一笔 Live S$0.50 订单之后，那笔订单本身及其 `refund_requests`/`stripe_events`/`email_logs`/`order_status_history` 属于真实财务与审计记录，**不能**像之前每一轮 Stripe 测试模式数据那样直接删除清空。测试结束后只允许：删除 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 这两个环境变量、把隐藏 variant 设为 `is_active=false`（不删除该行）、保留订单/退款/webhook/库存流水的完整记录，然后再另开一个独立 PR 去删除 `golive-test-shipping.ts` 这套临时代码机制。
+
+## 2026-08-29（续二）：Production 切到 Payment Element + Playwright 真实回归（发现一个未解决的 3DS 疑点）
+
+**Production 切换（纯配置，无代码改动）**：`CHECKOUT_UI_MODE`（Netlify storefront，仅 Production scope）改成 `elements`；`VITE_STRIPE_PUBLISHABLE_KEY` 用 Stripe Dashboard 自带的"Copy"按钮复制 Live Publishable Key 后配置（全程未在对话/截图/日志里展示完整值）；`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/Webhook 端点/Resend/Supabase 环境变量/`GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 均未改动。触发 Production 无缓存重新部署后确认：Node 22、12 个 Function、前端构建全部成功；`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 仍是 `false`；`create-checkout-session`/`resume-checkout-session` 直连测试仍返回 503 `checkout_disabled`；本轮全程没有创建任何真实 Live Checkout Session。
+
+**本地 Payment Element 差异回归改用 Playwright（不再用浏览器扩展点坐标）**：浏览器扩展工具在这个购物车抽屉/结账弹窗上反复出现坐标系失准的 bug（`computer` 工具点击的坐标和页面真实 CSS 像素对不上，多次验证后确认是这个自动化工具本身的问题，不是产品代码问题），改用项目已有的 Playwright（`tests/e2e/payment-element.spec.ts`，新增文件），全程用 `page.frame()`/frame locator 定位 Stripe 的跨域 iframe，不用坐标点击、不用页面 JS 跨域穿透。5 项子测试全部是针对真实本地 `netlify dev`（Stripe test mode）跑出来的真实结果，不是伪造通过：
+- **Card 4242 完整支付成功** ✅——真实 PaymentIntent 确认成功，页面显示"Payment received"提示。
+- **PayNow 可选中并进入二维码步骤** ✅——确认会在页面内挂载一个带二维码的元素（不是像最初以为的那样跳转到 Stripe 域名，这个 SDK 版本 PayNow 是页内展示二维码）。
+- **"返回"后重新提交复用同一订单，不重复创建订单/预留** ✅——用同一个 `checkoutAttemptId` 重新提交后，Supabase 里该邮箱确认只有 1 条 `orders` 行（不是 2 条）。
+- **375/390/412px 及桌面宽度无横向溢出，Card/PayNow 标签页可见，PAY NOW 按钮可见可点击，金额文字未截断** ✅——四个宽度全部用同一个已挂载的 Payment Element 通过 `setViewportSize` 复测（没有为每个宽度重新下单，避免浪费 IP 限流配额）。
+- **官方 3DS 测试卡（`4000002500003155`）**⚠️ **未确认通过，需要人工浏览器验证**——Playwright 成功找到并点击了 Stripe 注入的"3D Secure 2 Test Page"内嵌 frame 里的"Complete"按钮（点击本身没有报错），但点击后前端一直卡在"PROCESSING…"，即使把测试超时放宽到 120 秒、点击后再等 60 秒也没有跳转成功提示。**用 Stripe Restricted Key 直接查询该笔测试 PaymentIntent 发现它其实已经在 Stripe 那边真实支付成功**（`payment_status: paid`，随后用测试模式退款关闭）。也就是说：3DS 挑战在 Stripe 后端确实完成了，但客户端的 `confirm({redirect:"if_required"})` 之后似乎没有正确感知/展示这个结果——**这是否是 `initCheckoutElementsSdk` 这套新版 SDK 在这个场景下的真实前端 bug，还是仅仅是 Playwright 自动化浏览器环境的偶发问题，本轮未能确定**，需要用户或后续 session 用真实 Chrome 手动走一遍同样的路径（本地 `netlify dev` + 3DS 测试卡）来判断。如果人工验证也复现"支付成功但界面卡住"，这会是一个真实的客户可见问题（客户以为没付成功，实际上已经扣款），需要另开 PR 在 `dev` 分支修复，绝不能改 `main`。
+
+**本轮测试数据已清理**：11 笔本地测试订单（`pe-*@example.com`）全部通过 `cancel_pending_order_as_staff` 软取消并释放库存预留；其中 2 笔在 Stripe 那边真实支付成功的测试 PaymentIntent（1 笔 4242、1 笔就是上面那笔卡住的 3DS）已用 Stripe 测试模式退款关闭；`COGNAC-HENNESSY-VSOP` 库存确认已恢复到 50；没有产生任何测试邮件（本地没跑 `stripe listen`，webhook 没触发）、没有产生任何新的 Supabase 账号（全程用 Guest 结账）。Production 隐藏的 S$0.50 SKU 和 `GOLIVE_TEST_SKU`/`GOLIVE_TEST_EMAIL` 两个环境变量均未触碰。全程 Production 结账开关保持 `false`，没有创建任何真实 Live Session，没有发生真实扣款/退款。
+
+**按用户指示，在此暂停**，等待用户看完 3DS 疑点后决定：(a) 要不要现在就深入排查/修复这个疑点，(b) 还是先忽略它直接授权开始那唯一一次真实 Live S$0.50 PayNow 测试（3DS 卡的问题目前只影响信用卡路径，PayNow 本身回归通过）。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -1017,6 +1046,7 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
+0. **【最新，2026-08-29】3DS 疑点排查**：Payment Element 官方 3DS 测试卡（`4000002500003155`）在本地回归中点击 Stripe"Complete"后前端一直卡在"PROCESSING…"，但 Stripe 后端其实已真实支付成功（已用测试模式退款关闭）——用真实 Chrome 手动走一遍同样路径确认是否复现，复现的话是真实客户可见 bug，需要在 `dev` 开新 PR 修（详见上面"Playwright 真实回归"章节）。这件事排完/决定忽略之后，才继续下一步唯一一次真实 Live S$0.50 PayNow 测试。
 1. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
 2. **政策页面法律分工已经和用户对齐**（2026-08-26）：Terms & Conditions、Privacy Policy 这两份要发给老板找律师看（合同责任限制条款 + PDPA 都是真实法律/监管风险）；Delivery Policy、Refund Policy 剩下的占位符是业务事实（配送时效/范围/派送失败流程、退款窗口天数），用户自己填数字就行，不需要律师；Age Restriction 页建议搭 Terms 的顺风车让律师扫一眼年龄核实流程是否符合《酒类管制法》，不用单独立项。**这几份文件本身目前还没人去发给老板/律师**，只是分好了类。
 
