@@ -88,14 +88,12 @@ vi.mock("../netlify/functions/_lib/stripe", () => ({
 
 import handler from "../netlify/functions/create-checkout-session";
 
-const TEST_SKU = "GOLIVE-HIDDEN-TEST-SKU";
-const TEST_EMAIL = "delivered@resend.dev";
-const REAL_SKU = "BEER-HAPPY-BREW-LAGER";
+const REAL_SKU = "COGNAC-HENNESSY-VSOP";
 
 const validRecipient = {
   name: "Test Customer",
   phone: "91234567",
-  email: TEST_EMAIL,
+  email: "customer@example.com",
   address: "1 Test Street",
   postalCode: "123456",
   notes: "",
@@ -103,7 +101,7 @@ const validRecipient = {
 
 function checkoutBody(overrides: Record<string, unknown> = {}) {
   return {
-    items: [{ sku: TEST_SKU, qty: 1 }],
+    items: [{ sku: REAL_SKU, qty: 1 }],
     deliveryMethod: "standard",
     recipient: validRecipient,
     ageConfirmed: true,
@@ -128,8 +126,6 @@ beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
   process.env.CHECKOUT_ENABLED = "true";
   process.env.SITE_URL = "https://trinityglobe.test";
-  delete process.env.GOLIVE_TEST_SKU;
-  delete process.env.GOLIVE_TEST_EMAIL;
 
   storeSettingsRow = {
     standard_shipping_fee_cents: 1500, // S$15
@@ -139,20 +135,9 @@ beforeEach(() => {
   };
   productVariantsRows = [
     {
-      sku: TEST_SKU,
-      name_snapshot: "Go-Live Verification Item",
-      unit_price_cents: 50,
-      case_size: null,
-      case_price_cents: null,
-      five_case_size: null,
-      five_case_price_cents: null,
-      is_active: true,
-      allow_self_collection: true,
-    },
-    {
       sku: REAL_SKU,
-      name_snapshot: "Happy Brew Lager",
-      unit_price_cents: 600,
+      name_snapshot: "Hennessy VSOP",
+      unit_price_cents: 8500, // S$85
       case_size: null,
       case_price_cents: null,
       five_case_size: null,
@@ -174,11 +159,9 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
-describe("create-checkout-session — go-live test shipping exemption", () => {
-  it("12. CHECKOUT_ENABLED=false still returns 503 for the hidden test SKU, gate cannot be bypassed", async () => {
+describe("create-checkout-session", () => {
+  it("CHECKOUT_ENABLED=false returns 503 before any order/session is created — the gate cannot be bypassed", async () => {
     process.env.CHECKOUT_ENABLED = "false";
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
 
     const res = await handler(makeRequest(checkoutBody()), fakeContext);
     const body = await res.json();
@@ -189,9 +172,47 @@ describe("create-checkout-session — go-live test shipping exemption", () => {
     expect(rpcImpl).not.toHaveBeenCalled();
   });
 
-  it("8. inactive test SKU is refused before the exemption is ever evaluated", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
+  it("normal order below the free-shipping threshold: S$85 item + S$15 flat shipping = S$100 total", async () => {
+    const res = await handler(makeRequest(checkoutBody()), fakeContext);
+
+    expect(res.status).toBe(200);
+    expect(rpcImpl).toHaveBeenCalledWith(
+      "create_pending_order",
+      expect.objectContaining({ p_subtotal_cents: 8500, p_shipping_fee_cents: 1500, p_total_cents: 10000 })
+    );
+    const sessionParams = sessionsCreate.mock.calls[0]![0];
+    expect(sessionParams.line_items).toHaveLength(2); // item + a separate "Shipping" line
+  });
+
+  it("order at/above the free-shipping threshold gets S$0 shipping", async () => {
+    productVariantsRows[0]!.unit_price_cents = 12500; // single bottle already over the S$120 threshold
+
+    const res = await handler(makeRequest(checkoutBody()), fakeContext);
+
+    expect(res.status).toBe(200);
+    expect(rpcImpl).toHaveBeenCalledWith(
+      "create_pending_order",
+      expect.objectContaining({ p_shipping_fee_cents: 0, p_total_cents: 12500 })
+    );
+    const sessionParams = sessionsCreate.mock.calls[0]![0];
+    expect(sessionParams.line_items).toHaveLength(1); // item only, no "Shipping" line
+  });
+
+  it("a client-supplied price field is ignored — the DB price is what's charged", async () => {
+    const res = await handler(
+      makeRequest(checkoutBody({ items: [{ sku: REAL_SKU, qty: 1, unitPriceCents: 1, priceCents: 1 }] })),
+      fakeContext
+    );
+
+    expect(res.status).toBe(200);
+    // Server still computed 8500 cents (from the DB row), not the smuggled 1 cent.
+    expect(rpcImpl).toHaveBeenCalledWith(
+      "create_pending_order",
+      expect.objectContaining({ p_subtotal_cents: 8500, p_total_cents: 10000 })
+    );
+  });
+
+  it("inactive SKU is refused with 409 before any session is created", async () => {
     productVariantsRows[0]!.is_active = false;
 
     const res = await handler(makeRequest(checkoutBody()), fakeContext);
@@ -201,111 +222,5 @@ describe("create-checkout-session — go-live test shipping exemption", () => {
     expect(body.code).toBe("insufficient_stock");
     expect(sessionsCreate).not.toHaveBeenCalled();
     expect(rpcImpl).not.toHaveBeenCalled();
-  });
-
-  it("9. full match: shipping is S$0, order total is S$0.50, no Shipping line item sent to Stripe", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-
-    const res = await handler(makeRequest(checkoutBody()), fakeContext);
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_subtotal_cents: 50, p_shipping_fee_cents: 0, p_total_cents: 50 })
-    );
-    const sessionParams = sessionsCreate.mock.calls[0]![0];
-    expect(sessionParams.line_items).toHaveLength(1); // item only, no "Shipping" line
-    expect(sessionParams.line_items[0].price_data.unit_amount).toBe(50);
-  });
-
-  it("env vars set but this is a normal real order -> real S$15 shipping / S$120 threshold untouched (S$6 item -> S$21 total)", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-
-    const res = await handler(
-      makeRequest(checkoutBody({ items: [{ sku: REAL_SKU, qty: 1 }], recipient: { ...validRecipient, email: "real-customer@example.com" } })),
-      fakeContext
-    );
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_subtotal_cents: 600, p_shipping_fee_cents: 1500, p_total_cents: 2100 })
-    );
-  });
-
-  it("10. real order still gets free shipping once its own subtotal clears S$120, independent of the exemption", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-    productVariantsRows[1]!.unit_price_cents = 12500; // single bottle already over the S$120 threshold
-
-    const res = await handler(
-      makeRequest(checkoutBody({ items: [{ sku: REAL_SKU, qty: 1 }], recipient: { ...validRecipient, email: "real-customer@example.com" } })),
-      fakeContext
-    );
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_shipping_fee_cents: 0, p_total_cents: 12500 })
-    );
-  });
-
-  it("11. a client-supplied price field is ignored — the DB price is what's charged", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-
-    const res = await handler(
-      makeRequest(checkoutBody({ items: [{ sku: TEST_SKU, qty: 1, unitPriceCents: 1, priceCents: 1 }] })),
-      fakeContext
-    );
-
-    expect(res.status).toBe(200);
-    // Server still computed 50 cents (from the DB row), not the smuggled 1 cent.
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_subtotal_cents: 50, p_shipping_fee_cents: 0, p_total_cents: 50 })
-    );
-  });
-
-  it("exemption stays dormant when both env vars are unset, even for what would otherwise be a matching cart", async () => {
-    // GOLIVE_TEST_SKU / GOLIVE_TEST_EMAIL both left unset by beforeEach.
-    const res = await handler(makeRequest(checkoutBody()), fakeContext);
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_shipping_fee_cents: 1500, p_total_cents: 1550 })
-    );
-  });
-
-  it("wrong recipient email with an otherwise-matching cart still pays real shipping", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-
-    const res = await handler(
-      makeRequest(checkoutBody({ recipient: { ...validRecipient, email: "not-the-test-email@example.com" } })),
-      fakeContext
-    );
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_shipping_fee_cents: 1500, p_total_cents: 1550 })
-    );
-  });
-
-  it("qty of 2 for the test SKU still pays real shipping (exemption requires exactly qty 1)", async () => {
-    process.env.GOLIVE_TEST_SKU = TEST_SKU;
-    process.env.GOLIVE_TEST_EMAIL = TEST_EMAIL;
-
-    const res = await handler(makeRequest(checkoutBody({ items: [{ sku: TEST_SKU, qty: 2 }] })), fakeContext);
-
-    expect(res.status).toBe(200);
-    expect(rpcImpl).toHaveBeenCalledWith(
-      "create_pending_order",
-      expect.objectContaining({ p_subtotal_cents: 100, p_shipping_fee_cents: 1500, p_total_cents: 1600 })
-    );
   });
 });
