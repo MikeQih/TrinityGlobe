@@ -1,8 +1,8 @@
 # Trinity Globe 商城项目 — 当前状态清单
 
 > 用途：新开 session 时把这份文件读一遍就能接着做。会随进展更新，别当成一次性交接文档。
-> 最后更新：2026-08-29
-> **Production 结账已正式开放**（`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 均为 `true`）。真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并进 `main`（当前 Production 部署自 `main@1968603`），开放前只读核查、开放后服务端/UI 验证、一次无支付烟雾测试均已通过，详见下面"2026-08-29（续四）"一节。
+> 最后更新：2026-08-30
+> **Production 结账已正式开放**（`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 均为 `true`）。真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并进 `main`（当前 Production 部署自 `main@20c6c08`），开放前只读核查、开放后服务端/UI 验证、一次无支付烟雾测试均已通过，详见下面"2026-08-29（续四）"一节。**2026-08-30**：PR #8（Safari 购物车/移动端 Header/账户菜单 fail-safe 四合一修复）已合并进 `main` 并验证上线 Production，详见"2026-08-30（PR #8）"一节。PR #9（员工新订单通知邮件多收件人修复）已开出、Deploy Preview 通过，**尚未合并**。老板 `ryanwangleee@gmail.com` 的后台 admin 账号**尚未注册**，授权流程已暂停等待老板本人注册。
 
 ## 项目背景
 
@@ -1095,6 +1095,35 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 
 ---
 
+## 2026-08-30：PR #8——Safari购物车/移动Header/账户菜单四轮修复，已合并main并上线Production
+
+**背景**：PR #8 分四个 commit 逐步修复真机测试发现的问题，每一轮都是用户在真实 iPhone Safari/Chrome 上截图报告新问题，不接受"本地测得通过"就算数：
+
+1. **`042abf2`**：移动端 Safari 购物车抽屉 `100vh` 导致 Checkout 按钮被地址栏裁切——改用 `100dvh`/`-webkit-fill-available` 级联 + `.cart-drawer-body{min-height:0}` 独立滚动 + `safe-area-inset-bottom`；顺带精简移动端 Header（原本 SIGN IN 文字+cart+hamburger 三个元素挤在一起）。
+2. **`c62e771`**：把 account/cart/hamburger 包进新的 `.nav-actions` 容器统一移动端右对齐，并把移动菜单从两个独立列表（`#mobileLinksList`+`#mobileAccountLinks`）合并成一个共享 `<ul>`，让 Sign In/My Orders 等账户行和 Home/About 等普通行完全共享同一套间距/分割线样式。
+3. **`33a1ece`**：上一轮引入了新 bug——用户真机截图显示桌面端布局也跟着变了、手机端 hamburger 完全消失。根因：`.nav-links` 原本自带的 `margin-left:auto`被删掉，改到新 `.nav-actions` 上且没有限定在移动端 media query 内，导致桌面端两个元素同时抢占剩余空间、断行错位。用**实际 Playwright 跑出的 computed style + 与 `main` 分支像素级对比**（而非猜测）定位根因，修复后 1024/1280/1440px 桌面布局与 `main` 合并前逐像素完全一致（截图文件大小逐字节相同）。这一轮新增了 375~1440px 全断点回归测试（含 959/960/961px 边界）。
+4. **`4a7bb2f`**：用户在真实 Deploy Preview 上打开 hamburger 菜单，看到 Home/About/Collection/Contact/中文但没有 SIGN IN。根因：`initAccountNav()`（`src/cart.ts`）只在 `initAuth().then(render)` 里渲染账户行，而移动菜单本身的显隐是纯 CSS `.open` class 切换，跟这个 Promise 完全无关——只要用户在 Supabase `getSession()` 网络请求完成前打开菜单，就会看到空白账户区。修复：把 `render()` 挪到 `initAuth()` 之前**同步调用一次**（`getSession()` 读的是初始值为 `null` 的模块级变量，所以这次同步调用永远先画出未登录 SIGN IN 状态），异步确认真实 session 后再重绘为已登录视图；`initAuth().then(render)` 补上 `.catch()` 避免未处理的 rejection。用真实 build 产物 + 真实 Supabase GoTrueClient（在 `localStorage` 按 `sb-<project-ref>-auth-token` 真实格式播种 session、拦截其内部 `auth/v1/token` 刷新请求）验证了立即返回/延迟数秒/网络失败/有效session 四种场景，SIGN IN 全部正确表现。
+
+**合并与上线**：本环境无 `gh`/GitHub API 写权限（`gh auth status` 未登录），改用等效的本地 git 操作——`git merge --no-ff origin/dev`（对应 GitHub 的"Create a merge commit"策略）+ `git push origin main`，效果与走 GitHub UI 合并完全一致，GitHub 自动识别 PR #8 为已合并（`merge_commit_sha: 20c6c08`），**`dev` 分支未删除**。Netlify Production 部署确认：`Published`，`main@20c6c08`，12 个 Functions 全部部署成功，build 26 秒无错误。上线后用 Playwright（Chromium+WebKit）直接对 `trinityglobe.sg` 做了一轮完整回归（非 Deploy Preview）：桌面 1024/1280/1440px 导航像素级不变；移动端品牌居左、cart+hamburger 成组居右、hamburger 菜单 SIGN IN 立即可见；购物车 Footer 完整可见（含地址栏收起模拟）；CHECKOUT 按钮显示"Checkout"而非"Unavailable"；点击 CHECKOUT 确认能打开账户选择/结账表单后立即关闭，抓包确认除 Stripe.js 自身加载外**没有任何 Functions/Supabase/订单相关请求**，未创建订单、未走完结账流程、未付款。
+
+---
+
+## 2026-08-30：员工新订单通知邮箱——多收件人代码缺陷，PR #9 已开出待合并
+
+**用户需求**：给老板 `ryanwangleee@gmail.com` 开通后台 admin 权限，并让员工新订单通知同时发到老板邮箱和现有 `2537175447@qq.com`。
+
+**发现的真实代码缺陷（未合并任何邮箱配置改动前先查出）**：`STAFF_NOTIFICATION_EMAILS` 的解析逻辑（`.split(",").map(trim).filter(Boolean)`）确实支持多个邮箱，但 `sendStaffNotificationEmail`/`resendStaffNotificationEmail`（真正发送"新订单"通知的函数）把解析出的数组又用 `.join(", ")` 拼回**一个逗号分隔的字符串**，传给 Resend 的 `to` 字段。查了 Resend 官方文档原文："`to`: `string | string[]`——多个地址请用字符串数组发送"，完全没提字符串内逗号分隔的写法受支持。这与同文件里 `sendPaymentReviewAlertEmail`/`sendRefundReviewAlertEmail`（早就正确地传 `to: staffEmails` 数组）不一致。按照"代码目前不能可靠支持多邮箱就先停下、不要直接改 Production 环境变量"的预定规则，**没有**直接把 Production 的 `STAFF_NOTIFICATION_EMAILS` 改成两个邮箱，而是先修代码：
+
+- `netlify/functions/_lib/email.ts`：新增 `parseStaffEmails()`（拆逗号+trim+过滤空值+**大小写不敏感去重**）；`sendTrackedEmail` 的参数拆成 `recipient`（存入 `email_logs.recipient` 这个 `text` 字段的展示字符串，不变）和新增的 `to`（真正传给 Resend 的 `string | string[]`）；客户确认邮件（`sendOrderConfirmationEmail`/`resendOrderConfirmationEmail`）新增 `to: order.recipient_snapshot.email`，行为完全不变，仍是单一字符串。
+- 新增 `tests/staff-notification-email.test.ts`（10 个测试）：mock `resend` 包 + Supabase 的 `claim_email_send`/`settle_email_send`，跑真实的 `_lib/email.ts` 逻辑断言实际 Resend payload——单邮箱数组、双邮箱数组、空格清理、空段过滤、大小写去重、空列表安全跳过（不调用 Resend/RPC）、customer_confirmation 不受影响、admin 手动重发用同一数组逻辑、多收件人仍只产生一条 `email_logs` 记录（一次 claim+一次 settle+一次 send，不是每个邮箱一条）、Idempotency-Key/`resend_email_id`webhook关联不变。全部通过，且未改动 `claim_email_send`/`settle_email_send`/webhook 状态机本身。
+- 全套验证：storefront typecheck ✅ / test 101/101 ✅ / build ✅；admin-app typecheck ✅ / build ✅。
+
+**PR #9**（`dev@9d83979` → `main`）：https://github.com/MikeQih/TrinityGlobe/pull/9 ，`mergeable_state: clean`，两个 Deploy Preview 均 `success`，**尚未合并**，等用户确认后再合并；合并后仍需再单独把 Production 的 `STAFF_NOTIFICATION_EMAILS` 改成 `2537175447@qq.com,ryanwangleee@gmail.com`（这一步这次也还没做）。
+
+**老板后台账号——情况B，已暂停**：Supabase `auth.users` 只读核查（精确匹配 + `ILIKE` 模糊匹配双重确认）：`ryanwangleee@gmail.com` **尚未注册**；`admin_profiles` 全表只有 1 行（`qihengchang1014@gmail.com`，`role=admin`），没有老板的记录。按规则**没有**代老板创建账号或密码。等老板本人通过官网注册并完成邮箱验证后，下一步是：只读 SELECT 确认邮箱→UID 唯一映射，再按 `admin_profiles` 自举流程（见上面"管理员账号的创建/修改/撤销"一节，Supabase SQL Editor 手动 `insert into admin_profiles (user_id, role, display_name) values ('<uid>', 'admin', '<姓名>')`）写入 `role='admin'`，写入前后各只读核查一次。老板本人登录 `https://trinity-globe-admin.netlify.app` 验证也要等账号注册完才能做。
+
+---
+
 ## 重要的操作纪律（继续遵守）
 
 - **账号隔离**：Stripe/Supabase/Resend/Airwallex 全部用全新专属账号，不复用用户其他项目（如"Owo99" Stripe、"collabify"等Supabase项目、"miaotie.fun" Resend域名）的账号/密钥
@@ -1108,7 +1137,9 @@ Facebook 开发者后台的"基本"设置页已经填完：隐私政策网址、
 ## 下次打开新session，最该先做的事
 
 **不依赖外部信息、现在就能继续做的**：
-0. **【最新，2026-08-29】Production 结账已正式开放**：真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并（详见上面"2026-08-29（续四）"一节），`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 在 Production 均为 `true`，官网可以正常接受真实客户付款。**库存基线仍是临时统一的 50**（见上面"上线前检查清单"里"库存统一为 50 只是临时测试基线"这一条）——这是当前唯一仍未解决的真实运营风险：如果实际库存不足 50，客户下单后可能缺货，需要老板尽快确认每款酒的真实可售数量。
+0. **【最新，2026-08-30】PR #8 已合并上线**（Safari购物车/移动Header/账户菜单四轮修复），Production 已验证正常，详见上面"2026-08-30：PR #8"一节。**PR #9（员工新订单通知邮件多收件人修复）已开出、Deploy Preview 通过，等用户确认后合并**——https://github.com/MikeQih/TrinityGlobe/pull/9 。合并后还有一步没做：把 Production 的 `STAFF_NOTIFICATION_EMAILS` 从当前的 `2537175447@qq.com` 改成 `2537175447@qq.com,ryanwangleee@gmail.com`（只改 Production，不改 Deploy Previews/Branch deploys）。
+0b. **老板 `ryanwangleee@gmail.com` 的后台 admin 账号——等老板本人注册**：Supabase `auth.users` 目前没有这个邮箱（已用精确匹配+模糊匹配双重核查过），按规则没有代老板创建账号/密码。等用户告知老板已通过官网注册并完成邮箱验证后，下一步是只读核查邮箱→UID唯一映射，再用 SQL Editor 手动写入 `admin_profiles(user_id, role='admin')`（详见"2026-08-30：员工新订单通知邮箱"一节和"管理员账号的创建/修改/撤销"一节）。
+0c. **Production 结账已正式开放**：真人 3DS 验证（PR #5）与 GOLIVE 遗留引用清理（PR #6）均已合并（详见上面"2026-08-29（续四）"一节），`CHECKOUT_ENABLED`/`VITE_CHECKOUT_ENABLED` 在 Production 均为 `true`，官网可以正常接受真实客户付款。**库存基线仍是临时统一的 50**（见上面"上线前检查清单"里"库存统一为 50 只是临时测试基线"这一条）——这是当前唯一仍未解决的真实运营风险：如果实际库存不足 50，客户下单后可能缺货，需要老板尽快确认每款酒的真实可售数量。
 1. 老板反馈1：产品后台和订单后台加跳转入口（轻量方案，用户已选定）
 2. **政策页面法律分工已经和用户对齐**（2026-08-26）：Terms & Conditions、Privacy Policy 这两份要发给老板找律师看（合同责任限制条款 + PDPA 都是真实法律/监管风险）；Delivery Policy、Refund Policy 剩下的占位符是业务事实（配送时效/范围/派送失败流程、退款窗口天数），用户自己填数字就行，不需要律师；Age Restriction 页建议搭 Terms 的顺风车让律师扫一眼年龄核实流程是否符合《酒类管制法》，不用单独立项。**这几份文件本身目前还没人去发给老板/律师**，只是分好了类。
 
